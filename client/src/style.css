@@ -1,0 +1,36 @@
+@import "leaflet/dist/leaflet.css";
+@import "tailwindcss";
+
+:root {
+  --color-text-primary: #1e293b; /* slate-900 */
+  --color-text-secondary: #475569; /* slate-600 */
+  --color-bg-primary: #f8fafc; /* slate-50 */
+  --color-bg-secondary: #e2e8f0; /* slate-200 */
+  --color-bg-card: #ffffff; /* white */
+  --color-border-card: #e2e8f0; /* slate-200 */
+  --color-blue-primary: #3b82f5; /* blue-500 */
+  --color-bg-calendar-cell: #0f172a; /* slate-900 - fixed for calendar cells */
+}
+
+html.dark {
+  --color-text-primary: #f1f5f9; /* slate-100 */
+  --color-text-secondary: #94a3b8; /* slate-400 */
+  --color-bg-primary: #0f172a; /* slate-900 */
+  --color-bg-secondary: #1e293b; /* slate-800 */
+  --color-bg-card: #1e293b; /* slate-800 */
+  --color-border-card: #334155; /* slate-700 */
+  --color-blue-primary: #60a5fa; /* blue-400 */
+  --color-bg-calendar-cell: #0f172a; /* slate-900 - fixed for calendar cells */
+}
+
+body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+/* Leaflet 지도 컨테이너 스타일 */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  z-index: 0;
+}
