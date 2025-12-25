@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useLayoutEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 
@@ -12,6 +12,9 @@ if (typeof window !== 'undefined') {
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
   });
 }
+
+// React Strict Mode에서 중복 초기화 방지를 위한 전역 플래그
+const mapInitializationFlags = new WeakMap<HTMLElement, boolean>();
 
 // 지도 크기 조정을 위한 컴포넌트
 const MapResizer = () => {
@@ -57,31 +60,70 @@ interface MapPanelProps {
 // 지도 중심 이동 컴포넌트
 const MapController = ({ center, zoom }: { center: [number, number]; zoom: number }) => {
   const map = useMap();
+  const prevCenterRef = useRef<[number, number] | null>(null);
+  
   useEffect(() => {
-    map.setView(center, zoom);
+    // 이전 중심과 다를 때만 이동 (무한 루프 방지)
+    if (!prevCenterRef.current || 
+        prevCenterRef.current[0] !== center[0] || 
+        prevCenterRef.current[1] !== center[1]) {
+      map.setView(center, zoom, { animate: true, duration: 0.5 });
+      prevCenterRef.current = center;
+    }
   }, [center, zoom, map]);
   return null;
 };
 
 const MapPanel = ({ selectedGroup = null, onCreateGroupClick }: MapPanelProps) => {
   const [isMounted, setIsMounted] = useState(false);
+  const [shouldRenderMap, setShouldRenderMap] = useState(false);
   const defaultPosition: [number, number] = [37.5665, 126.9780]; // Default position (Seoul)
-  const [mapKey, setMapKey] = useState(0);
+  const mapRef = useRef<L.Map | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  
+  // 컴포넌트 인스턴스마다 고유한 ID 생성 (React Strict Mode 대응)
+  const mapIdRef = useRef(`map-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
 
-  useEffect(() => {
-    // 컴포넌트가 마운트된 후 지도 초기화
-    setIsMounted(true);
+  useLayoutEffect(() => {
+    // DOM이 준비된 후 맵 렌더링 여부 결정
+    if (mapContainerRef.current) {
+      const container = mapContainerRef.current;
+      // 이미 맵이 초기화되어 있지 않은 경우에만 렌더링
+      if (!(container as any)._leaflet_id && !mapInitializationFlags.get(container)) {
+        setIsMounted(true);
+        setShouldRenderMap(true);
+      }
+    } else {
+      setIsMounted(true);
+      setShouldRenderMap(true);
+    }
   }, []);
 
-  // 선택된 그룹이 변경되면 지도 업데이트
   useEffect(() => {
-    if (selectedGroup) {
-      // 지도 재렌더링을 위해 key 변경
-      setMapKey((prev) => prev + 1);
-    }
-  }, [selectedGroup]);
+    // 컴포넌트 언마운트 시 맵 정리
+    return () => {
+      if (mapRef.current) {
+        try {
+          // DOM에서 맵 컨테이너 제거
+          const container = mapRef.current.getContainer();
+          if (container) {
+            // Leaflet이 자동으로 정리하도록 함
+            mapRef.current.remove();
+            // DOM에서 Leaflet ID 제거
+            delete (container as any)._leaflet_id;
+            // 전역 플래그 제거
+            mapInitializationFlags.delete(container);
+          }
+        } catch (e) {
+          // 이미 제거된 경우 무시
+        }
+        mapRef.current = null;
+      }
+    };
+  }, []);
 
-  if (!isMounted) {
+  if (!isMounted || !shouldRenderMap) {
     return (
       <div className="h-full w-full flex items-center justify-center bg-[var(--color-bg-secondary)]">
         <p className="text-[var(--color-text-secondary)]">지도를 불러오는 중...</p>
@@ -93,14 +135,53 @@ const MapPanel = ({ selectedGroup = null, onCreateGroupClick }: MapPanelProps) =
   const mapZoom = selectedGroup ? 15 : 13;
 
   return (
-    <div className="h-full w-full" style={{ height: '100%', width: '100%', position: 'relative' }}>
-      <MapContainer
-        center={mapCenter}
-        zoom={mapZoom}
-        scrollWheelZoom={false}
-        style={{ height: '100%', width: '100%', zIndex: 0 }}
-        key={`map-container-${mapKey}`}
+    <div 
+      ref={containerRef}
+      className="h-full w-full" 
+      style={{ height: '100%', width: '100%', position: 'relative' }}
+    >
+      <div 
+        ref={mapContainerRef}
+        style={{ height: '100%', width: '100%' }}
       >
+        <MapContainer
+          key={mapIdRef.current}
+          center={mapCenter}
+          zoom={mapZoom}
+          scrollWheelZoom={false}
+          style={{ height: '100%', width: '100%', zIndex: 0 }}
+          whenCreated={(map) => {
+            const container = map.getContainer();
+            
+            // 이미 초기화된 맵이 있으면 제거 (React Strict Mode 대응)
+            if (mapRef.current && mapRef.current !== map) {
+              try {
+                const oldContainer = mapRef.current.getContainer();
+                if (oldContainer) {
+                  mapRef.current.remove();
+                  delete (oldContainer as any)._leaflet_id;
+                  mapInitializationFlags.delete(oldContainer);
+                }
+              } catch (e) {
+                // 무시
+              }
+            }
+            
+            // 현재 맵 인스턴스 저장 및 플래그 설정
+            mapRef.current = map;
+            if (container) {
+              mapInitializationFlags.set(container, true);
+            }
+          }}
+          whenReady={() => {
+            // 맵이 준비되면 크기 조정
+            if (mapRef.current) {
+              setTimeout(() => {
+                mapRef.current?.invalidateSize();
+              }, 100);
+            }
+          }}
+        >
         <MapResizer />
         <MapController center={mapCenter} zoom={mapZoom} />
         <TileLayer
@@ -127,7 +208,8 @@ const MapPanel = ({ selectedGroup = null, onCreateGroupClick }: MapPanelProps) =
             </Popup>
           </Marker>
         )}
-      </MapContainer>
+        </MapContainer>
+      </div>
       
       {/* 새 모임 만들기 플로팅 버튼 */}
       {onCreateGroupClick && (

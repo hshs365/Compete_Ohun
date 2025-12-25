@@ -4,9 +4,6 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 
-// FullCalendar의 CSS는 전역으로 처리하거나 별도의 파일을 통해 관리됩니다.
-// 여기서는 직접 임포트하지 않습니다.
-
 const MySchedulePage = () => {
   const [isMobile, setIsMobile] = React.useState(window.innerWidth < 768);
 
