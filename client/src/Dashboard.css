@@ -1,0 +1,23 @@
+.dashboard-container {
+  display: flex;
+  height: 100vh;
+}
+
+.sidebar-container {
+  width: 250px;
+  background-color: #f8f9fa;
+  padding: 20px;
+  border-right: 1px solid #dee2e6;
+}
+
+.main-content-container {
+  flex-grow: 1;
+  padding: 20px;
+}
+
+.ranking-container {
+  width: 300px;
+  background-color: #f8f9fa;
+  padding: 20px;
+  border-left: 1px solid #dee2e6;
+}
