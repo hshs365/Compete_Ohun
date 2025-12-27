@@ -112,6 +112,12 @@ netstat -ano | findstr :3000
 Stop-Process -Id <PID> -Force
 ```
 
+## 👥 팀원 협업
+
+**새로 참여하는 팀원은 반드시 확인하세요!**
+
+- **TEAM-SETUP-GUIDE.md** - 팀원 협업 설정 가이드 (데이터베이스, 환경 변수, 카카오맵 설정)
+
 ## 📚 문서
 
 ### 주요 문서
