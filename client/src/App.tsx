@@ -3,10 +3,11 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import GroupListPanel from './components/GroupListPanel';
 import CategoryFilter from './components/CategoryFilter';
-import MapPanel from './components/MapPanel';
+import KakaoMapPanel from './components/KakaoMapPanel';
 import type { SelectedGroup } from './components/MapPanel';
 import GroupDetail from './components/GroupDetail';
 import CreateGroupModal from './components/CreateGroupModal';
+import { api } from './utils/api';
 import MyInfoPage from './components/MyInfoPage'; // MyInfoPage 컴포넌트 import
 import MySchedulePage from './components/MySchedulePage'; // MySchedulePage 컴포넌트 import
 import ContactPage from './components/ContactPage'; // ContactPage 컴포넌트 import
@@ -45,6 +46,8 @@ const DashboardLayout = () => {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<SelectedGroup | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [allGroups, setAllGroups] = useState<SelectedGroup[]>([]);
 
   const handleGroupClick = (group: SelectedGroup) => {
     setSelectedGroup(group);
@@ -55,16 +58,63 @@ const DashboardLayout = () => {
   };
 
   const handleCreateGroup = (groupData: Omit<SelectedGroup, 'id'>) => {
-    // TODO: 실제로는 API를 통해 서버에 저장
-    console.log('새 모임 생성:', groupData);
-    // 임시로 ID를 생성하여 목록에 추가할 수 있도록 준비
-    // 실제 구현 시에는 서버 응답에서 받아온 ID를 사용
+    // API 호출은 CreateGroupModal에서 처리하므로 여기서는 콘솔만 출력
+    console.log('새 모임 생성 완료:', groupData);
   };
 
+  const handleGroupCreated = () => {
+    // 모임 생성 성공 시 목록 새로고침
+    setRefreshTrigger((prev) => prev + 1);
+  };
+
+  const handleParticipantChange = () => {
+    // 참가자 수 변경 시 목록 새로고침
+    setRefreshTrigger((prev) => prev + 1);
+  };
+
+  // 모든 그룹 목록 가져오기 (지도 마커용)
+  useEffect(() => {
+    const fetchAllGroups = async () => {
+      try {
+        const category = selectedCategory === '전체' || selectedCategory === null ? undefined : selectedCategory;
+        const queryParams = new URLSearchParams();
+        
+        if (category) {
+          queryParams.append('category', category);
+        }
+        queryParams.append('limit', '100');
+
+        const response = await api.get<{ groups: any[]; total: number }>(
+          `/api/groups?${queryParams.toString()}`
+        );
+
+        const mappedGroups: SelectedGroup[] = response.groups.map((group) => ({
+          id: group.id,
+          name: group.name,
+          location: group.location,
+          coordinates: [parseFloat(group.latitude.toString()), parseFloat(group.longitude.toString())] as [number, number],
+          memberCount: group.participantCount,
+          category: group.category,
+          description: group.description || undefined,
+          meetingTime: group.meetingTime || undefined,
+          contact: group.contact || undefined,
+          equipment: group.equipment || [],
+        }));
+
+        setAllGroups(mappedGroups);
+      } catch (err) {
+        console.error('모임 목록 조회 실패:', err);
+        setAllGroups([]);
+      }
+    };
+
+    fetchAllGroups();
+  }, [selectedCategory, refreshTrigger]);
+
   return (
-    <div className="flex flex-col md:flex-row h-full w-full">
+    <div className="flex flex-col md:flex-row h-full w-full overflow-hidden" style={{ height: '100%', display: 'flex' }}>
       {/* 모바일: 카테고리 필터를 상단에 */}
-      <div className="md:hidden w-full border-b border-[var(--color-border-card)]">
+      <div className="md:hidden w-full border-b border-[var(--color-border-card)] flex-shrink-0">
         <CategoryFilter
           selectedCategory={selectedCategory}
           setSelectedCategory={setSelectedCategory}
@@ -73,7 +123,11 @@ const DashboardLayout = () => {
       
       {/* 데스크톱: GroupListPanel과 CategoryFilter */}
       <div className="hidden md:flex flex-shrink-0">
-        <GroupListPanel selectedCategory={selectedCategory} onGroupClick={handleGroupClick} />
+        <GroupListPanel 
+          selectedCategory={selectedCategory} 
+          onGroupClick={handleGroupClick}
+          refreshTrigger={refreshTrigger}
+        />
         <CategoryFilter
           selectedCategory={selectedCategory}
           setSelectedCategory={setSelectedCategory}
@@ -82,8 +136,12 @@ const DashboardLayout = () => {
       
       {/* 모바일: GroupListPanel을 상단에 (상세보기 열릴 때는 숨김) */}
       {!selectedGroup && (
-        <div className="md:hidden w-full border-b border-[var(--color-border-card)]">
-          <GroupListPanel selectedCategory={selectedCategory} onGroupClick={handleGroupClick} />
+        <div className="md:hidden w-full border-b border-[var(--color-border-card)] flex-shrink-0">
+          <GroupListPanel 
+            selectedCategory={selectedCategory} 
+            onGroupClick={handleGroupClick}
+            refreshTrigger={refreshTrigger}
+          />
         </div>
       )}
       
@@ -91,7 +149,7 @@ const DashboardLayout = () => {
       {selectedGroup && (
         <>
           {/* 모바일: 뒤로가기 버튼 */}
-          <div className="md:hidden w-full border-b border-[var(--color-border-card)] bg-[var(--color-bg-card)] p-2">
+          <div className="md:hidden w-full border-b border-[var(--color-border-card)] bg-[var(--color-bg-card)] p-2 flex-shrink-0">
             <button
               onClick={handleCloseDetail}
               className="flex items-center space-x-2 text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] px-3 py-2 rounded-lg transition-colors"
@@ -102,15 +160,21 @@ const DashboardLayout = () => {
               <span>목록으로</span>
             </button>
           </div>
-          <GroupDetail group={selectedGroup} onClose={handleCloseDetail} />
+          <GroupDetail 
+            group={selectedGroup} 
+            onClose={handleCloseDetail}
+            onParticipantChange={handleParticipantChange}
+          />
         </>
       )}
       
       {/* 지도 영역 */}
-      <main className="flex-1 h-full min-h-[400px] md:min-h-0 relative">
-        <MapPanel 
-          selectedGroup={selectedGroup} 
+      <main className="flex-1 relative overflow-hidden" style={{ height: '100%', minHeight: 0, flex: '1 1 0%' }}>
+        <KakaoMapPanel 
+          selectedGroup={selectedGroup}
+          allGroups={allGroups}
           onCreateGroupClick={() => setIsCreateModalOpen(true)}
+          onGroupClick={handleGroupClick}
         />
       </main>
       
@@ -119,6 +183,7 @@ const DashboardLayout = () => {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSubmit={handleCreateGroup}
+        onSuccess={handleGroupCreated}
       />
     </div>
   );
@@ -153,7 +218,7 @@ const MainLayout = () => {
     <ProtectedRoute>
       <div className="flex h-screen bg-[var(--color-bg-primary)] overflow-hidden">
         <Sidebar />
-        <div className="flex-1 flex flex-col overflow-y-auto min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
           <Routes>
             <Route index element={<DashboardLayout />} />
             <Route path="my-info" element={<MyInfoPage />} />

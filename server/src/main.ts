@@ -20,6 +20,8 @@ async function bootstrap() {
     }),
   );
 
-  await app.listen(process.env.PORT ?? 3000);
+  const port = process.env.PORT ?? 3000;
+  await app.listen(port);
+  console.log(`🚀 서버가 http://localhost:${port}에서 실행 중입니다.`);
 }
 bootstrap();

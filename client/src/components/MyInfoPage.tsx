@@ -12,6 +12,7 @@ import {
   HeartIcon,
   CreditCardIcon,
   ArrowRightOnRectangleIcon,
+  MapPinIcon,
 } from '@heroicons/react/24/outline';
 import ToggleSwitch from './ToggleSwitch';
 import { useAuth } from '../contexts/AuthContext';
@@ -33,6 +34,8 @@ interface UserProfileData {
   marketingEmailConsent: boolean;
   marketingSmsConsent: boolean;
   phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
   socialAccounts: {
     kakao: boolean;
     naver: boolean;
@@ -48,6 +51,8 @@ const MyInfoPage = () => {
   const [nickname, setNickname] = useState('');
   const [isEditingPhone, setIsEditingPhone] = useState(false);
   const [phone, setPhone] = useState('');
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; address: string } | null>(null);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
 
   // 사용자 정보 로드
   useEffect(() => {
@@ -58,6 +63,20 @@ const MyInfoPage = () => {
         setProfileData(data);
         setNickname(data.nickname || '');
         setPhone(data.phone || '');
+        
+        // 저장된 위치 정보가 있으면 표시
+        if (data.latitude && data.longitude) {
+          // 주소는 역지오코딩으로 가져오거나 저장된 값 사용
+          const savedLocation = localStorage.getItem('userLocation');
+          if (savedLocation) {
+            try {
+              const location = JSON.parse(savedLocation);
+              setUserLocation(location);
+            } catch (e) {
+              // 무시
+            }
+          }
+        }
       } catch (error) {
         console.error('사용자 정보 로드 실패:', error);
       } finally {
@@ -160,6 +179,80 @@ const MyInfoPage = () => {
     } catch (error) {
       console.error('마케팅 동의 업데이트 실패:', error);
     }
+  };
+
+  const handleGetCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert('이 브라우저는 위치 정보를 지원하지 않습니다.');
+      return;
+    }
+
+    setIsGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        try {
+          // 카카오맵 역지오코딩 API로 주소 가져오기
+          const KAKAO_REST_API_KEY = import.meta.env.VITE_KAKAO_REST_API_KEY;
+          if (!KAKAO_REST_API_KEY) {
+            throw new Error('카카오 REST API 키가 설정되지 않았습니다.');
+          }
+
+          const response = await fetch(
+            `https://dapi.kakao.com/v2/local/geo/coord2address.json?x=${longitude}&y=${latitude}`,
+            {
+              headers: {
+                Authorization: `KakaoAK ${KAKAO_REST_API_KEY}`,
+              },
+            }
+          );
+
+          const data = await response.json();
+          const address = data.documents?.[0]?.address?.address_name || 
+                         data.documents?.[0]?.road_address?.address_name || 
+                         '주소를 가져올 수 없습니다';
+
+          // 위치 정보 저장
+          await api.put('/api/auth/me', {
+            latitude,
+            longitude,
+          });
+
+          setUserLocation({ latitude, longitude, address });
+          setProfileData({
+            ...profileData!,
+            latitude,
+            longitude,
+          });
+
+          // localStorage에 저장
+          localStorage.setItem('userLocation', JSON.stringify({ latitude, longitude, address }));
+          
+          // 커스텀 이벤트 발생 (같은 탭에서 즉시 감지)
+          window.dispatchEvent(new CustomEvent('userLocationUpdated', {
+            detail: { latitude, longitude, address }
+          }));
+
+          alert('위치 정보가 저장되었습니다.');
+        } catch (error) {
+          console.error('위치 정보 저장 실패:', error);
+          alert('위치 정보 저장에 실패했습니다.');
+        } finally {
+          setIsGettingLocation(false);
+        }
+      },
+      (error) => {
+        console.error('위치 정보 가져오기 실패:', error);
+        alert('위치 정보를 가져올 수 없습니다. 위치 권한을 확인해주세요.');
+        setIsGettingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
   };
 
   if (isLoading || !profileData) {
@@ -398,6 +491,43 @@ const MyInfoPage = () => {
                 </>
               )}
             </div>
+          </div>
+
+          {/* 위치 정보 */}
+          <div className="pt-3 border-t border-[var(--color-border-card)]">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-3">
+                <MapPinIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
+                <span className="text-[var(--color-text-primary)] font-medium">현재 위치</span>
+              </div>
+              <button
+                onClick={handleGetCurrentLocation}
+                disabled={isGettingLocation}
+                className="px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isGettingLocation ? '위치 가져오는 중...' : '현재 위치 저장'}
+              </button>
+            </div>
+            {userLocation ? (
+              <div className="mt-2 p-3 bg-[var(--color-bg-secondary)] rounded-lg">
+                <div className="text-sm text-[var(--color-text-secondary)] mb-1">저장된 위치</div>
+                <div className="text-[var(--color-text-primary)] font-medium">{userLocation.address}</div>
+                <div className="text-xs text-[var(--color-text-secondary)] mt-1">
+                  위도: {userLocation.latitude.toFixed(6)}, 경도: {userLocation.longitude.toFixed(6)}
+                </div>
+              </div>
+            ) : profileData.latitude && profileData.longitude ? (
+              <div className="mt-2 p-3 bg-[var(--color-bg-secondary)] rounded-lg">
+                <div className="text-sm text-[var(--color-text-secondary)] mb-1">저장된 위치</div>
+                <div className="text-xs text-[var(--color-text-secondary)]">
+                  위도: {profileData.latitude.toFixed(6)}, 경도: {profileData.longitude.toFixed(6)}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2 text-sm text-[var(--color-text-secondary)]">
+                저장된 위치 정보가 없습니다. '현재 위치 저장' 버튼을 클릭하여 위치를 저장하세요.
+              </div>
+            )}
           </div>
 
           {/* 수신 동의 */}

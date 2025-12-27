@@ -1,13 +1,84 @@
-import React from 'react';
-import { XMarkIcon, MapPinIcon, UsersIcon, TagIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect } from 'react';
+import { XMarkIcon, MapPinIcon, UsersIcon, TagIcon, WrenchScrewdriverIcon } from '@heroicons/react/24/outline';
 import type { SelectedGroup } from './MapPanel';
+import { api } from '../utils/api';
 
 interface GroupDetailProps {
   group: SelectedGroup | null;
   onClose: () => void;
+  onParticipantChange?: () => void; // 참가자 수 변경 시 콜백
 }
 
-const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose }) => {
+const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipantChange }) => {
+  const [isParticipant, setIsParticipant] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [participantCount, setParticipantCount] = useState(group?.memberCount || 0);
+
+  useEffect(() => {
+    if (group) {
+      setParticipantCount(group.memberCount || 0);
+      checkParticipation();
+    }
+  }, [group]);
+
+  const checkParticipation = async () => {
+    if (!group) return;
+    
+    try {
+      const groupData = await api.get<{ isUserParticipant?: boolean; participantCount: number }>(`/api/groups/${group.id}`);
+      setIsParticipant(groupData.isUserParticipant || false);
+      setParticipantCount(groupData.participantCount || 0);
+    } catch (error) {
+      console.error('참가 상태 확인 실패:', error);
+    }
+  };
+
+  const handleJoin = async () => {
+    if (!group || isLoading) return;
+
+    setIsLoading(true);
+    try {
+      const updatedGroup = await api.post<{ participantCount: number }>(`/api/groups/${group.id}/join`);
+      setIsParticipant(true);
+      setParticipantCount(updatedGroup.participantCount);
+      
+      // 부모 컴포넌트에 변경 알림
+      if (onParticipantChange) {
+        onParticipantChange();
+      }
+    } catch (error) {
+      console.error('모임 참가 실패:', error);
+      alert(error instanceof Error ? error.message : '모임 참가에 실패했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLeave = async () => {
+    if (!group || isLoading) return;
+
+    if (!confirm('정말 모임에서 나가시겠습니까?')) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await api.post(`/api/groups/${group.id}/leave`);
+      setIsParticipant(false);
+      setParticipantCount((prev) => Math.max(1, prev - 1));
+      
+      // 부모 컴포넌트에 변경 알림
+      if (onParticipantChange) {
+        onParticipantChange();
+      }
+    } catch (error) {
+      console.error('모임 탈퇴 실패:', error);
+      alert(error instanceof Error ? error.message : '모임 탈퇴에 실패했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (!group) return null;
 
   return (
@@ -33,14 +104,12 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose }) => {
             </div>
             
             <div className="flex items-center space-x-4">
-              {group.memberCount !== undefined && (
-                <div className="flex items-center space-x-2">
-                  <UsersIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-                  <span className="text-[var(--color-text-secondary)]">
-                    현재 인원: <span className="text-[var(--color-text-primary)] font-semibold">{group.memberCount}명</span>
-                  </span>
-                </div>
-              )}
+              <div className="flex items-center space-x-2">
+                <UsersIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
+                <span className="text-[var(--color-text-secondary)]">
+                  참가자: <span className="text-[var(--color-text-primary)] font-semibold">{participantCount}명</span>
+                </span>
+              </div>
               
               {group.category && (
                 <div className="flex items-center space-x-2">
@@ -69,11 +138,45 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose }) => {
             </div>
           </div>
 
+          {/* 준비물 정보 */}
+          {group.equipment && group.equipment.length > 0 && (
+            <div className="border-t border-[var(--color-border-card)] pt-4">
+              <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-3 flex items-center">
+                <WrenchScrewdriverIcon className="w-5 h-5 mr-2" />
+                준비물
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {group.equipment.map((item, index) => (
+                  <span
+                    key={index}
+                    className="px-3 py-1.5 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] text-sm font-medium rounded-full"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* 액션 버튼 */}
           <div className="flex space-x-3 pt-4 border-t border-[var(--color-border-card)]">
-            <button className="flex-1 px-4 py-3 bg-[var(--color-blue-primary)] text-white rounded-lg font-semibold hover:opacity-90 transition-opacity">
-              모임 가입하기
-            </button>
+            {isParticipant ? (
+              <button
+                onClick={handleLeave}
+                disabled={isLoading}
+                className="flex-1 px-4 py-3 bg-red-500 text-white rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? '처리 중...' : '모임 나가기'}
+              </button>
+            ) : (
+              <button
+                onClick={handleJoin}
+                disabled={isLoading}
+                className="flex-1 px-4 py-3 bg-[var(--color-blue-primary)] text-white rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? '처리 중...' : '모임 참가하기'}
+              </button>
+            )}
             <button className="px-4 py-3 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-lg font-semibold hover:opacity-80 transition-opacity">
               공유하기
             </button>

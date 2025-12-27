@@ -3,6 +3,7 @@ import {
   Post,
   Body,
   Get,
+  Put,
   Query,
   UseGuards,
   HttpCode,
@@ -17,6 +18,7 @@ import { LoginDto } from './dto/login.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { SocialCallbackDto } from './dto/social-callback.dto';
 import { OAuthAuthUrlDto } from './dto/oauth-auth-url.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -156,7 +158,19 @@ export class AuthController {
       socialAccounts: connectedProviders,
       // phone 필드는 DB에 없으므로 null로 반환
       phone: null,
+      latitude: user.latitude ? Number(user.latitude) : null,
+      longitude: user.longitude ? Number(user.longitude) : null,
     };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Put('me')
+  @HttpCode(HttpStatus.OK)
+  async updateProfile(
+    @CurrentUser() user: User,
+    @Body(ValidationPipe) updateProfileDto: UpdateProfileDto,
+  ) {
+    return this.authService.updateProfile(user.id, updateProfileDto);
   }
 }
 

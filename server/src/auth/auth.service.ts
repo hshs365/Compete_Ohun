@@ -219,6 +219,10 @@ export class AuthService {
     return { available };
   }
 
+  async updateProfile(userId: number, updateData: { nickname?: string; phone?: string; latitude?: number; longitude?: number }): Promise<User> {
+    return this.usersService.updateUser(userId, updateData);
+  }
+
   private generateToken(user: User): string {
     const payload: JwtPayload = {
       sub: user.id,

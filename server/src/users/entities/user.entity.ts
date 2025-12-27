@@ -61,6 +61,13 @@ export class User {
   @Column({ type: 'varchar', length: 50 })
   residenceSigungu: string; // 시/군/구
 
+  // 위치 정보 (위도, 경도)
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  latitude: number | null;
+
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  longitude: number | null;
+
   // 선택 정보
   @Column({ type: 'text', array: true, default: [] })
   interestedSports: string[]; // 관심 운동 종목 배열

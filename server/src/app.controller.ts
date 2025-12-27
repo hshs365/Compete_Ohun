@@ -6,7 +6,11 @@ export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Get()
-  getHello(): string {
-    return this.appService.getHello();
+  getHello(): { message: string; status: string; api: string } {
+    return {
+      message: 'Ohun API Server',
+      status: 'running',
+      api: '/api'
+    };
   }
 }

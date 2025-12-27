@@ -50,10 +50,12 @@ export type SelectedGroup = {
   description?: string;
   meetingTime?: string;
   contact?: string;
+  equipment?: string[]; // 준비물 목록
 };
 
 interface MapPanelProps {
   selectedGroup?: SelectedGroup | null;
+  allGroups?: SelectedGroup[]; // 모든 모임 목록
   onCreateGroupClick?: () => void;
 }
 
@@ -74,7 +76,7 @@ const MapController = ({ center, zoom }: { center: [number, number]; zoom: numbe
   return null;
 };
 
-const MapPanel = ({ selectedGroup = null, onCreateGroupClick }: MapPanelProps) => {
+const MapPanel = ({ selectedGroup = null, allGroups = [], onCreateGroupClick }: MapPanelProps) => {
   const [isMounted, setIsMounted] = useState(false);
   const [shouldRenderMap, setShouldRenderMap] = useState(false);
   const defaultPosition: [number, number] = [37.5665, 126.9780]; // Default position (Seoul)
@@ -188,20 +190,32 @@ const MapPanel = ({ selectedGroup = null, onCreateGroupClick }: MapPanelProps) =
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {/* 선택된 그룹 마커 */}
-        {selectedGroup && (
-          <Marker position={selectedGroup.coordinates}>
+        {/* 모든 모임 마커 */}
+        {allGroups.map((group) => (
+          <Marker
+            key={group.id}
+            position={group.coordinates}
+            opacity={selectedGroup && selectedGroup.id === group.id ? 1 : 0.7}
+          >
             <Popup>
               <div>
-                <strong>{selectedGroup.name}</strong>
+                <strong>{group.name}</strong>
                 <br />
-                {selectedGroup.location}
+                {group.location}
+                <br />
+                <span className="text-xs text-gray-600">{group.category}</span>
+                {group.memberCount && (
+                  <>
+                    <br />
+                    <span className="text-xs text-gray-600">참가자: {group.memberCount}명</span>
+                  </>
+                )}
               </div>
             </Popup>
           </Marker>
-        )}
-        {/* 기본 위치 마커 (그룹이 선택되지 않았을 때만) */}
-        {!selectedGroup && (
+        ))}
+        {/* 기본 위치 마커 (모임이 없을 때만) */}
+        {allGroups.length === 0 && !selectedGroup && (
           <Marker position={defaultPosition}>
             <Popup>
               서울 시청 <br /> 현재 위치
