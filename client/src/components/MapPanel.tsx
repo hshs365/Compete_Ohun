@@ -46,16 +46,25 @@ export type SelectedGroup = {
   location: string;
   coordinates: [number, number];
   memberCount?: number;
+  maxParticipants?: number; // 최대 참여자 수
   category?: string;
   description?: string;
   meetingTime?: string;
   contact?: string;
   equipment?: string[]; // 준비물 목록
+  badges?: {
+    isNew?: boolean; // 생성된 지 2시간 이내
+    isHot?: boolean; // 참가자가 급속도로 늘어나는 모임
+    hasRanker?: boolean; // 랭커가 참가한 모임
+    isUrgent?: boolean; // 마감임박 (80% 이상 참가)
+    isToday?: boolean; // 오늘 모임
+  };
+  parsedMeetingTime?: Date; // 파싱된 모임 시간 (정렬용)
 };
 
 interface MapPanelProps {
   selectedGroup?: SelectedGroup | null;
-  allGroups?: SelectedGroup[]; // 모든 모임 목록
+  allGroups?: SelectedGroup[]; // 모든 매치 목록
   onCreateGroupClick?: () => void;
 }
 
@@ -225,12 +234,12 @@ const MapPanel = ({ selectedGroup = null, allGroups = [], onCreateGroupClick }: 
         </MapContainer>
       </div>
       
-      {/* 새 모임 만들기 플로팅 버튼 */}
+      {/* 새 매치 만들기 플로팅 버튼 */}
       {onCreateGroupClick && (
         <button
           onClick={onCreateGroupClick}
           className="absolute bottom-6 right-6 z-[1000] bg-[var(--color-blue-primary)] text-white px-4 py-3 rounded-full shadow-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
-          aria-label="새 모임 만들기"
+          aria-label="새 매치 만들기"
         >
           <svg
             className="w-5 h-5 flex-shrink-0"
@@ -242,7 +251,7 @@ const MapPanel = ({ selectedGroup = null, allGroups = [], onCreateGroupClick }: 
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           <span className="whitespace-nowrap font-semibold text-sm md:text-base">
-            새 모임 만들기
+            새 매치 만들기
           </span>
         </button>
       )}

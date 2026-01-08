@@ -1,11 +1,16 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, MoreThanOrEqual } from 'typeorm';
 import { Group } from './entities/group.entity';
 import { GroupParticipant } from './entities/group-participant.entity';
+import { GroupGameSettings } from './entities/group-game-settings.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupQueryDto } from './dto/group-query.dto';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/entities/notification.entity';
+import { UsersService } from '../users/users.service';
+import { UserScoreService } from '../users/user-score.service';
 
 @Injectable()
 export class GroupsService {
@@ -14,27 +19,106 @@ export class GroupsService {
     private groupRepository: Repository<Group>,
     @InjectRepository(GroupParticipant)
     private participantRepository: Repository<GroupParticipant>,
+    @InjectRepository(GroupGameSettings)
+    private gameSettingsRepository: Repository<GroupGameSettings>,
+    private notificationsService: NotificationsService,
+    private usersService: UsersService,
+    private userScoreService: UserScoreService,
   ) {}
 
   async create(createGroupDto: CreateGroupDto, creatorId: number): Promise<Group> {
+    // 이벤트매치인 경우 사장님 권한 체크
+    const groupType = createGroupDto.type || 'normal';
+    if (groupType === 'event') {
+      const creator = await this.usersService.findById(creatorId);
+      if (!creator) {
+        throw new NotFoundException('사용자를 찾을 수 없습니다.');
+      }
+      if (!creator.businessNumberVerified) {
+        throw new ForbiddenException('이벤트매치는 체육관 사장님이나 스포츠샵 사장님으로 등록된 사용자만 개최할 수 있습니다.');
+      }
+    }
+
+    // meetingDateTime이 문자열이면 Date로 변환
+    let meetingDateTime: Date | null = null;
+    if (createGroupDto.meetingDateTime) {
+      if (typeof createGroupDto.meetingDateTime === 'string') {
+        meetingDateTime = new Date(createGroupDto.meetingDateTime);
+      } else {
+        meetingDateTime = createGroupDto.meetingDateTime;
+      }
+    }
+
     const group = this.groupRepository.create({
       ...createGroupDto,
+      type: groupType,
       creatorId,
       participantCount: 1, // 생성자 포함
       equipment: createGroupDto.equipment || [],
+      participants: [], // 명시적으로 빈 배열 설정 (cascade 문제 방지)
+      meetingDateTime,
     });
 
-    return this.groupRepository.save(group);
+    const savedGroup = await this.groupRepository.save(group);
+
+    // 게임 설정이 있으면 저장
+    if (createGroupDto.gameSettings) {
+      const gameSettings = this.gameSettingsRepository.create({
+        groupId: savedGroup.id,
+        gameType: createGroupDto.gameSettings.gameType || 'individual',
+        positions: createGroupDto.gameSettings.positions || [],
+        minPlayersPerTeam: createGroupDto.gameSettings.minPlayersPerTeam || null,
+        balanceByExperience: createGroupDto.gameSettings.balanceByExperience || false,
+        balanceByRank: createGroupDto.gameSettings.balanceByRank || false,
+      });
+      await this.gameSettingsRepository.save(gameSettings);
+    }
+
+    // 게임 설정을 포함하여 다시 조회
+    const groupWithSettings = await this.groupRepository.findOne({
+      where: { id: savedGroup.id },
+      relations: ['creator', 'gameSettings'],
+    });
+
+    // 모임 생성자 리더십 점수 업데이트
+    try {
+      const creator = await this.usersService.findById(creatorId);
+      if (creator) {
+        await this.usersService.updateUser(creatorId, {
+          groupsCreated: (creator.groupsCreated || 0) + 1,
+        });
+        await this.userScoreService.recalculateAllScores(creatorId);
+      }
+    } catch (error) {
+      // 점수 업데이트 실패해도 모임 생성은 성공으로 처리
+      console.error('❌ 리더십 점수 업데이트 실패:', error);
+    }
+
+    // participants 관계를 undefined로 설정하여 반환 (cascade 문제 방지)
+    if (groupWithSettings) {
+      (groupWithSettings as any).participants = undefined;
+      return groupWithSettings;
+    }
+
+    // participants 관계를 undefined로 설정하여 반환 (cascade 문제 방지)
+    (savedGroup as any).participants = undefined;
+    return savedGroup;
   }
 
   async findAll(queryDto: GroupQueryDto): Promise<{ groups: Group[]; total: number }> {
-    const { category, search, page = 1, limit = 20 } = queryDto;
+    const { category, search, page = 1, limit = 20, hideClosed, onlyRanker, gender, includeCompleted, type } = queryDto;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.groupRepository
       .createQueryBuilder('group')
       .leftJoinAndSelect('group.creator', 'creator')
+      .leftJoinAndSelect('group.gameSettings', 'gameSettings')
       .where('group.isActive = :isActive', { isActive: true });
+
+    // 모임 타입 필터
+    if (queryDto.type) {
+      queryBuilder.andWhere('group.type = :type', { type: queryDto.type });
+    }
 
     // 카테고리 필터
     if (category && category !== '전체') {
@@ -49,34 +133,155 @@ export class GroupsService {
       );
     }
 
+    // 성별 필터
+    if (gender) {
+      queryBuilder.andWhere('group.genderRestriction = :gender', { gender });
+    }
+
+    // 종료된 모임 필터
+    // 이벤트매치는 종료된 경우 기본적으로 제외, includeCompleted가 true면 포함
+    // 일반 모임은 includeCompleted가 true면 종료된 것도 포함
+    if (queryDto.type === 'event') {
+      // 이벤트매치인 경우
+      if (!queryDto.includeCompleted) {
+        // 종료된 이벤트매치는 기본적으로 제외
+        queryBuilder.andWhere('group.isCompleted = :isCompleted', { isCompleted: false });
+      }
+    } else if (queryDto.type === 'normal' || !queryDto.type) {
+      // 일반 모임인 경우 (또는 타입 필터가 없는 경우)
+      if (!queryDto.includeCompleted) {
+        // 종료된 일반 모임도 기본적으로 제외 (선택적으로 포함 가능)
+        queryBuilder.andWhere('group.isCompleted = :isCompleted', { isCompleted: false });
+      }
+    }
+
+    // 마감된 모임 가리기
+    if (hideClosed) {
+      queryBuilder.andWhere(
+        '(group.maxParticipants IS NULL OR group.participantCount < group.maxParticipants)',
+      );
+    }
+
+    // 선수출신 경기만 보기 (랭커가 참가한 모임만)
+    if (onlyRanker) {
+      queryBuilder.andWhere(
+        'EXISTS (SELECT 1 FROM group_participants gp INNER JOIN users u ON gp.user_id = u.id WHERE gp.group_id = group.id AND u.skill_level = :skillLevel)',
+        { skillLevel: 'advanced' },
+      );
+    }
+
     // 정렬: 최신순
     queryBuilder.orderBy('group.createdAt', 'DESC');
 
     // 페이지네이션
     const [groups, total] = await queryBuilder.skip(skip).take(limit).getManyAndCount();
 
-    return { groups, total };
+    // 각 모임에 대한 추가 정보 계산 (최근 참가자 증가율, 랭커 참가 여부)
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000); // 1시간 전
+
+    const groupsWithMetadata = await Promise.all(
+      groups.map(async (group) => {
+        // 최근 1시간 이내 참가자 수 계산 (레코드 존재 = 참가, status 무시)
+        const recentParticipants = await this.participantRepository.count({
+          where: {
+            groupId: group.id,
+            joinedAt: MoreThanOrEqual(oneHourAgo),
+          },
+        });
+
+        // 랭커가 참가한 모임인지 확인 (일단 skillLevel이 ADVANCED인 참가자가 있으면 랭커로 간주)
+        // TODO: 실제 랭커 판단 로직은 나중에 구현 (랭킹 시스템이 완성되면)
+        let hasRanker = false;
+        try {
+          const rankerCount = await this.participantRepository
+            .createQueryBuilder('participant')
+            .innerJoin('participant.user', 'user')
+            .where('participant.groupId = :groupId', { groupId: group.id })
+            .andWhere('user.skillLevel = :skillLevel', { skillLevel: 'advanced' })
+            .getCount();
+          hasRanker = rankerCount > 0;
+        } catch (error) {
+          // 에러 발생 시 false로 설정
+          console.error('랭커 확인 실패:', error);
+        }
+
+        return {
+          ...group,
+          recentJoinCount: recentParticipants,
+          hasRanker,
+        };
+      }),
+    );
+
+    return { groups: groupsWithMetadata, total };
   }
 
   async findOne(id: number, userId?: number): Promise<Group> {
-    const group = await this.groupRepository.findOne({
-      where: { id },
-      relations: ['creator', 'participants', 'participants.user'],
-    });
+    try {
+      // 모임 정보는 relations 없이 먼저 로드 (캐시 문제 방지)
+      const group = await this.groupRepository.findOne({
+        where: { id },
+        relations: ['creator', 'gameSettings'],
+      });
 
-    if (!group) {
-      throw new NotFoundException('모임을 찾을 수 없습니다.');
+      if (!group) {
+        throw new NotFoundException('모임을 찾을 수 없습니다.');
+      }
+
+      // participants는 별도로 조회하여 항상 최신 데이터 보장 (캐시 무시)
+      try {
+        group.participants = await this.participantRepository.find({
+          where: { groupId: id },
+          relations: ['user'],
+        });
+      } catch (participantError) {
+        console.error('참가자 목록 로드 실패:', participantError);
+        // 참가자 목록 로드 실패 시 빈 배열로 설정
+        group.participants = [];
+      }
+
+      // 실제 참가자 수 계산하여 participantCount 동기화 (레코드 존재 = 참가, status 무시)
+      // 모임장도 항상 참가자이므로 +1
+      const actualParticipantCount = group.participants?.length || 0;
+      const syncedCount = Math.max(1, actualParticipantCount + 1); // 최소 1명 (모임장)
+      
+      // participantCount가 실제 참가자 수와 다르면 동기화
+      if (group.participantCount !== syncedCount) {
+        // participants 관계를 제외하고 participantCount만 업데이트
+        // cascade: true 때문에 participants를 함께 저장하면 group_id가 null이 될 수 있음
+        this.groupRepository
+          .createQueryBuilder()
+          .update(Group)
+          .set({ participantCount: syncedCount })
+          .where('id = :id', { id: group.id })
+          .execute()
+          .catch((saveError) => {
+            console.error('participantCount 동기화 실패:', saveError);
+          });
+        // group 객체의 participantCount도 업데이트 (반환값에 반영)
+        group.participantCount = syncedCount;
+      }
+
+      // 사용자가 참가했는지 확인 (선택적) - 레코드 존재 = 참가
+      if (userId) {
+        const isParticipant = group.participants?.some(
+          (p) => p.userId === userId,
+        );
+        (group as any).isUserParticipant = isParticipant;
+      }
+
+      return group;
+    } catch (error) {
+      // NotFoundException은 그대로 throw
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      
+      // 그 외의 에러는 로깅하고 재throw
+      console.error('findOne 에러:', error);
+      throw error;
     }
-
-    // 사용자가 참가했는지 확인 (선택적)
-    if (userId) {
-      const isParticipant = group.participants?.some(
-        (p) => p.userId === userId && p.status === 'joined',
-      );
-      (group as any).isUserParticipant = isParticipant;
-    }
-
-    return group;
   }
 
   async update(id: number, updateGroupDto: UpdateGroupDto, userId: number): Promise<Group> {
@@ -87,8 +292,18 @@ export class GroupsService {
       throw new ForbiddenException('모임을 수정할 권한이 없습니다.');
     }
 
+    // participants 관계를 제외하고 업데이트
+    // cascade: true 때문에 participants를 함께 저장하면 group_id가 null이 될 수 있음
+    await this.groupRepository
+      .createQueryBuilder()
+      .update(Group)
+      .set(updateGroupDto)
+      .where('id = :id', { id })
+      .execute();
+    
+    // group 객체도 업데이트하여 반환
     Object.assign(group, updateGroupDto);
-    return this.groupRepository.save(group);
+    return group;
   }
 
   async remove(id: number, userId: number): Promise<void> {
@@ -100,77 +315,704 @@ export class GroupsService {
     }
 
     // 실제 삭제 대신 비활성화
-    group.isActive = false;
-    await this.groupRepository.save(group);
+    // participants 관계를 제외하고 isActive만 업데이트
+    await this.groupRepository
+      .createQueryBuilder()
+      .update(Group)
+      .set({ isActive: false })
+      .where('id = :id', { id })
+      .execute();
   }
 
   async joinGroup(groupId: number, userId: number): Promise<Group> {
-    const group = await this.findOne(groupId);
-
-    if (!group.isActive) {
-      throw new NotFoundException('비활성화된 모임입니다.');
-    }
-
-    // 이미 참가했는지 확인
-    const existingParticipant = await this.participantRepository.findOne({
-      where: { groupId, userId, status: 'joined' },
+    console.log('🚀 joinGroup 시작:', {
+      원본_groupId: groupId,
+      원본_userId: userId,
+      groupId_타입: typeof groupId,
+      userId_타입: typeof userId,
     });
 
-    if (existingParticipant) {
-      throw new ConflictException('이미 참가한 모임입니다.');
+    try {
+      // groupId와 userId 유효성 검사 및 숫자 변환
+      const numericGroupId = Number(groupId);
+      const numericUserId = Number(userId);
+      
+      console.log('🔢 숫자 변환 후:', {
+        numericGroupId,
+        numericUserId,
+        groupId_유효성: !isNaN(numericGroupId) && numericGroupId > 0,
+        userId_유효성: !isNaN(numericUserId) && numericUserId > 0,
+      });
+      
+      if (!numericGroupId || isNaN(numericGroupId) || !numericUserId || isNaN(numericUserId)) {
+        console.error('❌ ID 유효성 검사 실패');
+        throw new BadRequestException('모임 ID 또는 사용자 ID가 유효하지 않습니다.');
+      }
+
+      // 모임 정보 조회
+      console.log('📋 모임 정보 조회 시작:', { numericGroupId, numericUserId });
+      const group = await this.findOne(numericGroupId, numericUserId);
+      if (!group) {
+        console.error('❌ 모임을 찾을 수 없음:', { numericGroupId });
+        throw new NotFoundException('모임을 찾을 수 없습니다.');
+      }
+      console.log('✅ 모임 정보 조회 완료:', {
+        groupId: group.id,
+        groupName: group.name,
+        creatorId: group.creatorId,
+        participantCount: group.participantCount,
+        maxParticipants: group.maxParticipants,
+      });
+
+      // 최대 참여자 수 체크
+      if (group.maxParticipants && group.participantCount >= group.maxParticipants) {
+        console.error('❌ 모임 인원 가득참:', {
+          participantCount: group.participantCount,
+          maxParticipants: group.maxParticipants,
+        });
+        throw new ConflictException('모임 인원이 가득 찼습니다.');
+      }
+
+      // 이미 참가했는지 확인 (레코드 존재 = 참가)
+      console.log('🔍 기존 참가자 확인:', { numericGroupId, numericUserId });
+      const existingParticipant = await this.participantRepository.findOne({
+        where: { groupId: numericGroupId, userId: numericUserId },
+      });
+
+      if (existingParticipant) {
+        console.error('❌ 이미 참가한 모임:', {
+          participantId: existingParticipant.id,
+          groupId: existingParticipant.groupId,
+          userId: existingParticipant.userId,
+        });
+        throw new ConflictException('이미 참가한 모임입니다.');
+      }
+      console.log('✅ 기존 참가자 없음 - 새로 참가 가능');
+
+      // 생성자는 자동으로 참가자이므로 별도 처리 불필요
+      if (group.creatorId === numericUserId) {
+        console.error('❌ 모임 생성자는 이미 참가 상태');
+        throw new ConflictException('모임 생성자는 이미 참가 상태입니다.');
+      }
+
+      // 사용자 정보 가져오기 (알림 전송용 및 성별 체크)
+      const user = await this.usersService.findById(numericUserId);
+      if (!user) {
+        throw new NotFoundException('사용자를 찾을 수 없습니다.');
+      }
+
+      // 성별 제한 체크
+      if (group.genderRestriction) {
+        if (user.gender !== group.genderRestriction) {
+          const genderText = group.genderRestriction === 'male' ? '남자' : '여자';
+          throw new ForbiddenException(`이 모임은 ${genderText}만 참가할 수 있습니다.`);
+        }
+      }
+
+      // 같은 시간대에 참가한 다른 모임이 있는지 확인
+      if (group.meetingDateTime) {
+        const meetingTime = new Date(group.meetingDateTime);
+        const userParticipatedGroups = await this.participantRepository
+          .createQueryBuilder('participant')
+          .innerJoin('participant.group', 'group')
+          .where('participant.userId = :userId', { userId: numericUserId })
+          .andWhere('group.meetingDateTime IS NOT NULL')
+          .andWhere('group.isActive = :isActive', { isActive: true })
+          .select(['group.id', 'group.name', 'group.meetingDateTime'])
+          .getRawMany();
+
+        // 시간 겹침 체크 (같은 날짜, 같은 시간대)
+        for (const participatedGroup of userParticipatedGroups) {
+          const otherMeetingTime = new Date(participatedGroup.group_meetingDateTime);
+          
+          // 같은 날짜인지 확인
+          const isSameDate = 
+            meetingTime.getFullYear() === otherMeetingTime.getFullYear() &&
+            meetingTime.getMonth() === otherMeetingTime.getMonth() &&
+            meetingTime.getDate() === otherMeetingTime.getDate();
+          
+          if (isSameDate) {
+            // 같은 시간대인지 확인 (1시간 이내 차이를 겹치는 것으로 간주)
+            const timeDiff = Math.abs(meetingTime.getTime() - otherMeetingTime.getTime());
+            const oneHourInMs = 60 * 60 * 1000; // 1시간
+            
+            if (timeDiff < oneHourInMs) {
+              throw new ConflictException(
+                `이미 같은 시간대에 참가한 모임이 있습니다. (${participatedGroup.group_name})`
+              );
+            }
+          }
+        }
+      }
+
+      // 이미 참가했는지 다시 한 번 확인 (동시성 문제 방지)
+      const duplicateCheck = await this.participantRepository.findOne({
+        where: { groupId: numericGroupId, userId: numericUserId },
+      });
+      
+      if (duplicateCheck) {
+        throw new ConflictException('이미 참가한 모임입니다.');
+      }
+
+      // 참가자 추가 - Raw SQL을 사용하여 직접 INSERT 실행
+      console.log('📝 참가자 INSERT 시작:', {
+        numericGroupId,
+        numericUserId,
+        groupId_타입: typeof numericGroupId,
+        userId_타입: typeof numericUserId,
+        groupId_값: numericGroupId,
+        userId_값: numericUserId,
+      });
+
+      // 파라미터 최종 검증
+      if (!numericGroupId || isNaN(numericGroupId) || numericGroupId <= 0) {
+        console.error('❌ 모임 ID 유효성 검사 실패:', { numericGroupId });
+        throw new BadRequestException(`유효하지 않은 모임 ID: ${numericGroupId}`);
+      }
+      if (!numericUserId || isNaN(numericUserId) || numericUserId <= 0) {
+        console.error('❌ 사용자 ID 유효성 검사 실패:', { numericUserId });
+        throw new BadRequestException(`유효하지 않은 사용자 ID: ${numericUserId}`);
+      }
+
+      let insertSuccess = false;
+      
+      try {
+        // 방법 1: createQueryBuilder를 사용한 INSERT 시도
+        console.log('🔧 방법 1: createQueryBuilder INSERT 시도');
+        const queryBuilder = this.participantRepository
+          .createQueryBuilder()
+          .insert()
+          .into(GroupParticipant)
+          .values({
+            groupId: numericGroupId,
+            userId: numericUserId,
+            status: 'joined',
+          });
+
+        const sql = queryBuilder.getSql();
+        const params = queryBuilder.getParameters();
+        console.log('📄 생성된 SQL:', { sql, params });
+
+        const insertResult = await queryBuilder.execute();
+        console.log('✅ createQueryBuilder INSERT 성공:', {
+          result: insertResult,
+          raw: insertResult.raw,
+          identifiers: insertResult.identifiers,
+        });
+
+        if (insertResult && (insertResult.raw?.length > 0 || insertResult.identifiers?.length > 0)) {
+          insertSuccess = true;
+          console.log('✅ 참가자 레코드 저장 완료 (createQueryBuilder)');
+        }
+      } catch (saveError: any) {
+        console.error('❌ createQueryBuilder INSERT 실패:', {
+          error: saveError.message,
+          code: saveError.code,
+          detail: saveError.detail,
+          constraint: saveError.constraint,
+          stack: saveError.stack?.substring(0, 500),
+        });
+
+        // 방법 2: Raw SQL로 재시도
+        try {
+          console.log('🔧 방법 2: Raw SQL INSERT 시도');
+          const insertQuery = `
+            INSERT INTO group_participants (group_id, user_id, status, joined_at)
+            VALUES ($1, $2, $3, NOW())
+            RETURNING id, group_id, user_id, status, joined_at
+          `;
+          
+          console.log('📄 Raw SQL 쿼리:', {
+            query: insertQuery,
+            params: [numericGroupId, numericUserId, 'joined'],
+            param1_타입: typeof numericGroupId,
+            param2_타입: typeof numericUserId,
+            param1_값: numericGroupId,
+            param2_값: numericUserId,
+          });
+
+          const insertResult = await this.participantRepository.manager.query(insertQuery, [
+            numericGroupId,
+            numericUserId,
+            'joined',
+          ]);
+
+          console.log('✅ Raw SQL INSERT 성공:', {
+            result: insertResult,
+            resultType: typeof insertResult,
+            isArray: Array.isArray(insertResult),
+            length: insertResult?.length,
+            firstItem: insertResult?.[0],
+          });
+
+          if (insertResult && Array.isArray(insertResult) && insertResult.length > 0) {
+            insertSuccess = true;
+            console.log('✅ 참가자 레코드 저장 완료 (Raw SQL)');
+          }
+        } catch (rawSqlError: any) {
+          console.error('❌ Raw SQL INSERT도 실패:', {
+            error: rawSqlError.message,
+            code: rawSqlError.code,
+            detail: rawSqlError.detail,
+            constraint: rawSqlError.constraint,
+          });
+
+          // 에러 코드에 따른 처리
+          // UNIQUE 제약 조건 위반 (중복 참가 시도)
+          if (rawSqlError.code === '23505' || rawSqlError.message?.includes('UNIQUE')) {
+            // 실제로 레코드가 저장되었는지 확인
+            const existingParticipant = await this.participantRepository.findOne({
+              where: { groupId: numericGroupId, userId: numericUserId },
+            });
+            
+            if (existingParticipant) {
+              // 실제로는 저장되었으므로 성공으로 처리
+              insertSuccess = true;
+              console.log('✓ 참가자 레코드가 이미 존재함 (중복 저장 시도):', {
+                participantId: existingParticipant.id,
+                groupId: numericGroupId,
+                userId: numericUserId,
+              });
+            } else {
+              throw new ConflictException('이미 참가한 모임입니다.');
+            }
+          }
+          // NOT NULL 제약 조건 위반 처리
+          else if (rawSqlError.code === '23502' || rawSqlError.message?.includes('null value')) {
+            console.error('⚠️ 참가자 저장 실패 (NULL 제약조건):', {
+              groupId: numericGroupId,
+              userId: numericUserId,
+              error: rawSqlError.message,
+              code: rawSqlError.code,
+              detail: rawSqlError.detail,
+            });
+            
+            // 실제로 레코드가 저장되었는지 확인 (중복 저장 시도일 수 있음)
+            const existingParticipant = await this.participantRepository.findOne({
+              where: { groupId: numericGroupId, userId: numericUserId },
+            });
+            
+            if (existingParticipant) {
+              // 실제로는 저장되었으므로 성공으로 처리
+              insertSuccess = true;
+              console.log('✓ 참가자 레코드가 이미 존재함 (NULL 제약조건 에러 무시):', {
+                participantId: existingParticipant.id,
+                groupId: numericGroupId,
+                userId: numericUserId,
+              });
+            } else {
+              // 실제로 저장되지 않았으므로 에러 발생
+              throw new BadRequestException('모임 참가 정보가 올바르지 않습니다. 다시 시도해주세요.');
+            }
+          } else {
+            // 다른 에러인 경우에도 레코드가 저장되었는지 확인
+            const existingParticipant = await this.participantRepository.findOne({
+              where: { groupId: numericGroupId, userId: numericUserId },
+            });
+            
+            if (existingParticipant) {
+              // 실제로는 저장되었으므로 성공으로 처리
+              insertSuccess = true;
+              console.log('✓ 참가자 레코드가 이미 존재함 (기타 에러 무시):', {
+                participantId: existingParticipant.id,
+                groupId: numericGroupId,
+                userId: numericUserId,
+                error: rawSqlError.message,
+              });
+            } else {
+              console.error('참가자 저장 실패:', {
+                groupId: numericGroupId,
+                userId: numericUserId,
+                error: rawSqlError.message,
+                code: rawSqlError.code,
+              });
+              throw new ConflictException('모임 참가에 실패했습니다. 다시 시도해주세요.');
+            }
+          }
+        }
+      }
+
+      // INSERT가 성공하지 않았으면 에러 발생
+      if (!insertSuccess) {
+        throw new InternalServerErrorException('참가자 레코드 저장에 실패했습니다.');
+      }
+
+      // 참가자 수 업데이트: 실제 참가자 수를 계산하여 동기화
+      const actualParticipantCount = await this.participantRepository.count({
+        where: { groupId: group.id },
+      });
+      // 모임장도 항상 참가자이므로 +1
+      const newParticipantCount = Math.max(1, actualParticipantCount + 1);
+      
+      // participants 관계를 제외하고 participantCount만 업데이트
+      // cascade: true 때문에 participants를 함께 저장하면 group_id가 null이 될 수 있음
+      console.log('📊 참가자 수 업데이트:', {
+        groupId: group.id,
+        previousCount: group.participantCount,
+        newCount: newParticipantCount,
+        actualParticipantCount,
+      });
+      
+      await this.groupRepository
+        .createQueryBuilder()
+        .update(Group)
+        .set({ participantCount: newParticipantCount })
+        .where('id = :id', { id: group.id })
+        .execute();
+      
+      // group 객체의 participantCount도 업데이트 (반환값에 반영)
+      group.participantCount = newParticipantCount;
+
+      // 모임장에게 알림 전송 (참가자가 모임장이 아닌 경우에만)
+      if (group.creatorId !== numericUserId) {
+        try {
+          console.log('📬 모임장 알림 전송 시작:', {
+            creatorId: group.creatorId,
+            participantId: numericUserId,
+            groupId: group.id,
+            groupName: group.name,
+          });
+          
+          const participantUser = await this.usersService.findById(numericUserId);
+          if (participantUser && participantUser.nickname) {
+            await this.notificationsService.createNotification(
+              group.creatorId,
+              NotificationType.GROUP_JOIN,
+              '새로운 참가자',
+              `${participantUser.nickname}${participantUser.tag || ''}님이 "${group.name}" 모임에 참가했습니다.`,
+              {
+                groupId: group.id,
+                groupName: group.name,
+                participantId: numericUserId,
+                participantNickname: participantUser.nickname + (participantUser.tag || ''),
+              },
+            );
+            console.log('✅ 모임장 알림 전송 완료:', {
+              creatorId: group.creatorId,
+              participantNickname: participantUser.nickname + (participantUser.tag || ''),
+            });
+          } else {
+            console.warn('⚠️ 참가자 정보를 찾을 수 없어 알림을 전송하지 않습니다:', {
+              participantId: numericUserId,
+            });
+          }
+        } catch (error) {
+          // 알림 생성 실패해도 모임 참가는 성공으로 처리
+          console.error('❌ 모임장 알림 생성 실패:', error);
+        }
+      } else {
+        console.log('ℹ️ 참가자가 모임장이므로 알림을 전송하지 않습니다.');
+      }
+
+      // 점수 업데이트 (참가자만, 모임장은 제외)
+      if (group.creatorId !== numericUserId) {
+        try {
+          await this.userScoreService.onGroupJoin(numericUserId, group.id, group.category);
+        } catch (error) {
+          // 점수 업데이트 실패해도 모임 참가는 성공으로 처리
+          console.error('❌ 점수 업데이트 실패:', error);
+        }
+      }
+
+      // 참가 완료 후 그룹 정보 반환 (에러 처리 강화)
+      try {
+        return await this.findOne(groupId, userId);
+      } catch (error) {
+        // findOne 실패 시에도 참가자는 이미 저장되었으므로 기본 정보만 반환
+        console.error('모임 상세 정보 조회 실패 (참가는 성공):', error);
+        
+        // 참가자 목록을 별도로 로드하여 반환
+        const savedGroup = await this.groupRepository.findOne({
+          where: { id: groupId },
+          relations: ['creator'],
+        });
+        if (!savedGroup) {
+          throw new NotFoundException('모임을 찾을 수 없습니다.');
+        }
+
+        // 참가자 목록 로드
+        try {
+          savedGroup.participants = await this.participantRepository.find({
+            where: { groupId: groupId },
+            relations: ['user'],
+          });
+        } catch (participantError) {
+          console.error('참가자 목록 로드 실패:', participantError);
+          savedGroup.participants = [];
+        }
+
+        // 실제 참가자 수 계산하여 participantCount 동기화
+        const actualCount = savedGroup.participants?.length || 0;
+        savedGroup.participantCount = Math.max(1, actualCount + 1);
+
+        // 사용자가 참가했는지 확인
+        if (userId) {
+          const isParticipant = savedGroup.participants?.some(
+            (p) => p.userId === userId,
+          );
+          (savedGroup as any).isUserParticipant = isParticipant;
+        }
+
+        return savedGroup;
+      }
+    } catch (error) {
+      // 모든 에러를 로깅하고 재throw
+      console.error('joinGroup 에러 상세:', {
+        groupId,
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      // 이미 HttpException이면 그대로 throw
+      if (error instanceof NotFoundException || error instanceof ConflictException || error instanceof ForbiddenException) {
+        throw error;
+      }
+      // 그 외의 에러는 InternalServerError로 변환
+      throw new InternalServerErrorException(`모임 참가 중 오류가 발생했습니다: ${error instanceof Error ? error.message : String(error)}`);
     }
-
-    // 생성자는 자동으로 참가자이므로 별도 처리 불필요
-    if (group.creatorId === userId) {
-      throw new ConflictException('모임 생성자는 이미 참가 상태입니다.');
-    }
-
-    // 참가자 추가
-    const participant = this.participantRepository.create({
-      groupId,
-      userId,
-      status: 'joined',
-    });
-
-    await this.participantRepository.save(participant);
-
-    // 참가자 수 업데이트
-    group.participantCount += 1;
-    await this.groupRepository.save(group);
-
-    return this.findOne(groupId, userId);
   }
 
   async leaveGroup(groupId: number, userId: number): Promise<void> {
-    const group = await this.findOne(groupId);
+    try {
+      // groupId와 userId 유효성 검사
+      const numericGroupId = Number(groupId);
+      const numericUserId = Number(userId);
+      
+      if (!numericGroupId || isNaN(numericGroupId) || !numericUserId || isNaN(numericUserId)) {
+        throw new BadRequestException('모임 ID 또는 사용자 ID가 유효하지 않습니다.');
+      }
 
-    // 생성자는 탈퇴 불가
-    if (group.creatorId === userId) {
-      throw new ForbiddenException('모임 생성자는 탈퇴할 수 없습니다.');
+      // 모임 정보 조회 (findOne 대신 직접 조회하여 에러 방지)
+      let group: Group | null = null;
+      try {
+        group = await this.groupRepository.findOne({
+          where: { id: numericGroupId },
+          relations: ['creator'],
+        });
+      } catch (findError) {
+        console.error('모임 조회 실패:', findError);
+        throw new NotFoundException('모임을 찾을 수 없습니다.');
+      }
+
+      if (!group) {
+        throw new NotFoundException('모임을 찾을 수 없습니다.');
+      }
+
+      // 생성자는 탈퇴 불가
+      if (group.creatorId === numericUserId) {
+        throw new ForbiddenException('모임 생성자는 탈퇴할 수 없습니다.');
+      }
+
+      // 모임 시간 1시간 전에는 취소 불가
+      if (group.meetingDateTime) {
+        const meetingTime = new Date(group.meetingDateTime);
+        const now = new Date();
+        const oneHourBefore = new Date(meetingTime.getTime() - 60 * 60 * 1000); // 1시간 전
+        
+        if (now >= oneHourBefore) {
+          throw new ForbiddenException('모임 시간 1시간 전부터는 취소할 수 없습니다.');
+        }
+      }
+
+      // 참가자 찾기 (status와 관계없이 모든 참가자 조회)
+      let participant = await this.participantRepository.findOne({
+        where: { 
+          groupId: numericGroupId, 
+          userId: numericUserId
+        },
+      });
+
+      // 관계를 통해서도 찾기 시도
+      if (!participant) {
+        participant = await this.participantRepository.findOne({
+          where: { 
+            group: { id: numericGroupId },
+            user: { id: numericUserId }
+          },
+          relations: ['group', 'user'],
+        });
+      }
+
+      if (!participant) {
+        console.error('참가자 찾기 실패:', {
+          groupId: numericGroupId,
+          userId: numericUserId,
+          groupCreatorId: group.creatorId,
+        });
+        throw new NotFoundException('참가한 모임이 아닙니다.');
+      }
+
+      console.log('참가자 삭제 시작:', {
+        participantId: participant.id,
+        groupId: numericGroupId,
+        userId: numericUserId,
+        currentStatus: participant.status,
+      });
+
+      // 참가자 레코드를 완전히 삭제
+      // 방법 1: delete() 메서드 사용 (가장 간단)
+      const deleteResult = await this.participantRepository.delete({ 
+        id: participant.id 
+      });
+      
+      console.log('참가자 삭제 결과 (delete):', {
+        participantId: participant.id,
+        groupId: numericGroupId,
+        userId: numericUserId,
+        affected: deleteResult.affected,
+      });
+
+      // 삭제가 실제로 이루어졌는지 확인
+      if (deleteResult.affected === 0) {
+        // 방법 2: createQueryBuilder로 재시도
+        console.log('delete() 실패, createQueryBuilder로 재시도...');
+        const queryResult = await this.participantRepository
+          .createQueryBuilder()
+          .delete()
+          .from(GroupParticipant)
+          .where('id = :id', { id: participant.id })
+          .execute();
+        
+        console.log('참가자 삭제 결과 (queryBuilder):', {
+          participantId: participant.id,
+          affected: queryResult.affected,
+        });
+
+        if (queryResult.affected === 0) {
+          console.error('⚠️ 참가자 삭제 실패: 모든 방법 실패', {
+            participantId: participant.id,
+            groupId: numericGroupId,
+            userId: numericUserId,
+            participantData: participant,
+          });
+          throw new InternalServerErrorException('참가자 삭제에 실패했습니다. 데이터베이스 오류가 발생했을 수 있습니다.');
+        }
+      }
+
+      // 삭제 확인: 실제로 레코드가 삭제되었는지 재확인 (약간의 지연 후)
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const verifyDeleted = await this.participantRepository.findOne({
+        where: { id: participant.id },
+      });
+
+      if (verifyDeleted) {
+        console.error('⚠️ 참가자 삭제 확인 실패: 레코드가 여전히 존재합니다.', {
+          participantId: participant.id,
+          groupId: numericGroupId,
+          userId: numericUserId,
+          foundRecord: verifyDeleted,
+        });
+        throw new InternalServerErrorException('참가자 삭제에 실패했습니다. 레코드가 여전히 존재합니다.');
+      }
+
+      console.log('✓ 참가자 삭제 완료: 레코드가 정상적으로 삭제되었습니다.');
+
+      // 참가자 수 업데이트 (최소 1명 유지 - 모임장)
+      // 레코드가 존재하는 참가자 수를 계산 (status는 무시, 레코드 존재 = 참가)
+      const actualParticipantCount = await this.participantRepository.count({
+        where: { groupId: numericGroupId },
+      });
+      
+      // 모임장도 항상 참가자이므로 +1
+      const newParticipantCount = Math.max(1, actualParticipantCount + 1);
+      
+      // participants 관계를 제외하고 participantCount만 업데이트
+      // cascade: true 때문에 participants를 함께 저장하면 group_id가 null이 될 수 있음
+      await this.groupRepository
+        .createQueryBuilder()
+        .update(Group)
+        .set({ participantCount: newParticipantCount })
+        .where('id = :id', { id: numericGroupId })
+        .execute();
+      
+      // group 객체의 participantCount도 업데이트 (로깅용)
+      group.participantCount = newParticipantCount;
+      
+      console.log('참가자 수 업데이트 완료:', {
+        groupId: numericGroupId,
+        previousCount: group.participantCount,
+        newCount: group.participantCount,
+        actualJoinedCount: actualParticipantCount,
+      });
+    } catch (error) {
+      // 이미 HttpException이면 그대로 throw
+      if (error instanceof NotFoundException || 
+          error instanceof ConflictException || 
+          error instanceof ForbiddenException ||
+          error instanceof BadRequestException) {
+        throw error;
+      }
+      
+      // 그 외의 에러는 로깅하고 InternalServerError로 변환
+      console.error('leaveGroup 에러 상세:', {
+        groupId,
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      
+      throw new InternalServerErrorException(
+        `모임 나가기 중 오류가 발생했습니다: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
-
-    const participant = await this.participantRepository.findOne({
-      where: { groupId, userId, status: 'joined' },
-    });
-
-    if (!participant) {
-      throw new NotFoundException('참가한 모임이 아닙니다.');
-    }
-
-    // 참가 상태를 취소로 변경
-    participant.status = 'cancelled';
-    await this.participantRepository.save(participant);
-
-    // 참가자 수 업데이트
-    group.participantCount = Math.max(1, group.participantCount - 1);
-    await this.groupRepository.save(group);
   }
 
   async checkParticipation(groupId: number, userId: number): Promise<boolean> {
+    // 레코드 존재 = 참가 (status는 무시)
     const participant = await this.participantRepository.findOne({
-      where: { groupId, userId, status: 'joined' },
+      where: { groupId, userId },
     });
     return !!participant;
+  }
+
+  async findMyGroups(creatorId: number): Promise<Group[]> {
+    const groups = await this.groupRepository.find({
+      where: { creatorId, isActive: true },
+      order: { createdAt: 'DESC' },
+      take: 10, // 최근 10개만 가져오기
+    });
+    return groups;
+  }
+
+  async closeGroup(groupId: number, userId: number): Promise<Group> {
+    const group = await this.findOne(groupId);
+
+    // 생성자만 마감 가능
+    if (group.creatorId !== userId) {
+      throw new ForbiddenException('모임을 마감할 권한이 없습니다.');
+    }
+
+    // participants 관계를 제외하고 isClosed만 업데이트
+    await this.groupRepository
+      .createQueryBuilder()
+      .update(Group)
+      .set({ isClosed: true })
+      .where('id = :id', { id: groupId })
+      .execute();
+    
+    group.isClosed = true;
+    return group;
+  }
+
+  async reopenGroup(groupId: number, userId: number): Promise<Group> {
+    const group = await this.findOne(groupId);
+
+    // 생성자만 재개 가능
+    if (group.creatorId !== userId) {
+      throw new ForbiddenException('모임을 재개할 권한이 없습니다.');
+    }
+
+    // participants 관계를 제외하고 isClosed만 업데이트
+    await this.groupRepository
+      .createQueryBuilder()
+      .update(Group)
+      .set({ isClosed: false })
+      .where('id = :id', { id: groupId })
+      .execute();
+    
+    group.isClosed = false;
+    return group;
   }
 }
 

@@ -1,17 +1,21 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { OAuthService } from './services/oauth.service';
+import { PhoneVerificationService } from './services/phone-verification.service';
 import { UsersModule } from '../users/users.module';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { PhoneVerification } from './entities/phone-verification.entity';
 
 @Module({
   imports: [
-    UsersModule,
+    forwardRef(() => UsersModule),
     PassportModule,
+    TypeOrmModule.forFeature([PhoneVerification]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => {
@@ -27,8 +31,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, OAuthService, JwtStrategy],
-  exports: [AuthService],
+  providers: [AuthService, OAuthService, PhoneVerificationService, JwtStrategy],
+  exports: [AuthService, PhoneVerificationService],
 })
 export class AuthModule {}
 

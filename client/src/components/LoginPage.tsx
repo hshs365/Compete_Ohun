@@ -168,7 +168,7 @@ const LoginPage = () => {
             <span className="text-white text-2xl font-bold">O</span>
           </div>
           <h1 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2">Ohun</h1>
-          <p className="text-[var(--color-text-secondary)]">운동 모임 플랫폼에 오신 것을 환영합니다</p>
+          <p className="text-[var(--color-text-secondary)]">운동 매치 플랫폼에 오신 것을 환영합니다</p>
         </div>
 
         {/* 로그인 폼 카드 */}

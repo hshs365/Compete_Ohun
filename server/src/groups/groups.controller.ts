@@ -12,6 +12,7 @@ import {
   HttpStatus,
   ParseIntPipe,
   Req,
+  BadRequestException,
 } from '@nestjs/common';
 import { GroupsService } from './groups.service';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -39,6 +40,12 @@ export class GroupsController {
     return this.groupsService.findAll(queryDto);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('my-groups')
+  async findMyGroups(@CurrentUser() user: User) {
+    return this.groupsService.findMyGroups(user.id);
+  }
+
   @Public()
   @Get(':id')
   async findOne(
@@ -55,21 +62,55 @@ export class GroupsController {
   @UseGuards(JwtAuthGuard)
   @Post(':id/join')
   @HttpCode(HttpStatus.OK)
-  joinGroup(
+  async joinGroup(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: User,
   ) {
-    return this.groupsService.joinGroup(id, user.id);
+    try {
+      return await this.groupsService.joinGroup(id, user.id);
+    } catch (error) {
+      console.error('joinGroup 컨트롤러 에러:', {
+        groupId: id,
+        userId: user.id,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/invite')
+  @HttpCode(HttpStatus.OK)
+  async inviteUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('userId', ParseIntPipe) userId: number,
+    @CurrentUser() user: User,
+  ) {
+    // 모임장만 다른 사용자를 초대할 수 있음
+    const group = await this.groupsService.findOne(id, user.id);
+    if (group.creatorId !== user.id) {
+      throw new BadRequestException('모임장만 다른 사용자를 초대할 수 있습니다.');
+    }
+    
+    // 초대 대상 사용자가 자기 자신이 아닌지 확인
+    if (userId === user.id) {
+      throw new BadRequestException('자기 자신을 초대할 수 없습니다.');
+    }
+
+    // 초대 (자동 참가)
+    return await this.groupsService.joinGroup(id, userId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post(':id/leave')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  leaveGroup(
+  @HttpCode(HttpStatus.OK)
+  async leaveGroup(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: User,
   ) {
-    return this.groupsService.leaveGroup(id, user.id);
+    await this.groupsService.leaveGroup(id, user.id);
+    return { success: true, message: '모임에서 나갔습니다.' };
   }
 
   @UseGuards(JwtAuthGuard)
@@ -87,6 +128,20 @@ export class GroupsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: User) {
     return this.groupsService.remove(id, user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/close')
+  @HttpCode(HttpStatus.OK)
+  closeGroup(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: User) {
+    return this.groupsService.closeGroup(id, user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/reopen')
+  @HttpCode(HttpStatus.OK)
+  reopenGroup(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: User) {
+    return this.groupsService.reopenGroup(id, user.id);
   }
 }
 

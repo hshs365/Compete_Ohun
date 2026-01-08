@@ -6,11 +6,13 @@ import {
   UpdateDateColumn,
   ManyToOne,
   OneToMany,
+  OneToOne,
   JoinColumn,
   Index,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { GroupParticipant } from './group-participant.entity';
+import { GroupGameSettings } from './group-game-settings.entity';
 
 @Entity('groups')
 export class Group {
@@ -62,15 +64,58 @@ export class Group {
   @Column({ type: 'int', default: 1 })
   participantCount: number; // 참가자 수 (생성자 포함)
 
+  // 최대 참여자 수 (선택사항)
+  @Column({ type: 'int', nullable: true })
+  maxParticipants: number | null; // 최대 참여자 수 (null이면 제한 없음)
+
+  // 최소 참여자 수 (선택사항)
+  @Column({ type: 'int', nullable: true })
+  minParticipants: number | null; // 최소 참여자 수 (null이면 제한 없음)
+
+  // 실제 모임 일시 (스케줄러에서 사용)
+  @Column({ type: 'timestamp', nullable: true })
+  meetingDateTime: Date | null; // 실제 모임 일시 (예: 2024-01-15 10:00:00)
+
+  // 참가비 정보
+  @Column({ type: 'boolean', default: false })
+  hasFee: boolean; // 참가비 여부
+
+  @Column({ type: 'int', nullable: true })
+  feeAmount: number | null; // 참가비 금액 (원 단위)
+
+  @Column({ type: 'int', nullable: true })
+  facilityId: number | null; // 선택된 시설 ID (시설에서 진행하는 경우)
+
+  // 성별 제한 (선택사항)
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  genderRestriction: 'male' | 'female' | null; // 'male': 남자만, 'female': 여자만, null: 제한 없음
+
   // 참가자 관계
   @OneToMany(() => GroupParticipant, (participant) => participant.group, {
     cascade: true,
   })
   participants: GroupParticipant[];
 
+  // 게임 설정 관계 (1:1)
+  @OneToOne(() => GroupGameSettings, (gameSettings) => gameSettings.group, {
+    cascade: false,
+  })
+  gameSettings: GroupGameSettings | null;
+
+  // 모임 타입
+  @Column({ type: 'varchar', length: 20, default: 'normal' })
+  @Index()
+  type: 'normal' | 'event'; // 'normal': 일반 모임, 'event': 이벤트매치
+
   // 모임 상태
   @Column({ type: 'boolean', default: true })
   isActive: boolean; // 모임 활성화 여부
+
+  @Column({ type: 'boolean', default: false })
+  isClosed: boolean; // 모임 인원 마감 여부
+
+  @Column({ type: 'boolean', default: false })
+  isCompleted: boolean; // 모임 종료 여부 (meetingDateTime이 지났거나 수동으로 종료 처리)
 
   // 메타 정보
   @CreateDateColumn()

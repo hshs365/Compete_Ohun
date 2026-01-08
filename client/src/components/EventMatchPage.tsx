@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CalendarDaysIcon,
   MapPinIcon,
@@ -6,98 +6,109 @@ import {
   ClockIcon,
   TrophyIcon,
   FireIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline';
 import { SPORTS_CATEGORIES } from '../constants/sports';
+import { showSuccess, showError } from '../utils/swal';
+import { api } from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
+import LoadingSpinner from './LoadingSpinner';
 
 interface EventMatch {
   id: number;
-  title: string;
-  description: string;
-  date: string;
-  time: string;
+  name: string;
+  description: string | null;
+  meetingDateTime: string | null;
   location: string;
-  participants: number;
-  maxParticipants: number;
+  participantCount: number;
+  maxParticipants: number | null;
   category: string;
-  status: 'upcoming' | 'ongoing' | 'completed';
-  prize?: string;
-  isHot?: boolean;
+  isCompleted: boolean;
+  createdAt: string;
+  recentJoinCount?: number;
+  hasRanker?: boolean;
+  creator?: {
+    id: number;
+    nickname: string;
+    tag: string | null;
+  };
 }
 
 const EventMatchPage = () => {
+  const { user } = useAuth();
   const [selectedStatus, setSelectedStatus] = useState<'all' | 'upcoming' | 'ongoing' | 'completed'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('전체');
+  const [events, setEvents] = useState<EventMatch[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState<{ businessNumberVerified?: boolean } | null>(null);
 
-  // 샘플 데이터
-  const events: EventMatch[] = [
-    {
-      id: 1,
-      title: '2024 강남구 배드민턴 대회',
-      description: '강남구 배드민턴 동호회 회원들을 위한 토너먼트 대회입니다.',
-      date: '2024-02-15',
-      time: '09:00 - 18:00',
-      location: '서울특별시 강남구 스포츠센터',
-      participants: 32,
-      maxParticipants: 64,
-      category: '배드민턴',
-      status: 'upcoming',
-      prize: '우승상금 100만원',
-      isHot: true,
-    },
-    {
-      id: 2,
-      title: '서울 마라톤 펀런',
-      description: '함께 달리며 즐기는 마라톤 펀런 이벤트',
-      date: '2024-02-10',
-      time: '06:00 - 10:00',
-      location: '서울한강공원',
-      participants: 128,
-      maxParticipants: 200,
-      category: '러닝',
-      status: 'upcoming',
-      prize: '완주 기념품',
-      isHot: true,
-    },
-    {
-      id: 3,
-      title: '풋살 리그전',
-      description: '8개 팀이 참가하는 풋살 리그전',
-      date: '2024-02-08',
-      time: '14:00 - 20:00',
-      location: '올림픽공원 풋살장',
-      participants: 16,
-      maxParticipants: 16,
-      category: '축구',
-      status: 'ongoing',
-      prize: '우승 트로피',
-    },
-    {
-      id: 4,
-      title: '테니스 친선경기',
-      description: '테니스 동호회 친선경기',
-      date: '2024-02-05',
-      time: '10:00 - 16:00',
-      location: '서초 테니스 클럽',
-      participants: 24,
-      maxParticipants: 32,
-      category: '테니스',
-      status: 'completed',
-    },
-    {
-      id: 5,
-      title: '농구 3on3 대회',
-      description: '야외 농구장에서 진행되는 3on3 토너먼트',
-      date: '2024-02-20',
-      time: '13:00 - 18:00',
-      location: '잠실 체육공원',
-      participants: 48,
-      maxParticipants: 64,
-      category: '농구',
-      status: 'upcoming',
-      prize: '우승팀 상금 50만원',
-    },
-  ];
+  // 사용자 프로필 정보 가져오기 (사장님 여부 확인)
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const profile = await api.get<{ businessNumberVerified?: boolean }>('/api/auth/me');
+        setUserProfile(profile);
+      } catch (error) {
+        // 인증되지 않은 사용자는 무시
+      }
+    };
+    if (user) {
+      fetchUserProfile();
+    }
+  }, [user]);
 
+  // 이벤트매치 목록 가져오기
+  useEffect(() => {
+    const fetchEvents = async () => {
+      setIsLoading(true);
+      try {
+        const queryParams = new URLSearchParams();
+        queryParams.append('type', 'event');
+        // 종료된 이벤트매치는 기본적으로 제외
+        if (selectedStatus === 'completed') {
+          queryParams.append('includeCompleted', 'true');
+        }
+        if (selectedCategory && selectedCategory !== '전체') {
+          queryParams.append('category', selectedCategory);
+        }
+        queryParams.append('limit', '1000');
+
+        const response = await api.get<{ groups: EventMatch[]; total: number }>(
+          `/api/groups?${queryParams.toString()}`
+        );
+
+        // 현재 시간 기준으로 상태 계산
+        const now = new Date();
+        const eventsWithStatus = response.groups.map((event) => {
+          let status: 'upcoming' | 'ongoing' | 'completed' = 'upcoming';
+          if (event.isCompleted) {
+            status = 'completed';
+          } else if (event.meetingDateTime) {
+            const meetingDate = new Date(event.meetingDateTime);
+            if (meetingDate < now) {
+              status = 'completed';
+            } else {
+              // meetingDateTime이 2시간 이내면 ongoing
+              const hoursUntil = (meetingDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+              if (hoursUntil <= 2 && hoursUntil >= 0) {
+                status = 'ongoing';
+              }
+            }
+          }
+          return { ...event, status };
+        });
+
+        setEvents(eventsWithStatus);
+      } catch (error) {
+        console.error('이벤트매치 목록 가져오기 실패:', error);
+        showError('이벤트매치 목록을 불러오는데 실패했습니다.', '오류');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchEvents();
+  }, [selectedStatus, selectedCategory]);
   const categories = SPORTS_CATEGORIES;
 
   const getStatusLabel = (status: string) => {
@@ -132,21 +143,35 @@ const EventMatchPage = () => {
     return statusMatch && categoryMatch;
   });
 
-  const handleJoinEvent = (eventId: number) => {
+  const handleJoinEvent = async (eventId: number) => {
     // TODO: 이벤트 참가 API 호출
     console.log('이벤트 참가:', eventId);
-    alert('이벤트에 참가 신청되었습니다.');
+    await showSuccess('이벤트에 참가 신청되었습니다.', '이벤트 참가');
   };
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto w-full pb-12">
-      <div className="mb-6 md:mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)] mb-2">
-          이벤트 매치
-        </h1>
-        <p className="text-[var(--color-text-secondary)]">
-          다양한 스포츠 이벤트와 매치에 참여하세요
-        </p>
+      <div className="mb-6 md:mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)] mb-2">
+            이벤트 매치
+          </h1>
+          <p className="text-[var(--color-text-secondary)]">
+            다양한 스포츠 이벤트와 매치에 참여하세요
+          </p>
+        </div>
+        {userProfile?.businessNumberVerified && (
+          <button
+            onClick={() => {
+              // TODO: 이벤트매치 생성 모달 열기
+              showInfo('이벤트매치 생성 기능은 준비 중입니다.', '알림');
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90 transition-opacity"
+          >
+            <PlusIcon className="w-5 h-5" />
+            <span>이벤트매치 개최</span>
+          </button>
+        )}
       </div>
 
       {/* 필터 */}
@@ -226,7 +251,11 @@ const EventMatchPage = () => {
       </div>
 
       {/* 이벤트 목록 */}
-      {filteredEvents.length === 0 ? (
+      {isLoading ? (
+        <div className="flex justify-center items-center py-12">
+          <LoadingSpinner />
+        </div>
+      ) : filteredEvents.length === 0 ? (
         <div className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-12 text-center">
           <CalendarDaysIcon className="w-16 h-16 mx-auto text-[var(--color-text-secondary)] mb-4" />
           <p className="text-[var(--color-text-secondary)] text-lg">
@@ -242,13 +271,13 @@ const EventMatchPage = () => {
             >
               <div className="flex flex-col md:flex-row gap-4">
                 {/* 이벤트 정보 */}
-                <div className="flex-1">
-                  <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="text-xl font-bold text-[var(--color-text-primary)]">
-                          {event.title}
-                        </h3>
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="text-xl font-bold text-[var(--color-text-primary)]">
+                              {event.name}
+                            </h3>
                         {event.isHot && (
                           <FireIcon className="w-5 h-5 text-orange-500" />
                         )}
@@ -261,22 +290,28 @@ const EventMatchPage = () => {
                           {event.category}
                         </span>
                       </div>
-                      <p className="text-sm text-[var(--color-text-secondary)] mb-4">
-                        {event.description}
-                      </p>
+                      {event.description && (
+                        <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+                          {event.description}
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   {/* 상세 정보 */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                    <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
-                      <CalendarDaysIcon className="w-5 h-5" />
-                      <span>{new Date(event.date).toLocaleDateString('ko-KR')}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
-                      <ClockIcon className="w-5 h-5" />
-                      <span>{event.time}</span>
-                    </div>
+                    {event.meetingDateTime && (
+                      <>
+                        <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
+                          <CalendarDaysIcon className="w-5 h-5" />
+                          <span>{new Date(event.meetingDateTime).toLocaleDateString('ko-KR')}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
+                          <ClockIcon className="w-5 h-5" />
+                          <span>{new Date(event.meetingDateTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </>
+                    )}
                     <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
                       <MapPinIcon className="w-5 h-5" />
                       <span>{event.location}</span>
@@ -284,17 +319,9 @@ const EventMatchPage = () => {
                     <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
                       <UserGroupIcon className="w-5 h-5" />
                       <span>
-                        {event.participants} / {event.maxParticipants}명
+                        {event.participantCount} / {event.maxParticipants || '제한없음'}명
                       </span>
                     </div>
-                    {event.prize && (
-                      <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
-                        <TrophyIcon className="w-5 h-5 text-yellow-500" />
-                        <span className="font-semibold text-[var(--color-text-primary)]">
-                          {event.prize}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 </div>
 

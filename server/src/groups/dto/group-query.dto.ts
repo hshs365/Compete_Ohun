@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsInt, Min } from 'class-validator';
+import { IsOptional, IsString, IsInt, Min, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class GroupQueryDto {
@@ -21,7 +21,30 @@ export class GroupQueryDto {
   @IsInt()
   @Min(1)
   limit?: number = 20; // 페이지당 항목 수
+
+  @IsOptional()
+  @Type(() => Boolean)
+  hideClosed?: boolean; // 마감된 모임 가리기
+
+  @IsOptional()
+  @Type(() => Boolean)
+  onlyRanker?: boolean; // 선수출신 경기만 보기
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['male', 'female'])
+  gender?: 'male' | 'female'; // 성별 필터 (남자만/여자만)
+
+  @IsOptional()
+  @Type(() => Boolean)
+  includeCompleted?: boolean; // 종료된 모임 포함 여부
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['normal', 'event'])
+  type?: 'normal' | 'event'; // 모임 타입 필터
 }
+
 
 
 

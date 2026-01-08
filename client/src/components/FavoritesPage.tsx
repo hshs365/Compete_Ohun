@@ -7,6 +7,7 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartSolidIcon } from '@heroicons/react/24/solid';
+import { showSuccess } from '../utils/swal';
 
 interface FavoriteItem {
   id: number;
@@ -86,10 +87,10 @@ const FavoritesPage = () => {
     }
   };
 
-  const handleRemoveFavorite = (id: number) => {
+  const handleRemoveFavorite = async (id: number) => {
     // TODO: 즐겨찾기 제거 API 호출
     console.log('즐겨찾기 제거:', id);
-    alert('즐겨찾기에서 제거되었습니다.');
+    await showSuccess('즐겨찾기에서 제거되었습니다.', '즐겨찾기');
   };
 
   return (

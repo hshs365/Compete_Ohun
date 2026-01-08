@@ -13,8 +13,27 @@ export class RegisterDto {
   password: string;
 
   @IsString()
+  @Matches(/^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/, {
+    message: '올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)',
+  })
+  phone: string; // 연락처 (필수)
+
+  @IsString()
+  @Matches(/^[0-9]{6}$/, {
+    message: '인증번호는 6자리 숫자입니다.',
+  })
+  verificationCode: string; // 본인인증 번호 (필수)
+
+  @IsString()
   @MinLength(2)
   nickname: string;
+
+  @IsString()
+  @MinLength(2)
+  @Matches(/^[가-힣a-zA-Z\s]+$/, {
+    message: '이름은 한글 또는 영문만 입력 가능합니다.',
+  })
+  realName: string; // 실명 (필수)
 
   @IsEnum(Gender)
   gender: Gender;
@@ -59,6 +78,16 @@ export class RegisterDto {
   @IsOptional()
   @IsBoolean()
   marketingSmsConsent?: boolean;
+
+  @IsEnum(['individual', 'business'])
+  memberType: 'individual' | 'business'; // 회원 유형
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{3}-\d{2}-\d{5}$/, {
+    message: '사업자번호는 XXX-XX-XXXXX 형식이어야 합니다.',
+  })
+  businessNumber?: string; // 사업자번호 (사업자 회원인 경우 필수)
 }
 
 

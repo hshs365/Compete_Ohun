@@ -4,6 +4,7 @@ import {
   Body,
   Get,
   Put,
+  Delete,
   Query,
   UseGuards,
   HttpCode,
@@ -13,12 +14,14 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { OAuthService } from './services/oauth.service';
+import { PhoneVerificationService } from './services/phone-verification.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { SocialCallbackDto } from './dto/social-callback.dto';
 import { OAuthAuthUrlDto } from './dto/oauth-auth-url.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { VerifyBusinessNumberDto } from './dto/verify-business-number.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -30,12 +33,34 @@ export class AuthController {
   constructor(
     private authService: AuthService,
     private oauthService: OAuthService,
+    private phoneVerificationService: PhoneVerificationService,
   ) {}
+
+  @Public()
+  @Post('phone/request-verification')
+  @HttpCode(HttpStatus.OK)
+  async requestPhoneVerification(@Body('phone') phone: string) {
+    if (!phone) {
+      throw new BadRequestException('전화번호를 입력해주세요.');
+    }
+    return this.phoneVerificationService.requestVerification(phone);
+  }
+
+  @Public()
+  @Post('phone/verify')
+  @HttpCode(HttpStatus.OK)
+  async verifyPhone(@Body('phone') phone: string, @Body('code') code: string) {
+    if (!phone || !code) {
+      throw new BadRequestException('전화번호와 인증번호를 입력해주세요.');
+    }
+    return this.phoneVerificationService.verifyCode(phone, code);
+  }
 
   @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   async register(@Body(ValidationPipe) registerDto: RegisterDto) {
+    // 프로필 이미지 업로드 제거로 인해 일반 JSON 요청으로 변경
     return this.authService.register(registerDto);
   }
 
@@ -128,6 +153,16 @@ export class AuthController {
     return this.authService.checkNicknameAvailability(nickname);
   }
 
+  @Public()
+  @Get('check-email')
+  @HttpCode(HttpStatus.OK)
+  async checkEmail(@Query('email') email: string) {
+    if (!email || !/\S+@\S+\.\S+/.test(email)) {
+      throw new BadRequestException('올바른 이메일 형식이 아닙니다.');
+    }
+    return this.authService.checkEmailAvailability(email);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('me')
   @HttpCode(HttpStatus.OK)
@@ -144,6 +179,7 @@ export class AuthController {
       id: user.id,
       email: user.email || null,
       nickname: user.nickname || null,
+      tag: user.tag || null,
       gender: user.gender || null,
       ageRange: user.ageRange || null,
       birthDate: user.birthDate || null,
@@ -156,10 +192,13 @@ export class AuthController {
       marketingEmailConsent: user.marketingEmailConsent,
       marketingSmsConsent: user.marketingSmsConsent,
       socialAccounts: connectedProviders,
-      // phone 필드는 DB에 없으므로 null로 반환
-      phone: null,
+      phone: user.phone || null,
+      phoneVerified: user.phoneVerified || false,
       latitude: user.latitude ? Number(user.latitude) : null,
       longitude: user.longitude ? Number(user.longitude) : null,
+      businessNumber: user.businessNumber || null,
+      businessNumberVerified: user.businessNumberVerified || false,
+      nicknameChangedAt: user.nicknameChangedAt ? user.nicknameChangedAt.toISOString() : null,
     };
   }
 
@@ -171,6 +210,60 @@ export class AuthController {
     @Body(ValidationPipe) updateProfileDto: UpdateProfileDto,
   ) {
     return this.authService.updateProfile(user.id, updateProfileDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('verify-business-number')
+  @HttpCode(HttpStatus.OK)
+  async verifyBusinessNumber(
+    @CurrentUser() user: User,
+    @Body(ValidationPipe) verifyDto: VerifyBusinessNumberDto,
+  ) {
+    return this.authService.verifyBusinessNumber(user.id, verifyDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('withdraw')
+  @HttpCode(HttpStatus.OK)
+  async withdraw(@CurrentUser() user: User) {
+    await this.authService.withdraw(user.id);
+    return { message: '회원 탈퇴가 완료되었습니다.' };
+  }
+
+  @Public()
+  @Get('reverse-geocode')
+  @HttpCode(HttpStatus.OK)
+  async reverseGeocode(
+    @Query('longitude') longitude: string,
+    @Query('latitude') latitude: string,
+  ) {
+    if (!longitude || !latitude) {
+      throw new BadRequestException('경도와 위도를 입력해주세요.');
+    }
+
+    const lng = parseFloat(longitude);
+    const lat = parseFloat(latitude);
+
+    if (isNaN(lng) || isNaN(lat)) {
+      throw new BadRequestException('올바른 좌표 형식이 아닙니다.');
+    }
+
+    const address = await this.authService.reverseGeocode(lng, lat);
+    return { address };
+  }
+
+  @Public()
+  @Get('geocode')
+  @HttpCode(HttpStatus.OK)
+  async geocode(
+    @Query('address') address: string,
+  ) {
+    if (!address) {
+      throw new BadRequestException('주소를 입력해주세요.');
+    }
+
+    const coordinates = await this.authService.geocode(address);
+    return coordinates;
   }
 }
 

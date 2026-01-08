@@ -1,4 +1,5 @@
-import { IsOptional, IsString, IsNumber, Min, Max } from 'class-validator';
+import { IsOptional, IsString, IsNumber, Min, Max, IsArray, IsEnum } from 'class-validator';
+import { SkillLevel } from '../../users/entities/user.entity';
 
 export class UpdateProfileDto {
   @IsOptional()
@@ -20,7 +21,17 @@ export class UpdateProfileDto {
   @Min(-180)
   @Max(180)
   longitude?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  interestedSports?: string[];
+
+  @IsOptional()
+  @IsEnum(SkillLevel)
+  skillLevel?: SkillLevel;
 }
+
 
 
 

@@ -18,8 +18,10 @@ export const api = {
       ? localStorage.getItem('access_token')
       : sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
 
+    // FormData인 경우 Content-Type을 설정하지 않음 (브라우저가 자동으로 boundary 설정)
+    const isFormData = options.body instanceof FormData;
     const headers: HeadersInit = {
-      'Content-Type': 'application/json',
+      ...(!isFormData && { 'Content-Type': 'application/json' }),
       ...options.headers,
     };
 
@@ -33,30 +35,51 @@ export const api = {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({
-        message: '요청에 실패했습니다.',
-      }));
-      throw new Error(error.message || '요청에 실패했습니다.');
+      let error: any;
+      try {
+        error = await response.json();
+      } catch {
+        error = { message: `HTTP ${response.status}: ${response.statusText}` };
+      }
+      const errorMessage = error.message || error.error || `요청에 실패했습니다. (${response.status})`;
+      const apiError = new Error(errorMessage);
+      (apiError as any).response = { data: error, status: response.status };
+      throw apiError;
     }
 
-    return response.json();
+    // DELETE 요청의 경우 응답 본문이 없을 수 있음
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      // 응답 본문이 있는 경우에만 JSON 파싱
+      const text = await response.text();
+      return text ? JSON.parse(text) : null;
+    }
+    
+    // 응답 본문이 없는 경우 null 반환
+    return null as any;
   },
 
   get: <T>(endpoint: string) => {
     return api.request<T>(endpoint, { method: 'GET' });
   },
 
-  post: <T>(endpoint: string, data?: unknown) => {
+  post: <T>(endpoint: string, data?: unknown, options?: RequestInit) => {
+    // FormData인 경우 JSON.stringify 하지 않음
+    const isFormData = data instanceof FormData;
     return api.request<T>(endpoint, {
       method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
+      body: isFormData ? data : (data ? JSON.stringify(data) : undefined),
+      ...options,
     });
   },
 
-  put: <T>(endpoint: string, data?: unknown) => {
+  put: <T>(endpoint: string, data?: unknown, options?: RequestInit) => {
+    // FormData인 경우 JSON.stringify 하지 않음
+    const isFormData = data instanceof FormData;
     return api.request<T>(endpoint, {
       method: 'PUT',
-      body: data ? JSON.stringify(data) : undefined,
+      body: isFormData ? data : (data ? JSON.stringify(data) : undefined),
+      ...options,
     });
   },
 

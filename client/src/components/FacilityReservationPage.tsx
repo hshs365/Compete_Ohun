@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BuildingOfficeIcon,
   MapPinIcon,
@@ -6,126 +6,99 @@ import {
   ClockIcon,
   StarIcon,
   FunnelIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
+import { useAuth } from '../contexts/AuthContext';
+import { api } from '../utils/api';
+import CreateFacilityModal from './CreateFacilityModal';
+import { showInfo } from '../utils/swal';
 
 interface Facility {
   id: number;
   name: string;
-  type: '체육센터' | '체육관' | '풋살장' | '테니스장' | '수영장' | '골프연습장' | '기타';
+  type: string;
   address: string;
-  phone: string;
-  operatingHours: string;
+  phone: string | null;
+  operatingHours: string | null;
   rating: number;
   reviewCount: number;
-  price: string;
-  image?: string;
-  description?: string;
+  price: string | null;
+  image?: string | null;
+  description?: string | null;
   amenities?: string[];
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 const FacilityReservationPage = () => {
+  const { user } = useAuth();
   const [selectedType, setSelectedType] = useState<string>('전체');
   const [selectedArea, setSelectedArea] = useState<string>('전체');
   const [searchQuery, setSearchQuery] = useState('');
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [userProfile, setUserProfile] = useState<{ businessNumberVerified?: boolean } | null>(null);
 
-  // 샘플 데이터 (실제로는 API에서 가져올 데이터)
-  const facilities: Facility[] = [
-    {
-      id: 1,
-      name: '강남 스포츠센터',
-      type: '체육센터',
-      address: '서울특별시 강남구 테헤란로 123',
-      phone: '02-1234-5678',
-      operatingHours: '06:00 - 22:00',
-      rating: 4.5,
-      reviewCount: 128,
-      price: '시간당 15,000원',
-      description: '다양한 운동 기구와 시설을 갖춘 프리미엄 체육센터',
-      amenities: ['주차', '샤워실', '락커룸', '매점'],
-    },
-    {
-      id: 2,
-      name: '올림픽공원 풋살장',
-      type: '풋살장',
-      address: '서울특별시 송파구 올림픽로 240',
-      phone: '02-2345-6789',
-      operatingHours: '05:00 - 24:00',
-      rating: 4.8,
-      reviewCount: 245,
-      price: '시간당 25,000원',
-      description: '인조잔디와 조명시설을 갖춘 실내 풋살장',
-      amenities: ['주차', '샤워실', '간이탈의실'],
-    },
-    {
-      id: 3,
-      name: '서초 테니스 클럽',
-      type: '테니스장',
-      address: '서울특별시 서초구 서초대로 456',
-      phone: '02-3456-7890',
-      operatingHours: '07:00 - 21:00',
-      rating: 4.3,
-      reviewCount: 92,
-      price: '시간당 30,000원',
-      description: '코트 4면을 보유한 실내 테니스 클럽',
-      amenities: ['주차', '샤워실', '프로샵'],
-    },
-    {
-      id: 4,
-      name: '홍대 수영장',
-      type: '수영장',
-      address: '서울특별시 마포구 홍익로 789',
-      phone: '02-4567-8901',
-      operatingHours: '06:00 - 23:00',
-      rating: 4.6,
-      reviewCount: 167,
-      price: '시간당 12,000원',
-      description: '25m 8레인 실내 수영장',
-      amenities: ['주차', '샤워실', '락커룸', '수영용품 판매'],
-    },
-    {
-      id: 5,
-      name: '잠실 체육관',
-      type: '체육관',
-      address: '서울특별시 송파구 올림픽로 300',
-      phone: '02-5678-9012',
-      operatingHours: '09:00 - 20:00',
-      rating: 4.4,
-      reviewCount: 103,
-      price: '시간당 20,000원',
-      description: '농구장, 배구장 등 다목적 체육관',
-      amenities: ['주차', '샤워실', '관람석'],
-    },
-    {
-      id: 6,
-      name: '강동 골프 연습장',
-      type: '골프연습장',
-      address: '서울특별시 강동구 천호대로 1234',
-      phone: '02-6789-0123',
-      operatingHours: '06:00 - 24:00',
-      rating: 4.7,
-      reviewCount: 89,
-      price: '시간당 18,000원',
-      description: '2층 구조의 실내 골프 연습장',
-      amenities: ['주차', '카페', '프로샵'],
-    },
-  ];
+  // 사용자 프로필 정보 가져오기 (사업자번호 검증 여부 확인)
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const profile = await api.get<{ businessNumberVerified?: boolean }>('/api/auth/me');
+        setUserProfile(profile);
+      } catch (error) {
+        console.error('사용자 프로필 조회 실패:', error);
+      }
+    };
+    if (user) {
+      fetchUserProfile();
+    }
+  }, [user]);
+
+  // 시설 목록 가져오기
+  useEffect(() => {
+    const fetchFacilities = async () => {
+      setIsLoading(true);
+      try {
+        const queryParams = new URLSearchParams();
+        if (selectedType && selectedType !== '전체') {
+          queryParams.append('type', selectedType);
+        }
+        if (selectedArea && selectedArea !== '전체') {
+          queryParams.append('area', selectedArea);
+        }
+        if (searchQuery) {
+          queryParams.append('search', searchQuery);
+        }
+        queryParams.append('limit', '100');
+
+        const response = await api.get<{ facilities: Facility[]; total: number }>(
+          `/api/facilities?${queryParams.toString()}`
+        );
+        setFacilities(response.facilities);
+      } catch (error) {
+        console.error('시설 목록 조회 실패:', error);
+        setFacilities([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchFacilities();
+  }, [selectedType, selectedArea, searchQuery]);
 
   const facilityTypes = ['전체', '체육센터', '체육관', '풋살장', '테니스장', '수영장', '골프연습장', '기타'];
   const areas = ['전체', '서울', '경기', '인천', '부산', '대구', '대전', '광주'];
 
   // 필터링된 시설 목록
-  const filteredFacilities = facilities.filter((facility) => {
-    const typeMatch = selectedType === '전체' || facility.type === selectedType;
-    const areaMatch = selectedArea === '전체' || facility.address.includes(selectedArea);
-    const searchMatch = searchQuery === '' || facility.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return typeMatch && areaMatch && searchMatch;
-  });
+  const filteredFacilities = facilities;
 
-  const handleReservation = (facilityId: number) => {
+  const handleReservation = async (facilityId: number) => {
     // TODO: 예약 페이지로 이동 또는 예약 모달 열기
     console.log('예약하기:', facilityId);
-    alert(`${facilities.find((f) => f.id === facilityId)?.name} 예약 페이지로 이동합니다.`);
+    const facility = facilities.find((f) => f.id === facilityId);
+    await showInfo(`${facility?.name || '시설'} 예약 페이지로 이동합니다.`, '예약 안내');
   };
 
   const renderStars = (rating: number) => {
@@ -147,9 +120,20 @@ const FacilityReservationPage = () => {
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto w-full pb-12">
-      <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)] mb-6 md:mb-8">
+      <div className="flex items-center justify-between mb-6 md:mb-8">
+        <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">
         시설 예약
       </h1>
+        {userProfile?.businessNumberVerified && (
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg font-semibold hover:opacity-90 transition-opacity"
+          >
+            <PlusIcon className="w-5 h-5" />
+            시설 등록
+          </button>
+        )}
+      </div>
 
       {/* 필터 및 검색 */}
       <div className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-4 md:p-6 mb-6">
@@ -217,10 +201,44 @@ const FacilityReservationPage = () => {
       {/* 결과 개수 */}
       <div className="mb-4">
         <p className="text-[var(--color-text-secondary)] text-sm">
-          총 <span className="font-semibold text-[var(--color-text-primary)]">{filteredFacilities.length}</span>
-          개의 시설이 있습니다.
+          {isLoading ? (
+            '시설 목록을 불러오는 중...'
+          ) : (
+            <>
+              총 <span className="font-semibold text-[var(--color-text-primary)]">{filteredFacilities.length}</span>
+              개의 시설이 있습니다.
+            </>
+          )}
         </p>
       </div>
+
+      {/* 시설 등록 모달 */}
+      <CreateFacilityModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={() => {
+          // 시설 목록 새로고침
+          const queryParams = new URLSearchParams();
+          if (selectedType && selectedType !== '전체') {
+            queryParams.append('type', selectedType);
+          }
+          if (selectedArea && selectedArea !== '전체') {
+            queryParams.append('area', selectedArea);
+          }
+          if (searchQuery) {
+            queryParams.append('search', searchQuery);
+          }
+          queryParams.append('limit', '100');
+
+          api.get<{ facilities: Facility[]; total: number }>(
+            `/api/facilities?${queryParams.toString()}`
+          ).then((response) => {
+            setFacilities(response.facilities);
+          }).catch((error) => {
+            console.error('시설 목록 조회 실패:', error);
+          });
+        }}
+      />
 
       {/* 시설 목록 */}
       {filteredFacilities.length === 0 ? (
@@ -305,7 +323,11 @@ const FacilityReservationPage = () => {
 
                 {/* 가격 및 예약 버튼 */}
                 <div className="flex items-center justify-between pt-3 border-t border-[var(--color-border-card)]">
-                  <p className="text-lg font-bold text-[var(--color-blue-primary)]">{facility.price}</p>
+                  {facility.price ? (
+                    <p className="text-lg font-bold text-[var(--color-blue-primary)]">{facility.price}</p>
+                  ) : (
+                    <p className="text-sm text-[var(--color-text-secondary)]">가격 문의</p>
+                  )}
                   <button
                     onClick={() => handleReservation(facility.id)}
                     className="px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg font-semibold hover:opacity-90 transition-opacity text-sm"

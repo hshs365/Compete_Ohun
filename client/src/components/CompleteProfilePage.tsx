@@ -253,7 +253,7 @@ const CompleteProfilePage = () => {
                   className={`w-full px-4 py-2 border rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] ${
                     errors.residenceSigungu ? 'border-red-500' : 'border-[var(--color-border-card)]'
                   }`}
-                  placeholder="예: 강남구"
+                  placeholder="시/군/구를 입력해주세요"
                   disabled={!formData.residenceSido}
                 />
                 {errors.residenceSigungu && (

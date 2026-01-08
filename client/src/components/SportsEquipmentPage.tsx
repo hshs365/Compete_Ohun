@@ -6,6 +6,7 @@ import {
   FunnelIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
+import { showSuccess } from '../utils/swal';
 
 interface Product {
   id: number;
@@ -120,10 +121,10 @@ const SportsEquipmentPage = () => {
     return stars;
   };
 
-  const handleAddToCart = (productId: number) => {
+  const handleAddToCart = async (productId: number) => {
     // TODO: 장바구니에 추가 API 호출
     console.log('장바구니 추가:', productId);
-    alert('장바구니에 추가되었습니다.');
+    await showSuccess('장바구니에 추가되었습니다.', '장바구니');
   };
 
   return (

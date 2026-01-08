@@ -1,12 +1,20 @@
 import React from 'react';
-import { MAIN_CATEGORIES } from '../constants/sports';
+import { SPORTS_CATEGORIES } from '../constants/sports';
 
-const CategoryFilter = ({ selectedCategory, setSelectedCategory }) => {
-  const categories = MAIN_CATEGORIES;
+interface CategoryFilterProps {
+  selectedCategory: string | null;
+  setSelectedCategory: (category: string | null) => void;
+  selectedCity?: string | null; // 현재 선택된 지역
+}
+
+const CategoryFilter = ({ selectedCategory, setSelectedCategory, selectedCity }: CategoryFilterProps) => {
+  const categories = SPORTS_CATEGORIES;
 
   const handleCategoryClick = (category) => {
     if (category === '전체') {
       setSelectedCategory(null);
+      // "전체" 선택 시 현재 지역 중심으로 지도 이동을 트리거하기 위해
+      // 커스텀 이벤트 발생 (KakaoMapPanel에서 이미 selectedCity를 감지하므로 추가 작업 불필요)
     } else {
       setSelectedCategory(category);
     }

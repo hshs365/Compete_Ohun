@@ -1,6 +1,13 @@
 @import "leaflet/dist/leaflet.css";
 @import "tailwindcss";
 
+/* Pretendard 폰트 적용 */
+* {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 :root {
   --color-text-primary: #1e293b; /* slate-900 */
   --color-text-secondary: #475569; /* slate-600 */
@@ -33,4 +40,38 @@ body {
   height: 100%;
   width: 100%;
   z-index: 0;
+}
+
+/* 네이버 지도 InfoWindow 기본 말풍선/배경 제거 (매치 제목 라벨용) */
+#map div[style*="border: 1px solid rgb(51, 51, 51)"],
+#map div[style*="background: rgb(255, 255, 255)"] {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* 말풍선 꼬리 삼각형 제거 */
+#map div[style*="transparent transparent"],
+#map div[style*="pointer-events: none"][style*="width: 0px"][style*="height: 0px"] {
+  display: none !important;
+}
+
+/* InfoWindow 내부 텍스트 스타일 */
+.group-label-text {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Date input 달력 아이콘 다크모드 스타일 */
+.date-input-dark::-webkit-calendar-picker-indicator {
+  filter: invert(0);
+  cursor: pointer;
+}
+
+html.dark .date-input-dark::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
 }

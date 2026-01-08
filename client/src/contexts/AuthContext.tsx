@@ -5,10 +5,18 @@ export interface User {
   id: number;
   email?: string;
   nickname?: string;
+  tag?: string; // 닉네임 태그 (예: #KR1, #KR2)
   isProfileComplete: boolean;
 }
 
+// 닉네임과 태그를 조합하여 표시하는 헬퍼 함수
+export const formatDisplayName = (nickname?: string, tag?: string): string => {
+  if (!nickname) return '';
+  return tag ? `${nickname}${tag}` : nickname;
+};
+
 interface RegisterData {
+  realName: string; // 실명 (필수)
   nickname: string;
   gender: 'male' | 'female' | 'other';
   ageRange?: string;
@@ -22,6 +30,10 @@ interface RegisterData {
   marketingConsent?: boolean;
   marketingEmailConsent?: boolean;
   marketingSmsConsent?: boolean;
+  phone: string; // 전화번호 (필수)
+  verificationCode: string; // 인증번호 (필수)
+  memberType?: 'individual' | 'business'; // 회원 유형
+  businessNumber?: string; // 사업자등록번호 (사업자 회원인 경우)
 }
 
 export type CompleteProfileData = RegisterData;
@@ -31,7 +43,7 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
-  register: (email: string, password: string, userData: RegisterData) => Promise<void>;
+  register: (email: string, password: string, userData: RegisterData, skipNavigate?: boolean) => Promise<void>;
   logout: () => void;
   checkAuth: () => Promise<void>;
   completeProfile: (profileData: CompleteProfileData) => Promise<void>;
@@ -156,15 +168,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // 회원가입
-  const register = async (email: string, password: string, userData: RegisterData) => {
-    const data = await apiCall('/api/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({
-        email,
-        password,
-        ...userData,
-      }),
-    });
+  const register = async (email: string, password: string, userData: RegisterData, skipNavigate?: boolean) => {
+    try {
+      console.log('register 함수 호출:', { email, userData });
+      const data = await apiCall('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          password,
+          ...userData,
+        }),
+      });
+      console.log('회원가입 성공:', data);
 
     const rememberMe = localStorage.getItem('remember_me') === 'true';
     if (rememberMe) {
@@ -174,11 +189,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       localStorage.setItem('access_token', data.token); // 기존 호환성
     }
     
-    setToken(data.token);
-    setUser(data.user);
+      setToken(data.token);
+      setUser(data.user);
+      setIsLoading(false); // 로딩 완료 처리
 
-    // 일반 회원가입은 모든 정보를 입력받으므로 바로 완료
-    navigate('/');
+      // 신규 회원가입이므로 가이드 완료 플래그 삭제 (가이드를 다시 표시하기 위해)
+      localStorage.removeItem('welcome_guide_completed');
+
+      // 일반 회원가입은 모든 정보를 입력받으므로 바로 완료
+      // skipNavigate가 true이면 navigate하지 않음 (RegisterPage에서 가이드 표시 후 처리)
+      if (!skipNavigate) {
+        // 상태 업데이트가 완료된 후 네비게이션 (React 상태 업데이트는 비동기)
+        setTimeout(() => {
+          navigate('/');
+        }, 0);
+      }
+    } catch (error) {
+      console.error('register 함수 에러:', error);
+      setIsLoading(false);
+      throw error; // 에러를 다시 throw하여 RegisterPage에서 처리할 수 있도록
+    }
   };
 
   // 추가 정보 입력 완료
@@ -204,6 +234,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // 로그아웃
   const logout = () => {
+    // 현재 사용자의 프로필 사진 삭제
+    if (user?.id) {
+      localStorage.removeItem(`profileImage_${user.id}`);
+    }
+    
     localStorage.removeItem('access_token');
     sessionStorage.removeItem('access_token');
     // 자동 로그인 해제 (이메일은 유지)

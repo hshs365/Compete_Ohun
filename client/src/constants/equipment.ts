@@ -22,6 +22,13 @@ export const EQUIPMENT_BY_SPORT: EquipmentList = {
     '수건',
     '물',
   ],
+  풋살: [
+    '풋살화',
+    '풋살공',
+    '운동복',
+    '수건',
+    '물',
+  ],
   농구: [
     '농구화',
     '농구공',
@@ -55,16 +62,6 @@ export const EQUIPMENT_BY_SPORT: EquipmentList = {
     '수경',
     '수영장 이용권',
     '수건',
-  ],
-  요가: [
-    '요가매트',
-    '요가복',
-    '물',
-  ],
-  필라테스: [
-    '필라테스매트',
-    '운동복',
-    '물',
   ],
   골프: [
     '골프채',
@@ -124,6 +121,7 @@ export const EQUIPMENT_BY_SPORT: EquipmentList = {
 export const getEquipmentBySport = (sport: string): string[] => {
   return EQUIPMENT_BY_SPORT[sport] || EQUIPMENT_BY_SPORT['기타'];
 };
+
 
 
 

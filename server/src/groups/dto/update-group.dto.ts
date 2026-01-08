@@ -49,7 +49,12 @@ export class UpdateGroupDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isClosed?: boolean;
 }
+
 
 
 

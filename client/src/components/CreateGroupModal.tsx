@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { XMarkIcon, MapPinIcon, UsersIcon, TagIcon, CalendarIcon, PhoneIcon, WrenchScrewdriverIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, MapPinIcon, UsersIcon, TagIcon, CalendarIcon, WrenchScrewdriverIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import type { SelectedGroup } from './MapPanel';
-import { SPORTS_LIST } from '../constants/sports';
+import { SPORTS_LIST, getMinParticipantsForSport } from '../constants/sports';
 import { getEquipmentBySport } from '../constants/equipment';
 import { api } from '../utils/api';
-import KakaoMap from './KakaoMap';
+import NaverMap from './NaverMap';
+import { showError, showSuccess, showWarning } from '../utils/swal';
 
 interface CreateGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (groupData: Omit<SelectedGroup, 'id'>) => void;
-  onSuccess?: () => void; // 모임 생성 성공 시 콜백
+  onSuccess?: () => void; // 매치 생성 성공 시 콜백
 }
 
 const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, onSubmit, onSuccess }) => {
@@ -30,6 +31,20 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
     return [37.5665, 126.9780]; // 서울 시청 (기본값)
   };
 
+  // 오늘 날짜에 오후 6시를 기본값으로 설정
+  const getDefaultDateTime = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return {
+      date: `${year}-${month}-${day}`,
+      time: '18:00', // 오후 6시
+    };
+  };
+
+  const defaultDateTime = getDefaultDateTime();
+
   const [formData, setFormData] = useState({
     name: '',
     location: '',
@@ -37,8 +52,9 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
     memberCount: 1,
     category: '배드민턴',
     description: '',
-    meetingTime: '',
-    contact: '',
+    meetingDate: defaultDateTime.date, // 오늘 날짜
+    meetingTime: defaultDateTime.time, // 오후 6시
+    maxParticipants: '', // 최대 참여자 수
     equipment: [] as string[],
   });
 
@@ -48,32 +64,216 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
   const [mapKey, setMapKey] = useState(0);
   const [mapZoom, setMapZoom] = useState(15); // 지도 리렌더링을 위한 key
   const addressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // 모달 배경 클릭 감지용 (드래그와 클릭 구분)
+  const modalMouseDownRef = useRef<{ x: number; y: number } | null>(null);
   const categories = SPORTS_LIST;
 
-  // 카테고리 변경 시 해당 운동의 준비물 목록 업데이트
+  // 모달이 열릴 때 이전 그룹 데이터 불러오기
+  useEffect(() => {
+    const loadPreviousGroup = async () => {
+      if (!isOpen) {
+        // 모달이 닫힐 때 폼 초기화
+        const resetDateTime = getDefaultDateTime();
+        setFormData({
+          name: '',
+          location: '',
+          coordinates: getUserLocation(),
+          memberCount: 1,
+          category: '배드민턴',
+          description: '',
+          meetingDate: resetDateTime.date,
+          meetingTime: resetDateTime.time,
+          maxParticipants: '',
+          equipment: [],
+        });
+        setSelectedEquipment([]);
+        setShowMap(false);
+        return;
+      }
+
+      try {
+        const myGroups = await api.get<Array<{
+          id: number;
+          name: string;
+          location: string;
+          latitude: number;
+          longitude: number;
+          category: string;
+          description: string | null;
+          meetingTime: string | null;
+          equipment: string[];
+          maxParticipants: number | null;
+        }>>('/api/groups/my-groups');
+
+        // 가장 최근에 만든 그룹이 있으면 데이터 불러오기
+        if (myGroups && myGroups.length > 0) {
+          const latestGroup = myGroups[0];
+          
+          // 일시는 제외하고 나머지 필드만 채우기
+          const resetDateTime = getDefaultDateTime();
+          // 좌표를 숫자로 명시적으로 변환
+          const latitude = typeof latestGroup.latitude === 'string' 
+            ? parseFloat(latestGroup.latitude) 
+            : Number(latestGroup.latitude);
+          const longitude = typeof latestGroup.longitude === 'string' 
+            ? parseFloat(latestGroup.longitude) 
+            : Number(latestGroup.longitude);
+          
+          // 좌표가 유효한지 확인
+          if (isNaN(latitude) || isNaN(longitude)) {
+            // 좌표가 유효하지 않으면 기본 위치 사용
+            setFormData({
+              name: latestGroup.name,
+              location: latestGroup.location,
+              coordinates: getUserLocation(),
+              memberCount: 1,
+              category: latestGroup.category,
+              description: latestGroup.description || '',
+              meetingDate: resetDateTime.date,
+              meetingTime: resetDateTime.time,
+              maxParticipants: latestGroup.maxParticipants ? latestGroup.maxParticipants.toString() : '',
+              equipment: [],
+            });
+          } else {
+            setFormData({
+              name: latestGroup.name,
+              location: latestGroup.location,
+              coordinates: [latitude, longitude] as [number, number],
+              memberCount: 1,
+              category: latestGroup.category,
+              description: latestGroup.description || '',
+              meetingDate: resetDateTime.date, // 일시는 기본값 유지 (오늘 오후 6시)
+              meetingTime: resetDateTime.time,
+              maxParticipants: latestGroup.maxParticipants ? latestGroup.maxParticipants.toString() : '',
+              equipment: [],
+            });
+          }
+          
+          // 준비물도 설정
+          if (latestGroup.equipment && latestGroup.equipment.length > 0) {
+            setSelectedEquipment(latestGroup.equipment);
+          } else {
+            setSelectedEquipment([]);
+          }
+
+          // 지도 위치 업데이트
+          setMapZoom(3);
+          setMapKey((prev) => prev + 1);
+        } else {
+          // 이전 그룹이 없으면 기본값으로 초기화
+          const resetDateTime = getDefaultDateTime();
+          setFormData({
+            name: '',
+            location: '',
+            coordinates: getUserLocation(),
+            memberCount: 1,
+            category: '배드민턴',
+            description: '',
+            meetingDate: resetDateTime.date,
+            meetingTime: resetDateTime.time,
+            maxParticipants: '',
+            equipment: [],
+          });
+          setSelectedEquipment([]);
+        }
+      } catch (error) {
+        // 에러가 발생해도 기본값으로 초기화
+        console.log('이전 그룹 데이터를 불러올 수 없습니다:', error);
+        const resetDateTime = getDefaultDateTime();
+        setFormData({
+          name: '',
+          location: '',
+          coordinates: getUserLocation(),
+          memberCount: 1,
+          category: '배드민턴',
+          description: '',
+          meetingDate: resetDateTime.date,
+          meetingTime: resetDateTime.time,
+          maxParticipants: '',
+          equipment: [],
+        });
+        setSelectedEquipment([]);
+      }
+    };
+
+    loadPreviousGroup();
+  }, [isOpen]);
+
+  // 카테고리 변경 시 해당 운동의 준비물 목록 업데이트 및 최소 인원 자동 설정
   useEffect(() => {
     const equipmentList = getEquipmentBySport(formData.category);
     // 기존 선택된 준비물 중 현재 운동에 해당하는 것만 유지
     setSelectedEquipment((prev) => 
       prev.filter((item) => equipmentList.includes(item))
     );
+    
+    // 운동별 최소 인원 자동 설정
+    const minParticipants = getMinParticipantsForSport(formData.category);
+    if (minParticipants !== null) {
+      // 최소 인원이 설정된 경우, maxParticipants가 최소 인원보다 작으면 업데이트
+      setFormData((prev) => {
+        const currentMax = prev.maxParticipants ? parseInt(prev.maxParticipants, 10) : null;
+        if (currentMax === null || currentMax < minParticipants) {
+          return {
+            ...prev,
+            maxParticipants: minParticipants.toString(),
+          };
+        }
+        return prev;
+      });
+    }
   }, [formData.category]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // 위치가 비어있는지 확인
+    if (!formData.location || formData.location.trim() === '') {
+      await showWarning('위치를 선택해주세요. 주소 찾기 버튼을 클릭하거나 지도에서 마커를 드래그하여 위치를 선택하세요.', '위치 선택 필요');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      // API 호출로 모임 생성
+      // API 호출로 매치 생성
+      // 날짜와 시간을 합쳐서 meetingTime 문자열 생성
+      let meetingTimeString: string | undefined = undefined;
+      if (formData.meetingDate && formData.meetingTime) {
+        meetingTimeString = `${formData.meetingDate} ${formData.meetingTime}`;
+      } else if (formData.meetingDate) {
+        meetingTimeString = formData.meetingDate;
+      } else if (formData.meetingTime) {
+        meetingTimeString = formData.meetingTime;
+      }
+
+      // 좌표를 숫자로 명시적으로 변환
+      const latitude = Number(formData.coordinates[0]);
+      const longitude = Number(formData.coordinates[1]);
+      
+      // 좌표 유효성 검사
+      if (isNaN(latitude) || isNaN(longitude)) {
+        await showError('위치 좌표가 유효하지 않습니다. 주소 찾기 버튼을 클릭하거나 지도에서 마커를 드래그하여 위치를 다시 선택해주세요.', '위치 좌표 오류');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 운동별 최소 인원 계산
+      const minParticipants = getMinParticipantsForSport(formData.category);
+      
       const groupData = {
         name: formData.name,
         location: formData.location,
-        latitude: formData.coordinates[0],
-        longitude: formData.coordinates[1],
+        latitude: latitude,
+        longitude: longitude,
         category: formData.category,
         description: formData.description || undefined,
-        meetingTime: formData.meetingTime || undefined,
-        contact: formData.contact || undefined,
+        meetingTime: meetingTimeString,
+        maxParticipants: formData.maxParticipants && formData.maxParticipants.trim() !== '' 
+          ? parseInt(formData.maxParticipants, 10) 
+          : undefined,
+        minParticipants: minParticipants || undefined,
         equipment: selectedEquipment,
       };
 
@@ -100,10 +300,10 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
         category: createdGroup.category,
         description: createdGroup.description || undefined,
         meetingTime: createdGroup.meetingTime || undefined,
-        contact: createdGroup.contact || undefined,
       });
 
-      // 폼 초기화
+      // 폼 초기화 (기본값으로 오늘 오후 6시 설정)
+      const resetDateTime = getDefaultDateTime();
       setFormData({
         name: '',
         location: '',
@@ -111,8 +311,9 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
         memberCount: 1,
         category: '배드민턴',
         description: '',
-        meetingTime: '',
-        contact: '',
+        meetingDate: resetDateTime.date,
+        meetingTime: resetDateTime.time,
+        maxParticipants: '',
         equipment: [],
       });
       setSelectedEquipment([]);
@@ -124,8 +325,8 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
 
       onClose();
     } catch (error) {
-      console.error('모임 생성 실패:', error);
-      alert(error instanceof Error ? error.message : '모임 생성에 실패했습니다.');
+      console.error('매치 생성 실패:', error);
+      await showError(error instanceof Error ? error.message : '매치 생성에 실패했습니다.', '매치 생성 실패');
     } finally {
       setIsSubmitting(false);
     }
@@ -185,31 +386,33 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
     if (!address || address.trim().length === 0) return;
     
     try {
-      const KAKAO_REST_API_KEY = import.meta.env.VITE_KAKAO_REST_API_KEY;
+      const NAVER_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID;
+      const NAVER_CLIENT_SECRET = import.meta.env.VITE_NAVER_MAP_CLIENT_SECRET;
       
       // 디버깅: API 키 확인
-      console.log('카카오맵 API 키 확인:', KAKAO_REST_API_KEY ? '설정됨 ✅' : '없음 ❌');
+      console.log('네이버 지도 API 키 확인:', NAVER_CLIENT_ID ? '설정됨 ✅' : '없음 ❌');
       
-      // 1순위: 카카오맵 API (한국 주소에 최적화, API 키 필요)
-      if (KAKAO_REST_API_KEY) {
+      // 네이버 지도 Geocoding API 사용
+      if (NAVER_CLIENT_ID && NAVER_CLIENT_SECRET) {
         try {
-          console.log('카카오맵 API 호출 중:', address);
+          console.log('네이버 지도 Geocoding API 호출 중:', address);
           const response = await fetch(
-            `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(address)}`,
+            `https://naveropenapi.apigw.ntruss.com/map-geocode/v2/geocode?query=${encodeURIComponent(address)}`,
             {
               headers: {
-                Authorization: `KakaoAK ${KAKAO_REST_API_KEY}`,
+                'X-NCP-APIGW-API-KEY-ID': NAVER_CLIENT_ID,
+                'X-NCP-APIGW-API-KEY': NAVER_CLIENT_SECRET,
               },
             }
           );
           
-          console.log('카카오맵 API 응답 상태:', response.status);
+          console.log('네이버 지도 API 응답 상태:', response.status);
           
           if (response.ok) {
             const data = await response.json();
-            console.log('카카오맵 API 응답 데이터:', data);
-            if (data.documents && data.documents.length > 0) {
-              const { y, x } = data.documents[0];
+            console.log('네이버 지도 API 응답 데이터:', data);
+            if (data.status === 'OK' && data.addresses && data.addresses.length > 0) {
+              const { y, x } = data.addresses[0];
               const newCoordinates: [number, number] = [parseFloat(y), parseFloat(x)];
               
               console.log('변환된 좌표:', newCoordinates);
@@ -223,66 +426,31 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
               setMapZoom(3);
               // 지도 표시
               setShowMap(true);
-              // 지도 확대를 위해 key 변경 (KakaoMap 컴포넌트 리렌더링)
+              // 지도 확대를 위해 key 변경 (NaverMap 컴포넌트 리렌더링)
               setMapKey((prev) => prev + 1);
               return;
             } else {
-              console.warn('카카오맵 API: 검색 결과 없음');
+              console.warn('네이버 지도 API: 검색 결과 없음');
+              await showError('주소를 좌표로 변환할 수 없습니다. 주소를 확인해주세요.', '주소 변환 실패');
             }
           } else {
             const errorData = await response.json().catch(() => ({}));
-            console.error('카카오맵 API 오류:', response.status, errorData);
+            console.error('네이버 지도 API 오류:', response.status, errorData);
+            await showError('주소를 좌표로 변환할 수 없습니다. 주소를 확인해주세요.', '주소 변환 실패');
           }
         } catch (error) {
-          console.warn('카카오맵 API 호출 실패, OpenStreetMap으로 대체:', error);
+          console.error('네이버 지도 API 호출 실패:', error);
+          await showError('주소 검색에 실패했습니다. 네이버 지도 API 키를 확인해주세요.', '주소 검색 실패');
         }
+      } else {
+        await showWarning('네이버 지도 API 키가 설정되지 않았습니다. 주소 검색 기능을 사용할 수 없습니다.', 'API 키 없음');
       }
-      
-      // 2순위: OpenStreetMap Nominatim API (무료, API 키 불필요, 한국 주소는 정확도 낮을 수 있음)
-      console.log('OpenStreetMap API 호출 중 (대체 방법)');
-      try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
-          {
-            headers: {
-              'User-Agent': 'OhunApp/1.0', // Nominatim은 User-Agent 필수
-            },
-          }
-        );
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.length > 0) {
-            const { lat, lon } = data[0];
-            const newCoordinates: [number, number] = [parseFloat(lat), parseFloat(lon)];
-            
-            console.log('OpenStreetMap 변환된 좌표:', newCoordinates);
-            
-            setFormData((prev) => ({
-              ...prev,
-              coordinates: newCoordinates,
-              location: address, // 주소도 함께 업데이트
-            }));
-            // 지도 확대 레벨 설정 (주소 선택 시 확대)
-            setMapZoom(3);
-            // 지도 표시
-            setShowMap(true);
-            setMapKey((prev) => prev + 1); // 지도 리렌더링
-            return;
-          }
-        }
-      } catch (error) {
-        console.error('OpenStreetMap API 호출 실패:', error);
-      }
-      
-      // 모든 방법 실패 시 경고
-      console.warn('주소를 좌표로 변환할 수 없습니다. 주소를 확인해주세요.');
     } catch (error) {
       console.error('주소 변환 실패:', error);
     }
   };
 
-  // 마커 위치 변경 핸들러 (카카오맵)
+  // 마커 위치 변경 핸들러 (네이버 지도)
   const handleMarkerDragEnd = async (lat: number, lng: number) => {
     const newCoordinates: [number, number] = [lat, lng];
     
@@ -296,72 +464,62 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
 
     // 좌표를 주소로 변환 (역지오코딩)
     try {
-      const KAKAO_REST_API_KEY = import.meta.env.VITE_KAKAO_REST_API_KEY;
+      const NAVER_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID;
+      const NAVER_CLIENT_SECRET = import.meta.env.VITE_NAVER_MAP_CLIENT_SECRET;
       
-      // 1순위: 카카오맵 API (한국 주소에 최적화)
-      if (KAKAO_REST_API_KEY) {
+      // 네이버 지도 Reverse Geocoding API 사용
+      if (NAVER_CLIENT_ID && NAVER_CLIENT_SECRET) {
         try {
           const response = await fetch(
-            `https://dapi.kakao.com/v2/local/geo/coord2address.json?x=${lng}&y=${lat}`,
+            `https://naveropenapi.apigw.ntruss.com/map-geocode/v2/geocode?coords=${lng},${lat}&output=json`,
             {
               headers: {
-                Authorization: `KakaoAK ${KAKAO_REST_API_KEY}`,
+                'X-NCP-APIGW-API-KEY-ID': NAVER_CLIENT_ID,
+                'X-NCP-APIGW-API-KEY': NAVER_CLIENT_SECRET,
               },
             }
           );
           
           if (response.ok) {
             const data = await response.json();
-            if (data.documents && data.documents.length > 0) {
-              const address = data.documents[0].address;
-              const fullAddress = address
-                ? `${address.region_1depth_name} ${address.region_2depth_name} ${address.region_3depth_name || ''}`.trim()
-                : '';
+            if (data.status === 'OK' && data.results && data.results.length > 0) {
+              const result = data.results[0];
+              // 도로명 주소 우선, 없으면 지번 주소 사용
+              const roadAddress = result.land?.name;
+              const region = result.region;
+              
+              let fullAddress = '';
+              
+              if (roadAddress && region) {
+                // 도로명 주소 구성
+                const area1 = region.area1?.name || '';
+                const area2 = region.area2?.name || '';
+                const area3 = region.area3?.name || '';
+                fullAddress = `${area1} ${area2} ${area3} ${roadAddress}`.trim();
+              } else if (region) {
+                // 지번 주소 사용
+                const area1 = region.area1?.name || '';
+                const area2 = region.area2?.name || '';
+                const area3 = region.area3?.name || '';
+                const area4 = region.area4?.name || '';
+                fullAddress = `${area1} ${area2} ${area3} ${area4}`.trim();
+              }
               
               if (fullAddress) {
                 setFormData((prev) => ({
                   ...prev,
                   location: fullAddress,
                 }));
+                console.log('✅ 마커 위치 주소 업데이트:', fullAddress);
                 return;
               }
             }
           }
         } catch (error) {
-          console.warn('카카오맵 API 호출 실패, OpenStreetMap으로 대체:', error);
+          console.error('네이버 지도 API 호출 실패:', error);
         }
-      }
-      
-      // 2순위: OpenStreetMap Nominatim API (무료, API 키 불필요)
-      try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
-          {
-            headers: {
-              'User-Agent': 'OhunApp/1.0',
-            },
-          }
-        );
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.address) {
-            const addr = data.address;
-            // 한국 주소 형식으로 변환 시도
-            const fullAddress = addr.road 
-              ? `${addr.road}${addr.house_number ? ' ' + addr.house_number : ''}`
-              : data.display_name || '';
-            
-            if (fullAddress) {
-              setFormData((prev) => ({
-                ...prev,
-                location: fullAddress,
-              }));
-            }
-          }
-        }
-      } catch (error) {
-        console.error('OpenStreetMap API 호출 실패:', error);
+      } else {
+        console.warn('네이버 지도 API 키가 설정되지 않아 주소 변환을 수행할 수 없습니다.');
       }
     } catch (error) {
       console.error('주소 변환 실패:', error);
@@ -373,14 +531,36 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div 
+      className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4"
+      onMouseDown={(e) => {
+        // 모달 내용이 아닌 배경을 클릭한 경우에만 기록
+        if (e.target === e.currentTarget) {
+          modalMouseDownRef.current = { x: e.clientX, y: e.clientY };
+        }
+      }}
+      onMouseUp={(e) => {
+        // 모달 내용이 아닌 배경을 클릭한 경우에만 처리
+        if (e.target === e.currentTarget && modalMouseDownRef.current) {
+          const distance = Math.sqrt(
+            Math.pow(e.clientX - modalMouseDownRef.current.x, 2) +
+            Math.pow(e.clientY - modalMouseDownRef.current.y, 2)
+          );
+          // 5px 이내 이동이면 클릭으로 간주, 그 이상이면 드래그로 간주
+          if (distance < 5) {
+            onClose();
+          }
+          modalMouseDownRef.current = null;
+        }
+      }}
+    >
       <div
         className="bg-[var(--color-bg-card)] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-[var(--color-border-card)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
         <div className="sticky top-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)] p-4 md:p-6 flex items-center justify-between z-10">
-          <h2 className="text-xl md:text-2xl font-bold text-[var(--color-text-primary)]">새 모임 만들기</h2>
+          <h2 className="text-xl md:text-2xl font-bold text-[var(--color-text-primary)]">새 매치 만들기</h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-[var(--color-bg-secondary)] rounded-lg transition-colors"
@@ -391,10 +571,10 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
 
         {/* 폼 내용 */}
         <form onSubmit={handleSubmit} className="p-4 md:p-6 space-y-6">
-          {/* 모임 이름 */}
+          {/* 매치 이름 */}
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              모임 이름 <span className="text-red-500">*</span>
+              매치 이름 <span className="text-red-500">*</span>
             </label>
             <input
               id="name"
@@ -403,7 +583,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
               value={formData.name}
               onChange={(e) => handleChange('name', e.target.value)}
               className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-              placeholder="예: 강남 배드민턴 클럽"
+              placeholder="매치명을 입력해주세요"
             />
           </div>
 
@@ -439,25 +619,10 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
                 id="location"
                 type="text"
                 required
+                readOnly
                 value={formData.location}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setFormData((prev) => ({ ...prev, location: value }));
-                  
-                  // 이전 타이머 취소
-                  if (addressTimeoutRef.current) {
-                    clearTimeout(addressTimeoutRef.current);
-                  }
-                  
-                  // 주소 입력 시 좌표 변환 (디바운싱: 800ms 대기)
-                  if (value.trim().length > 0) {
-                    addressTimeoutRef.current = setTimeout(() => {
-                      handleAddressToCoordinates(value);
-                    }, 800);
-                  }
-                }}
-                className="flex-1 px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                placeholder="예: 서울시 강남구"
+                className="flex-1 px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] cursor-not-allowed"
+                placeholder="주소 찾기 버튼을 클릭하거나 지도에서 위치를 선택하세요"
               />
               <button
                 type="button"
@@ -484,7 +649,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
             {/* 지도 영역 */}
             {showMap && (
               <div className="mt-2 border border-[var(--color-border-card)] rounded-lg overflow-hidden" style={{ height: '300px' }}>
-                <KakaoMap
+                <NaverMap
                   key={mapKey}
                   center={formData.coordinates}
                   zoom={mapZoom}
@@ -494,42 +659,74 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
             )}
           </div>
 
-          {/* 모임 시간 */}
+          {/* 매치 일정 */}
           <div>
-            <label htmlFor="meetingTime" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+            <label htmlFor="meetingDateTime" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
               <CalendarIcon className="w-4 h-4 inline mr-1" />
-              모임 시간
+              매치 일정 <span className="text-xs text-[var(--color-text-secondary)] font-normal">(선택사항)</span>
             </label>
             <input
-              id="meetingTime"
-              type="text"
-              value={formData.meetingTime}
-              onChange={(e) => handleChange('meetingTime', e.target.value)}
-              className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-              placeholder="예: 매주 토요일 10:00"
+              id="meetingDateTime"
+              type="datetime-local"
+              value={formData.meetingDate && formData.meetingTime 
+                ? `${formData.meetingDate}T${formData.meetingTime}` 
+                : ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value) {
+                  const [date, time] = value.split('T');
+                  setFormData((prev) => ({
+                    ...prev,
+                    meetingDate: date || '',
+                    meetingTime: time || '',
+                  }));
+                } else {
+                  setFormData((prev) => ({
+                    ...prev,
+                    meetingDate: '',
+                    meetingTime: '',
+                  }));
+                }
+              }}
+              min={new Date().toISOString().slice(0, 16)} // 현재 시간 이후만 선택 가능
+              className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
             />
+            <p className="text-xs text-[var(--color-text-secondary)] mt-2">
+              📅 날짜와 시간을 한 번에 선택할 수 있습니다. 매치 일정이 없으면 비워두세요.
+            </p>
           </div>
 
-          {/* 연락처 */}
+          {/* 최대 참여자 수 */}
           <div>
-            <label htmlFor="contact" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              <PhoneIcon className="w-4 h-4 inline mr-1" />
-              연락처
+            <label htmlFor="maxParticipants" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+              <UsersIcon className="w-4 h-4 inline mr-1" />
+              최대 참여자 수 <span className="text-xs text-[var(--color-text-secondary)] font-normal">(선택사항)</span>
             </label>
             <input
-              id="contact"
-              type="tel"
-              value={formData.contact}
-              onChange={(e) => handleChange('contact', e.target.value)}
+              id="maxParticipants"
+              type="number"
+              min="1"
+              max="1000"
+              value={formData.maxParticipants}
+              onChange={(e) => {
+                const value = e.target.value;
+                // 숫자만 입력 가능하도록 검증
+                if (value === '' || (/^\d+$/.test(value) && parseInt(value, 10) >= 1 && parseInt(value, 10) <= 1000)) {
+                  handleChange('maxParticipants', value);
+                }
+              }}
               className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-              placeholder="예: 010-1234-5678"
+              placeholder="최대 참여자 수를 입력해주세요"
             />
+            <p className="text-xs text-[var(--color-text-secondary)] mt-1">
+              매치에 참가할 수 있는 최대 인원 수를 설정하세요. (1~1000명)
+            </p>
           </div>
 
-          {/* 모임 설명 */}
+          {/* 매치 설명 */}
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              모임 설명
+              매치 설명
             </label>
             <textarea
               id="description"
@@ -537,7 +734,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
               value={formData.description}
               onChange={(e) => handleChange('description', e.target.value)}
               className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] resize-none"
-              placeholder="모임에 대한 간단한 설명을 작성해주세요..."
+              placeholder="매치에 대한 간단한 설명을 작성해주세요..."
             />
           </div>
 
@@ -601,7 +798,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
               disabled={isSubmitting}
               className="flex-1 px-4 py-3 bg-[var(--color-blue-primary)] text-white rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? '생성 중...' : '모임 만들기'}
+              {isSubmitting ? '생성 중...' : '매치 만들기'}
             </button>
           </div>
         </form>
