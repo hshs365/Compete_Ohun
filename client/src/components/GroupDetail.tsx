@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { XMarkIcon, MapPinIcon, UsersIcon, WrenchScrewdriverIcon, TrashIcon, LockClosedIcon, LockOpenIcon, UserGroupIcon, TrophyIcon, StarIcon, CurrencyDollarIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
-import type { SelectedGroup } from './MapPanel';
+import type { SelectedGroup } from '../types/selected-group';
 import { api } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import ParticipantDetail from './ParticipantDetail';
@@ -555,8 +555,8 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
             </div>
           </div>
 
-          {/* 게임 설정 정보 (팀 게임인 경우) */}
-          {gameSettings && gameSettings.gameType === 'team' && (
+          {/* 게임 설정 정보 */}
+          {gameSettings && (
             <div className="border-t border-[var(--color-border-card)] pt-6">
               <div className="flex items-center gap-2 mb-4">
                 <UserGroupIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
@@ -564,8 +564,10 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
               </div>
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="text-[var(--color-text-secondary)]">게임 방식:</span>
-                  <span className="font-semibold text-[var(--color-text-primary)]">팀 vs 팀</span>
+                  <span className="text-[var(--color-text-secondary)]">매치 진행 방식:</span>
+                  <span className="font-semibold text-[var(--color-text-primary)]">
+                    {gameSettings.gameType === 'team' ? '포지션 지정 매치' : '자유 매칭'}
+                  </span>
                 </div>
                 
                 {gameSettings.positions && gameSettings.positions.length > 0 && (

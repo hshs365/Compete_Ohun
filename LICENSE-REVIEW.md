@@ -129,12 +129,6 @@
 - **링크**: https://github.com/tailwindlabs/heroicons
 - **사용 위치**: 전체 프로젝트 (아이콘)
 
-#### Leaflet 마커 아이콘
-- **리소스**: Leaflet 기본 마커 아이콘
-- **라이선스**: BSD 2-Clause License (Leaflet과 동일)
-- **상태**: ✅ 무료, 상업적 사용 가능
-- **CDN**: https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/
-
 ---
 
 ## 폰트

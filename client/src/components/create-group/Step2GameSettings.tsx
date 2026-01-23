@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { UserGroupIcon, UserIcon, TrophyIcon, StarIcon } from '@heroicons/react/24/outline';
 import { isTeamSport, getMinParticipantsForSport } from '../../constants/sports';
 
@@ -39,18 +39,6 @@ const Step2GameSettings: React.FC<Step2GameSettingsProps> = ({
 }) => {
   const isTeam = isTeamSport(category);
   const availablePositions = isTeam ? (TEAM_POSITIONS[category] || []) : [];
-
-  // 축구 카테고리 선택 시 팀당 최소 인원을 11명으로 자동 설정
-  useEffect(() => {
-    if (category === '축구' && gameType === 'team') {
-      if (teamSettings.minPlayersPerTeam !== 11) {
-        onTeamSettingsChange({
-          ...teamSettings,
-          minPlayersPerTeam: 11,
-        });
-      }
-    }
-  }, [category, gameType, teamSettings, onTeamSettingsChange]);
 
   const handlePositionToggle = (position: string) => {
     const newPositions = teamSettings.positions.includes(position)
@@ -98,14 +86,14 @@ const Step2GameSettings: React.FC<Step2GameSettingsProps> = ({
           매치 진행 방식 설정
         </h3>
         <p className="text-sm text-[var(--color-text-secondary)]">
-          {category}는 팀 기반 매치로 진행됩니다. 포지션을 지정해 팀을 구성하거나 자유 매칭으로 모집할 수 있어요.
+          {category}는 팀 기반 매치입니다. 매치 진행 방식은 포지션 지정 매치 또는 자유 매칭 중 선택하세요.
         </p>
       </div>
 
       {/* 매치 진행 방식 선택 */}
       <div className="space-y-4">
         <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-3">
-          매치 진행 방식
+          매치 진행 방식 선택
         </label>
         <div className="grid grid-cols-2 gap-4">
           <button
@@ -128,7 +116,7 @@ const Step2GameSettings: React.FC<Step2GameSettingsProps> = ({
                   포지션 지정 매치
                 </div>
                 <p className="text-sm text-[var(--color-text-secondary)]">
-                  블루팀/레드팀 전술 포지션을 지정해 참가자들이 팀/포지션을 선택합니다.
+                  상세보기에서 블루팀/레드팀 전술 포지션을 열고, 참가자들이 팀과 포지션을 직접 선택합니다.
                 </p>
               </div>
               {gameType === 'team' && (
@@ -157,7 +145,7 @@ const Step2GameSettings: React.FC<Step2GameSettingsProps> = ({
                   자유 매칭
                 </div>
                 <p className="text-sm text-[var(--color-text-secondary)]">
-                  모집 후 현장에서 포지션을 자유롭게 정하는 방식입니다.
+                  무작위로 인원을 모집해 만난 뒤, 현장에서 포지션을 정하는 방식입니다.
                 </p>
               </div>
               {gameType === 'individual' && (
@@ -221,7 +209,7 @@ const Step2GameSettings: React.FC<Step2GameSettingsProps> = ({
                   <div>
                     <p className="font-medium text-[var(--color-text-primary)]">선수 출신 여부 고려</p>
                     <p className="text-xs text-[var(--color-text-secondary)]">
-                      선수 출신 유저가 한 팀에 몰리지 않도록 상대편에도 균등하게 배분합니다.
+                      선수 출신 유저가 있다면 상대편에도 배치되어 한 팀으로 몰리지 않게 조정합니다.
                     </p>
                   </div>
                 </div>

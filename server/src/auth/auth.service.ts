@@ -1,7 +1,6 @@
 import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
 import type { Express } from 'express';
 import { UsersService } from '../users/users.service';
 import { PhoneVerificationService } from './services/phone-verification.service';
@@ -41,13 +40,13 @@ export class AuthService {
   ) {}
 
   async register(registerDto: RegisterDto): Promise<AuthResponse> {
-    // 본인인증 완료 여부 확인 (이미 인증된 상태인지 확인)
+    // 본인인증 완료 여부 확인 (SMS 인증 비활성화 시 생략)
     const normalizedPhone = registerDto.phone.replace(/-/g, '');
-    const isVerified = await this.phoneVerificationService.isVerified(registerDto.phone);
-
-    if (!isVerified) {
-      throw new BadRequestException('전화번호 본인인증이 완료되지 않았습니다. 인증번호를 먼저 요청하고 인증을 완료해주세요.');
-    }
+    // TODO: SMS 인증 재활성화 시 아래 로직 복구
+    // const isVerified = await this.phoneVerificationService.isVerified(registerDto.phone);
+    // if (!isVerified) {
+    //   throw new BadRequestException('전화번호 본인인증이 완료되지 않았습니다. 인증번호를 먼저 요청하고 인증을 완료해주세요.');
+    // }
 
     // 전화번호 중복 확인 (활성 사용자만 확인, 탈퇴한 사용자의 전화번호는 재사용 가능)
     const existingUser = await this.usersService.findByPhone(normalizedPhone);
@@ -74,7 +73,7 @@ export class AuthService {
       email: registerDto.email,
       passwordHash: registerDto.password,
       phone: normalizedPhone,
-      phoneVerified: true, // 전화번호 본인인증 완료
+      phoneVerified: true, // SMS 인증 비활성화로 임시 true 처리
       realName: registerDto.realName, // 실명 저장
       realNameVerified: true, // 전화번호 인증과 함께 실명인증 완료로 간주 (나중에 외부 API로 업그레이드 가능)
       nickname: registerDto.nickname,
@@ -287,7 +286,7 @@ export class AuthService {
     return { available };
   }
 
-  async updateProfile(userId: number, updateData: { nickname?: string; phone?: string; latitude?: number; longitude?: number; interestedSports?: string[]; skillLevel?: SkillLevel }): Promise<User> {
+  async updateProfile(userId: number, updateData: { nickname?: string; phone?: string; interestedSports?: string[]; skillLevel?: SkillLevel }): Promise<User> {
     return this.usersService.updateUser(userId, updateData);
   }
 
@@ -343,122 +342,5 @@ export class AuthService {
     await this.usersService.withdrawUser(userId);
   }
 
-  /**
-   * 좌표를 주소로 변환 (역지오코딩)
-   */
-  async reverseGeocode(longitude: number, latitude: number): Promise<string> {
-    const NAVER_CLIENT_ID = this.configService.get<string>('NAVER_MAP_CLIENT_ID');
-    const NAVER_CLIENT_SECRET = this.configService.get<string>('NAVER_MAP_CLIENT_SECRET');
-
-    if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
-      throw new BadRequestException('네이버 지도 API 키가 설정되지 않았습니다.');
-    }
-
-    try {
-      // 네이버 클라우드 플랫폼 Maps 서비스의 역지오코딩 API
-      // Maps 서비스는 API Gateway를 통해 제공되므로 엔드포인트가 다를 수 있음
-      const response = await axios.get(
-        `https://naveropenapi.apigw.ntruss.com/map-reversegeocode/v2/gc`,
-        {
-          params: {
-            coords: `${longitude},${latitude}`,
-            output: 'json',
-          },
-          headers: {
-            'X-NCP-APIGW-API-KEY-ID': NAVER_CLIENT_ID,
-            'X-NCP-APIGW-API-KEY': NAVER_CLIENT_SECRET,
-          },
-        }
-      );
-      
-      console.log('역지오코딩 API 호출 성공:', {
-        url: `https://naveropenapi.apigw.ntruss.com/map-reversegeocode/v2/gc`,
-        params: { coords: `${longitude},${latitude}`, output: 'json' },
-        clientId: NAVER_CLIENT_ID,
-      });
-
-      const geoData = response.data;
-      const address = geoData.results?.[0]?.region?.area1?.name && 
-                     geoData.results?.[0]?.region?.area2?.name &&
-                     geoData.results?.[0]?.region?.area3?.name
-                     ? `${geoData.results[0].region.area1.name} ${geoData.results[0].region.area2.name} ${geoData.results[0].region.area3.name}`
-                     : geoData.results?.[0]?.land?.name || 
-                     '주소를 가져올 수 없습니다';
-
-      return address;
-    } catch (error: any) {
-      console.error('역지오코딩 실패:', error);
-      console.error('에러 상세:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-      });
-      
-      // 401 Unauthorized 에러인 경우 더 자세한 메시지 제공
-      if (error.response?.status === 401) {
-        throw new BadRequestException(
-          '네이버 지도 API 인증에 실패했습니다. API 키와 서비스 활성화 상태를 확인해주세요. (401 Unauthorized)'
-        );
-      }
-      
-      throw new BadRequestException('주소를 가져오는데 실패했습니다.');
-    }
-  }
-
-  async geocode(address: string): Promise<{ latitude: number; longitude: number }> {
-    const NAVER_CLIENT_ID = this.configService.get<string>('NAVER_MAP_CLIENT_ID');
-    const NAVER_CLIENT_SECRET = this.configService.get<string>('NAVER_MAP_CLIENT_SECRET');
-
-    if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
-      throw new BadRequestException('네이버 지도 API 키가 설정되지 않았습니다.');
-    }
-
-    try {
-      // 네이버 클라우드 플랫폼 Maps 서비스의 지오코딩 API
-      const response = await axios.get(
-        `https://naveropenapi.apigw.ntruss.com/map-geocode/v2/geocode`,
-        {
-          params: {
-            query: address,
-          },
-          headers: {
-            'X-NCP-APIGW-API-KEY-ID': NAVER_CLIENT_ID,
-            'X-NCP-APIGW-API-KEY': NAVER_CLIENT_SECRET,
-          },
-        }
-      );
-
-      const geoData = response.data;
-      
-      if (geoData.status === 'OK' && geoData.addresses && geoData.addresses.length > 0) {
-        const { y: latitude, x: longitude } = geoData.addresses[0];
-        return {
-          latitude: parseFloat(latitude),
-          longitude: parseFloat(longitude),
-        };
-      }
-
-      throw new BadRequestException('주소에 대한 위치 정보를 찾을 수 없습니다.');
-    } catch (error: any) {
-      console.error('지오코딩 실패:', error);
-      console.error('에러 상세:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-      });
-
-      if (error.response?.status === 401) {
-        throw new BadRequestException('네이버 지도 API 인증에 실패했습니다. API 키와 서비스 활성화 상태를 확인해주세요. (401 Unauthorized)');
-      }
-
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-
-      throw new BadRequestException('주소 검색에 실패했습니다. 다시 시도해주세요.');
-    }
-  }
 }
 

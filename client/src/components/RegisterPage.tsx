@@ -39,6 +39,8 @@ const RegisterPage = () => {
   const [phone, setPhone] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [isPhoneVerified, setIsPhoneVerified] = useState(false);
+  const isSmsVerificationEnabled = false; // TODO: SMS 인증 재활성화 시 true로 변경
+  const isPhoneVerifiedEffective = isSmsVerificationEnabled ? isPhoneVerified : true;
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);
   const [countdown, setCountdown] = useState(0);
@@ -87,6 +89,10 @@ const RegisterPage = () => {
 
   // 인증번호 발송
   const handleRequestVerification = async () => {
+    if (!isSmsVerificationEnabled) {
+      await showWarning('현재 SMS 인증이 비활성화되어 있습니다.', 'SMS 인증 비활성화');
+      return;
+    }
     if (!phone) {
       setErrors({ ...errors, phone: '전화번호를 입력해주세요.' });
       return;
@@ -116,6 +122,10 @@ const RegisterPage = () => {
 
   // 인증번호 검증
   const handleVerifyCode = async () => {
+    if (!isSmsVerificationEnabled) {
+      await showWarning('현재 SMS 인증이 비활성화되어 있습니다.', 'SMS 인증 비활성화');
+      return;
+    }
     if (!verificationCode || verificationCode.length !== 6) {
       setErrors({ ...errors, verificationCode: '인증번호 6자리를 입력해주세요.' });
       return;
@@ -188,7 +198,7 @@ const RegisterPage = () => {
       newErrors.phone = '올바른 전화번호 형식이 아닙니다.';
     }
 
-    if (!isPhoneVerified) {
+    if (isSmsVerificationEnabled && !isPhoneVerified) {
       newErrors.verification = '본인인증을 완료해주세요.';
     }
 
@@ -417,6 +427,11 @@ const RegisterPage = () => {
 
             {/* 연락처 및 본인인증 */}
             <div className="space-y-3">
+              {!isSmsVerificationEnabled && (
+                <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300 text-sm">
+                  현재 SMS 인증이 비활성화되어 있어 인증 없이 가입됩니다.
+                </div>
+              )}
               <div>
                 <label className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-primary)] mb-2">
                   연락처 <span className="text-red-500">*</span>
@@ -438,12 +453,12 @@ const RegisterPage = () => {
                     }`}
                     placeholder="010-1234-5678"
                     maxLength={13}
-                    disabled={isPhoneVerified}
+                    disabled={isPhoneVerifiedEffective}
                   />
                   <button
                     type="button"
                     onClick={handleRequestVerification}
-                    disabled={isSendingCode || countdown > 0 || isPhoneVerified}
+                    disabled={!isSmsVerificationEnabled || isSendingCode || countdown > 0 || isPhoneVerifiedEffective}
                     className="px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                   >
                     {isSendingCode
@@ -465,7 +480,7 @@ const RegisterPage = () => {
                 )}
               </div>
 
-              {!isPhoneVerified && (
+              {!isPhoneVerifiedEffective && (
                 <div>
                   <label className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-primary)] mb-2">
                     인증번호 <span className="text-red-500">*</span>
@@ -489,7 +504,7 @@ const RegisterPage = () => {
                     <button
                       type="button"
                       onClick={handleVerifyCode}
-                      disabled={isVerifyingCode || verificationCode.length !== 6}
+                      disabled={!isSmsVerificationEnabled || isVerifyingCode || verificationCode.length !== 6}
                       className="px-4 py-2 bg-green-500 text-white rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                     >
                       {isVerifyingCode ? '확인 중...' : '인증 확인'}
@@ -500,7 +515,7 @@ const RegisterPage = () => {
                     <button
                       type="button"
                       onClick={handleRequestVerification}
-                      disabled={isSendingCode || countdown > 0 || isPhoneVerified}
+                      disabled={!isSmsVerificationEnabled || isSendingCode || countdown > 0 || isPhoneVerifiedEffective}
                       className="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-blue-primary)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <ArrowPathIcon className={`w-3.5 h-3.5 ${isSendingCode ? 'animate-spin' : ''}`} />
@@ -529,7 +544,7 @@ const RegisterPage = () => {
                 </div>
               )}
 
-              {isPhoneVerified && (
+              {isPhoneVerifiedEffective && (
                 <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                   <CheckCircleIcon className="w-5 h-5 text-green-500" />
                   <span className="text-sm font-medium text-green-700 dark:text-green-400">
@@ -540,7 +555,7 @@ const RegisterPage = () => {
             </div>
 
             {/* 실명 (본인인증 완료 후 표시) */}
-            {isPhoneVerified && (
+            {isPhoneVerifiedEffective && (
               <div>
                 <label className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-primary)] mb-2">
                   <UserIcon className="w-4 h-4" />

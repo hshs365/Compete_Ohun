@@ -4,7 +4,7 @@ import Sidebar from './components/Sidebar';
 import GroupListPanel from './components/GroupListPanel';
 import CategoryFilter from './components/CategoryFilter';
 import NaverMapPanel from './components/NaverMapPanel';
-import type { SelectedGroup } from './components/MapPanel';
+import type { SelectedGroup } from './types/selected-group';
 import GroupDetail from './components/GroupDetail';
 import MultiStepCreateGroup from './components/MultiStepCreateGroup';
 import NotificationPanel from './components/NotificationPanel';
@@ -26,6 +26,8 @@ import FavoritesPage from './components/FavoritesPage'; // FavoritesPage 컴포�
 import SportsEquipmentPage from './components/SportsEquipmentPage'; // SportsEquipmentPage 컴포넌트 import
 import EventMatchPage from './components/EventMatchPage'; // EventMatchPage 컴포넌트 import
 import FollowersPage from './components/FollowersPage'; // FollowersPage 컴포넌트 import
+import TeamsPage from './components/TeamsPage'; // TeamsPage 컴포넌트 import
+import TeamDetailPage from './components/TeamDetailPage'; // TeamDetailPage 컴포넌트 import
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import WelcomeGuide from './components/WelcomeGuide';
 import LoadingSpinner from './components/LoadingSpinner';
@@ -414,6 +416,8 @@ const MainLayout = () => {
             <Route path="favorites" element={<FavoritesPage />} />
             <Route path="sports-equipment" element={<SportsEquipmentPage />} />
             <Route path="event-match" element={<EventMatchPage />} />
+            <Route path="teams" element={<TeamsPage />} />
+            <Route path="teams/:teamId" element={<TeamDetailPage />} />
             <Route path="followers" element={<FollowersPage />} />
             <Route path="notice" element={<NoticePage />} />
             <Route path="contact" element={<ContactPage />} />

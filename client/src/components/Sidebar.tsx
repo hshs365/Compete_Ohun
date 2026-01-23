@@ -13,6 +13,7 @@ import {
   ShoppingBagIcon,
   CalendarDaysIcon,
   UserGroupIcon,
+  ShieldCheckIcon,
 } from '@heroicons/react/24/outline';
 
 const Sidebar = () => {
@@ -25,6 +26,7 @@ const Sidebar = () => {
     { name: '즐겨찾기', icon: HeartIcon, path: '/favorites' },
     { name: '스포츠용품', icon: ShoppingBagIcon, path: '/sports-equipment' },
     { name: '이벤트매치', icon: CalendarDaysIcon, path: '/event-match' },
+    { name: '팀', icon: ShieldCheckIcon, path: '/teams' },
     { name: '팔로워', icon: UserGroupIcon, path: '/followers' },
   ];
 

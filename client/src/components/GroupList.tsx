@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import type { SelectedGroup } from './MapPanel';
+import type { SelectedGroup } from '../types/selected-group';
 import { api } from '../utils/api';
 import { extractCityFromAddress, type KoreanCity } from '../utils/locationUtils';
 import LoadingSpinner from './LoadingSpinner';

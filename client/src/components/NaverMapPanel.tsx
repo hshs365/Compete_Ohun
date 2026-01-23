@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import type { SelectedGroup } from './MapPanel';
+import type { SelectedGroup } from '../types/selected-group';
 import { getCityCoordinates, type KoreanCity } from '../utils/locationUtils';
 import { api } from '../utils/api';
 

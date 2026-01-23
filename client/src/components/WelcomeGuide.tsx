@@ -40,7 +40,7 @@ const WelcomeGuide: React.FC<WelcomeGuideProps> = ({ onClose }) => {
   const tooltipRef = useRef<HTMLDivElement>(null);
 
   // 가이드 데이터
-  const [location, setLocation] = useState<{ latitude: number; longitude: number; address: string } | null>(null);
+  const [location, setLocation] = useState<{ address: string } | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isAthlete, setIsAthlete] = useState<boolean>(false);
   const [selectedSports, setSelectedSports] = useState<string[]>([]);
@@ -129,70 +129,40 @@ const WelcomeGuide: React.FC<WelcomeGuideProps> = ({ onClose }) => {
     }
   }, [highlightTarget]);
 
-  // 위치 가져오기
+  // 주소 검색으로 위치 등록
   const handleGetCurrentLocation = async () => {
-    if (!navigator.geolocation) {
-      await showWarning('이 브라우저는 위치 정보를 지원하지 않습니다.', '위치 정보 미지원');
-      return;
-    }
-
     setIsGettingLocation(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        
-        try {
-          // 위치 정보 먼저 저장 (주소 없이도 저장)
-          await api.put('/api/auth/me', {
-            latitude,
-            longitude,
-          });
+    const script = document.createElement('script');
+    script.src = '//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
 
-          // 주소는 나중에 가져오기 (실패해도 위경도는 저장됨)
-          let address = `위도: ${latitude.toFixed(6)}, 경도: ${longitude.toFixed(6)}`;
-          try {
-            const geoResponse = await api.get<{ address: string }>(
-              `/api/auth/reverse-geocode?longitude=${longitude}&latitude=${latitude}`
-            );
-            if (geoResponse.address && geoResponse.address !== '주소를 가져올 수 없습니다') {
-              address = geoResponse.address;
-            }
-          } catch (geoError) {
-            console.warn('주소 가져오기 실패 (위경도로 표시):', geoError);
-            // 주소 가져오기 실패해도 위경도로 표시
-          }
-
-          const locationData = { latitude, longitude, address };
-          setLocation(locationData);
-
-          localStorage.setItem('userLocation', JSON.stringify(locationData));
-          
-          window.dispatchEvent(new CustomEvent('userLocationUpdated', {
-            detail: locationData,
-          }));
-
-          await checkAuth();
-        } catch (error) {
-          console.error('위치 정보 저장 실패:', error);
-          // 저장 실패 시에도 위경도로 표시
-          setLocation({ latitude, longitude, address: `위도: ${latitude.toFixed(6)}, 경도: ${longitude.toFixed(6)}` });
-        } finally {
-          setIsGettingLocation(false);
-        }
-      },
-      (error) => {
-        console.error('위치 정보 가져오기 실패:', error);
-        setIsGettingLocation(false);
-        if (error.code === 1) {
-          showWarning('위치 정보 권한이 거부되었습니다. 설정에서 권한을 허용해주세요.', '위치 권한 거부');
-        }
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 60000,
+    const openPostcode = () => {
+      if (typeof window !== 'undefined' && (window as any).daum) {
+        new (window as any).daum.Postcode({
+          oncomplete: async (data: any) => {
+            const fullAddress = data.address;
+            const locationData = { address: fullAddress };
+            setLocation(locationData);
+            localStorage.setItem('userLocation', JSON.stringify(locationData));
+            window.dispatchEvent(new CustomEvent('userLocationUpdated', {
+              detail: locationData,
+            }));
+            await checkAuth();
+            setIsGettingLocation(false);
+          },
+          width: '100%',
+          height: '100%',
+        }).open();
       }
-    );
+    };
+
+    if (typeof window !== 'undefined' && (window as any).daum) {
+      openPostcode();
+    } else {
+      script.onload = () => {
+        openPostcode();
+      };
+      document.head.appendChild(script);
+    }
   };
 
   // 다음 단계로
@@ -248,19 +218,12 @@ const WelcomeGuide: React.FC<WelcomeGuideProps> = ({ onClose }) => {
       const updateData: any = {};
 
       if (location) {
-        updateData.latitude = location.latitude;
-        updateData.longitude = location.longitude;
-        
         localStorage.setItem('userLocation', JSON.stringify({
-          latitude: location.latitude,
-          longitude: location.longitude,
           address: location.address,
         }));
         
         window.dispatchEvent(new CustomEvent('userLocationUpdated', {
           detail: {
-            latitude: location.latitude,
-            longitude: location.longitude,
             address: location.address,
           },
         }));

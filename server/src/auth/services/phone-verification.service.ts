@@ -4,7 +4,9 @@ import { Repository, MoreThan } from 'typeorm';
 import { PhoneVerification } from '../entities/phone-verification.entity';
 import { UsersService } from '../../users/users.service';
 import { UserStatus } from '../../users/entities/user.entity';
+import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
+import axios from 'axios';
 
 @Injectable()
 export class PhoneVerificationService {
@@ -17,6 +19,7 @@ export class PhoneVerificationService {
     private verificationRepository: Repository<PhoneVerification>,
     @Inject(forwardRef(() => UsersService))
     private usersService: UsersService,
+    private configService: ConfigService,
   ) {}
 
   /**
@@ -47,21 +50,77 @@ export class PhoneVerificationService {
    * 실제 운영 시에는 SMS 발송 서비스(예: 알리고, 카카오 알림톡 등)를 연동해야 합니다.
    */
   private async sendSMS(phone: string, code: string): Promise<void> {
-    // TODO: 실제 SMS 발송 서비스 연동
-    // 예: 알리고, 카카오 알림톡, 네이버 클라우드 플랫폼 등
-    
-    // 개발 환경에서는 콘솔에 출력
-    console.log(`[SMS 발송] ${phone}로 인증번호 ${code}를 발송했습니다.`);
-    console.log(`[개발 모드] 실제 운영 시에는 SMS 발송 서비스를 연동해야 합니다.`);
-    
-    // 실제 SMS 발송 예시 (주석 처리)
-    // const smsService = new SMSService();
-    // await smsService.send({
-    //   to: phone,
-    //   message: `[오운] 인증번호는 ${code}입니다. 5분 내에 입력해주세요.`,
-    // });
+    const accessKey = this.configService.get<string>('NCP_ACCESS_KEY');
+    const secretKey = this.configService.get<string>('NCP_SECRET_KEY');
+    const serviceId = this.configService.get<string>('NCP_SMS_SERVICE_ID');
+    const sender = this.configService.get<string>('NCP_SMS_SENDER');
+
+    if (!accessKey || !secretKey || !serviceId || !sender) {
+      throw new BadRequestException('SMS 발송 설정이 누락되었습니다. 서버 환경 변수를 확인해주세요.');
+    }
+
+    const timestamp = Date.now().toString();
+    const method = 'POST';
+    const requestUrl = `/sms/v2/services/${serviceId}/messages`;
+    const apiUrl = `https://sens.apigw.ntruss.com${requestUrl}`;
+
+    const signature = this.createSignature({
+      method,
+      url: requestUrl,
+      timestamp,
+      accessKey,
+      secretKey,
+    });
+
+    const message = `[오운] 인증번호는 ${code}입니다. 5분 내에 입력해주세요.`;
+
+    try {
+      await axios.post(
+        apiUrl,
+        {
+          type: 'SMS',
+          from: sender,
+          content: message,
+          messages: [
+            {
+              to: phone,
+              content: message,
+            },
+          ],
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'x-ncp-apigw-timestamp': timestamp,
+            'x-ncp-iam-access-key': accessKey,
+            'x-ncp-apigw-signature-v2': signature,
+          },
+          timeout: 5000,
+        },
+      );
+    } catch (error: any) {
+      console.error('SMS 발송 실패:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
+      });
+      throw new BadRequestException('SMS 발송에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    }
   }
 
+  private createSignature(params: {
+    method: string;
+    url: string;
+    timestamp: string;
+    accessKey: string;
+    secretKey: string;
+  }): string {
+    const { method, url, timestamp, accessKey, secretKey } = params;
+    const space = ' ';
+    const newLine = '\n';
+    const message = [method, space, url, newLine, timestamp, newLine, accessKey].join('');
+    return crypto.createHmac('sha256', secretKey).update(message).digest('base64');
+  }
   /**
    * 인증번호 발송 요청
    */
@@ -119,7 +178,7 @@ export class PhoneVerificationService {
     await this.verificationRepository.save(verification);
 
     // SMS 발송
-    await this.sendSMS(phone, code);
+    await this.sendSMS(normalizedPhone, code);
 
     return {
       success: true,

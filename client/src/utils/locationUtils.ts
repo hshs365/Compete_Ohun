@@ -86,45 +86,6 @@ export const extractCityFromAddress = (address: string): KoreanCity | null => {
   return null;
 };
 
-/**
- * 좌표를 기반으로 도시를 추정합니다.
- * @param latitude 위도
- * @param longitude 경도
- * @returns 도시명 또는 null
- */
-export const estimateCityFromCoordinates = (latitude: number, longitude: number): KoreanCity | null => {
-  // 주요 도시의 대략적인 좌표 범위
-  const cityBounds: Record<string, { lat: [number, number]; lng: [number, number] }> = {
-    '서울특별시': { lat: [37.4, 37.7], lng: [126.8, 127.2] },
-    '부산광역시': { lat: [35.0, 35.3], lng: [129.0, 129.3] },
-    '대구광역시': { lat: [35.7, 36.0], lng: [128.4, 128.7] },
-    '인천광역시': { lat: [37.4, 37.6], lng: [126.5, 126.8] },
-    '광주광역시': { lat: [35.1, 35.2], lng: [126.7, 126.9] },
-    '대전광역시': { lat: [36.2, 36.4], lng: [127.3, 127.5] },
-    '울산광역시': { lat: [35.4, 35.6], lng: [129.2, 129.4] },
-    '세종특별자치시': { lat: [36.4, 36.6], lng: [127.2, 127.4] },
-    '경기도': { lat: [37.0, 38.0], lng: [126.5, 127.5] },
-    '강원도': { lat: [37.0, 38.5], lng: [127.0, 129.0] },
-    '충청북도': { lat: [36.0, 37.5], lng: [127.0, 128.5] },
-    '충청남도': { lat: [36.0, 37.0], lng: [126.0, 127.5] },
-    '전라북도': { lat: [35.0, 36.5], lng: [126.5, 127.5] },
-    '전라남도': { lat: [34.0, 35.5], lng: [125.0, 127.5] },
-    '경상북도': { lat: [35.5, 37.5], lng: [128.0, 130.0] },
-    '경상남도': { lat: [34.5, 36.0], lng: [127.5, 129.5] },
-    '제주특별자치도': { lat: [33.0, 33.6], lng: [126.0, 126.9] },
-  };
-  
-  for (const [city, bounds] of Object.entries(cityBounds)) {
-    if (
-      latitude >= bounds.lat[0] && latitude <= bounds.lat[1] &&
-      longitude >= bounds.lng[0] && longitude <= bounds.lng[1]
-    ) {
-      return city as KoreanCity;
-    }
-  }
-  
-  return null;
-};
 
 /**
  * 사용자의 현재 위치에서 도시를 가져옵니다.
@@ -143,11 +104,6 @@ export const getUserCity = (): KoreanCity | null => {
         if (city) return city;
       }
       
-      // 좌표가 있으면 좌표로 도시 추정
-      if (location.latitude && location.longitude) {
-        const city = estimateCityFromCoordinates(location.latitude, location.longitude);
-        if (city) return city;
-      }
     }
   } catch (e) {
     console.error('사용자 위치 정보 파싱 실패:', e);

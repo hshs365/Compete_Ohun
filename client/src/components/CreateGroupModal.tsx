@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { XMarkIcon, MapPinIcon, UsersIcon, TagIcon, CalendarIcon, WrenchScrewdriverIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
-import type { SelectedGroup } from './MapPanel';
+import type { SelectedGroup } from '../types/selected-group';
 import { SPORTS_LIST, getMinParticipantsForSport } from '../constants/sports';
 import { getEquipmentBySport } from '../constants/equipment';
 import { api } from '../utils/api';

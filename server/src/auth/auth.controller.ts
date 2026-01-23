@@ -194,8 +194,6 @@ export class AuthController {
       socialAccounts: connectedProviders,
       phone: user.phone || null,
       phoneVerified: user.phoneVerified || false,
-      latitude: user.latitude ? Number(user.latitude) : null,
-      longitude: user.longitude ? Number(user.longitude) : null,
       businessNumber: user.businessNumber || null,
       businessNumberVerified: user.businessNumberVerified || false,
       nicknameChangedAt: user.nicknameChangedAt ? user.nicknameChangedAt.toISOString() : null,
@@ -230,40 +228,5 @@ export class AuthController {
     return { message: '회원 탈퇴가 완료되었습니다.' };
   }
 
-  @Public()
-  @Get('reverse-geocode')
-  @HttpCode(HttpStatus.OK)
-  async reverseGeocode(
-    @Query('longitude') longitude: string,
-    @Query('latitude') latitude: string,
-  ) {
-    if (!longitude || !latitude) {
-      throw new BadRequestException('경도와 위도를 입력해주세요.');
-    }
-
-    const lng = parseFloat(longitude);
-    const lat = parseFloat(latitude);
-
-    if (isNaN(lng) || isNaN(lat)) {
-      throw new BadRequestException('올바른 좌표 형식이 아닙니다.');
-    }
-
-    const address = await this.authService.reverseGeocode(lng, lat);
-    return { address };
-  }
-
-  @Public()
-  @Get('geocode')
-  @HttpCode(HttpStatus.OK)
-  async geocode(
-    @Query('address') address: string,
-  ) {
-    if (!address) {
-      throw new BadRequestException('주소를 입력해주세요.');
-    }
-
-    const coordinates = await this.authService.geocode(address);
-    return coordinates;
-  }
 }
 

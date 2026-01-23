@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { XMarkIcon, ChevronLeftIcon, ChevronRightIcon, UserPlusIcon, UserMinusIcon } from '@heroicons/react/24/outline';
-import type { SelectedGroup } from './MapPanel';
+import type { SelectedGroup } from '../types/selected-group';
 import { api } from '../utils/api';
 import { showError, showSuccess, showWarning, showConfirm } from '../utils/swal';
-import { isTeamSport, getMinParticipantsForSport } from '../constants/sports';
+import { isTeamSport, getMinParticipantsForSport, SPORT_TEAM_SIZE } from '../constants/sports';
 import { getEquipmentBySport } from '../constants/equipment';
 
 // Step 컴포넌트들
@@ -605,10 +605,17 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
               onCategoryChange={(category) => {
                 // 카테고리 변경 시 최소인원 자동 설정
                 const minParticipants = getMinParticipantsForSport(category);
+                const defaultMinPlayersPerTeam = isTeamSport(category)
+                  ? (SPORT_TEAM_SIZE[category] || 1)
+                  : 1;
                 setFormData((prev) => ({ 
                   ...prev, 
                   category,
                   minParticipants: minParticipants ? minParticipants.toString() : '',
+                  teamSettings: {
+                    ...prev.teamSettings,
+                    minPlayersPerTeam: defaultMinPlayersPerTeam,
+                  },
                 }));
               }}
             />

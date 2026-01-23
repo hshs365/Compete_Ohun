@@ -9,6 +9,7 @@ import { AuthModule } from './auth/auth.module';
 import { GroupsModule } from './groups/groups.module';
 import { FacilitiesModule } from './facilities/facilities.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { TeamsModule } from './teams/teams.module';
 import { User } from './users/entities/user.entity';
 import { SocialAccount } from './social-accounts/entities/social-account.entity';
 import { Group } from './groups/entities/group.entity';
@@ -68,6 +69,7 @@ import { Follow } from './users/entities/follow.entity';
     GroupsModule,
     FacilitiesModule,
     NotificationsModule,
+    TeamsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

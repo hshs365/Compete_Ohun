@@ -47,8 +47,7 @@ interface UserProfileData {
   marketingEmailConsent: boolean;
   marketingSmsConsent: boolean;
   phone: string | null;
-  latitude: number | null;
-  longitude: number | null;
+  // 좌표는 사용하지 않음
   profileImage?: string | null;
   businessNumber?: string | null;
   businessNumberVerified?: boolean;
@@ -84,7 +83,7 @@ const MyInfoPage = () => {
   const [nickname, setNickname] = useState('');
   const [isEditingPhone, setIsEditingPhone] = useState(false);
   const [phone, setPhone] = useState('');
-  const [userLocation, setUserLocation] = useState<{ latitude: number | null; longitude: number | null; address: string } | null>(null);
+  const [userLocation, setUserLocation] = useState<{ address: string } | null>(null);
   const [isSavingLocation, setIsSavingLocation] = useState(false);
   const [isEditingBusinessNumber, setIsEditingBusinessNumber] = useState(false);
   const [businessNumber, setBusinessNumber] = useState('');
@@ -129,33 +128,20 @@ const MyInfoPage = () => {
       setPhone(data.phone || '');
       setBusinessNumber(data.businessNumber || '');
       
-      // 저장된 위치 정보가 있으면 localStorage에서 주소 가져오기 (단순화)
-      // 위경도 형식의 주소는 제외하고 실제 주소만 표시
-      if (data.latitude && data.longitude) {
-        const savedLocation = localStorage.getItem('userLocation');
-        if (savedLocation) {
-          try {
-            const location = JSON.parse(savedLocation);
-            // 저장된 위치와 서버의 위치가 일치하는지 확인 (0.0001도 차이 허용)
-            // 위경도 형식의 주소는 제외
-            if (Math.abs(location.latitude - data.latitude) < 0.0001 && 
-                Math.abs(location.longitude - data.longitude) < 0.0001 &&
-                location.address && !location.address.startsWith('위도:')) {
-              setUserLocation(location);
-            } else {
-              // 위치가 다르거나 위경도 형식이면 주소 없음으로 처리
-              setUserLocation(null);
-            }
-          } catch (e) {
-            // localStorage 파싱 실패 시 주소 없음으로 처리
+      // localStorage에 저장된 주소가 있으면 그대로 사용
+      const savedLocation = localStorage.getItem('userLocation');
+      if (savedLocation) {
+        try {
+          const location = JSON.parse(savedLocation);
+          if (location.address && !location.address.startsWith('위도:')) {
+            setUserLocation({ address: location.address });
+          } else {
             setUserLocation(null);
           }
-        } else {
-          // localStorage에 주소가 없으면 주소 없음으로 처리
+        } catch (e) {
           setUserLocation(null);
         }
       } else {
-        // 서버에 좌표가 없으면 주소 없음으로 처리
         setUserLocation(null);
       }
     } catch (error) {
@@ -191,39 +177,26 @@ const MyInfoPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser, isLoading]); // fetchUserData는 useCallback으로 안정적이므로 dependency에서 제외
 
-  // userLocationUpdated 이벤트 리스너 (가이드에서 위치 저장 시 즉시 반영) - 별도 useEffect로 분리
+  // userLocationUpdated 이벤트 리스너 (주소 저장 시 즉시 반영) - 별도 useEffect로 분리
   useEffect(() => {
-    const handleLocationUpdate = async (event: CustomEvent) => {
-      const { latitude, longitude, address } = event.detail;
-      setUserLocation({ latitude, longitude, address });
-      
-      // 서버에서 최신 사용자 정보를 다시 가져와서 동기화
-      try {
-        const data = await api.get<UserProfileData>('/api/auth/me');
-        setProfileData((prev) => {
-          if (prev) {
-            return {
-              ...prev,
-              ...data,
-              latitude,
-              longitude,
-            };
+    const handleLocationUpdate = (event: CustomEvent) => {
+      const { address } = event.detail || {};
+      if (address && !address.startsWith('위도:')) {
+        setUserLocation({ address });
+      } else {
+        const savedLocation = localStorage.getItem('userLocation');
+        if (savedLocation) {
+          try {
+            const location = JSON.parse(savedLocation);
+            if (location.address && !location.address.startsWith('위도:')) {
+              setUserLocation({ address: location.address });
+              return;
+            }
+          } catch (e) {
+            // 무시
           }
-          return { ...data, latitude, longitude } as UserProfileData;
-        });
-      } catch (error) {
-        console.error('사용자 정보 동기화 실패:', error);
-        // 에러가 발생해도 로컬 상태는 업데이트
-        setProfileData((prev) => {
-          if (prev) {
-            return {
-              ...prev,
-              latitude,
-              longitude,
-            };
-          }
-          return prev;
-        });
+        }
+        setUserLocation(null);
       }
     };
 
@@ -598,14 +571,11 @@ const MyInfoPage = () => {
           oncomplete: async (data: any) => {
             const fullAddress = data.address; // 선택한 주소
             
-            // 주소만 저장 (네이버 지도 API 사용하지 않고 단순화)
+            // 주소만 저장
             try {
               setIsSavingLocation(true);
 
-              // 주소 정보를 localStorage에만 저장 (서버에는 좌표 없이 저장)
               const locationData = {
-                latitude: null as number | null,
-                longitude: null as number | null,
                 address: fullAddress,
               };
 

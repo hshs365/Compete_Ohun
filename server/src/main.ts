@@ -1,9 +1,33 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { createClient } from 'redis';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
+  // 배포 환경 기본값 설정 (환경변수가 없을 때만 적용)
+  process.env.DB_HOST ||= '192.168.132.81';
+  process.env.REDIS_HOST ||= '192.168.132.81';
+
   const app = await NestFactory.create(AppModule);
+
+  // Redis 세션 스토어 연결
+  const redisHost = process.env.REDIS_HOST ?? '192.168.132.81';
+  const redisPort = process.env.REDIS_PORT ?? '6379';
+  const redisPassword = process.env.REDIS_PASSWORD ?? '';
+  const redisClient = createClient({
+    url: `redis://:${redisPassword}@${redisHost}:${redisPort}`,
+  });
+
+  redisClient.on('error', (error) => {
+    console.error('❌ Redis 연결 오류:', error);
+  });
+
+  try {
+    await redisClient.connect();
+    console.log(`✅ Redis 연결 완료 (${redisHost}:${redisPort})`);
+  } catch (error) {
+    console.error('❌ Redis 연결 실패:', error);
+  }
   
   // CORS 설정 (프론트엔드와 통신)
   // localhost와 IP 주소 모두 허용
@@ -79,12 +103,14 @@ async function bootstrap() {
   // Graceful shutdown 처리
   process.on('SIGTERM', async () => {
     console.log('SIGTERM 신호를 받았습니다. 서버를 종료합니다...');
+    await redisClient.quit().catch(() => undefined);
     await app.close();
     process.exit(0);
   });
 
   process.on('SIGINT', async () => {
     console.log('SIGINT 신호를 받았습니다. 서버를 종료합니다...');
+    await redisClient.quit().catch(() => undefined);
     await app.close();
     process.exit(0);
   });
