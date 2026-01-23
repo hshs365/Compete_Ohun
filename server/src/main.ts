@@ -14,8 +14,11 @@ async function bootstrap() {
   const redisHost = process.env.REDIS_HOST ?? '192.168.132.81';
   const redisPort = process.env.REDIS_PORT ?? '6379';
   const redisPassword = process.env.REDIS_PASSWORD ?? '';
+  const redisUrl = redisPassword
+    ? `redis://:${redisPassword}@${redisHost}:${redisPort}`
+    : `redis://${redisHost}:${redisPort}`;
   const redisClient = createClient({
-    url: `redis://:${redisPassword}@${redisHost}:${redisPort}`,
+    url: redisUrl,
   });
 
   redisClient.on('error', (error) => {
