@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { UserGroupIcon, UserPlusIcon, UserMinusIcon } from '@heroicons/react/24/outline';
 import { api } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,6 +16,7 @@ interface User {
 
 const FollowersPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'following' | 'followers' | 'played-together'>('following');
   const [following, setFollowing] = useState<User[]>([]);
   const [followers, setFollowers] = useState<User[]>([]);
@@ -22,8 +24,13 @@ const FollowersPage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user) {
+      // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
+      navigate('/login');
+      return;
+    }
     fetchData();
-  }, [activeTab]);
+  }, [activeTab, user, navigate]);
 
   const fetchData = async () => {
     if (!user) return;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { XMarkIcon, MapPinIcon, UsersIcon, WrenchScrewdriverIcon, TrashIcon, LockClosedIcon, LockOpenIcon, UserGroupIcon, TrophyIcon, StarIcon, CurrencyDollarIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import type { SelectedGroup } from '../types/selected-group';
@@ -76,6 +77,7 @@ interface GroupDetailData {
 
 const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipantChange }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [isParticipant, setIsParticipant] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [participantCount, setParticipantCount] = useState(group?.memberCount || 0);
@@ -191,6 +193,13 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
   const handleJoin = async () => {
     if (!group || isLoading) return;
 
+    // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
+    if (!user) {
+      await showInfo('모임에 참가하려면 로그인이 필요합니다.', '로그인 필요');
+      navigate('/login');
+      return;
+    }
+
     // 참가비가 있으면 결제 모달 표시
     if (hasFee && feeAmount && feeAmount > 0) {
       setShowPaymentModal(true);
@@ -289,6 +298,13 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
 
   const handleLeave = async () => {
     if (!group || isLoading) return;
+
+    // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
+    if (!user) {
+      await showInfo('모임에서 나가려면 로그인이 필요합니다.', '로그인 필요');
+      navigate('/login');
+      return;
+    }
 
     const confirmed = await showConfirm('정말 모임에서 나가시겠습니까?', '모임 나가기');
     if (!confirmed) {

@@ -141,7 +141,11 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
           showError('올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)', '전화번호 형식 오류');
           return false;
         }
-        if (!formData.isPhoneVerified) {
+        // SMS 인증 활성화 여부 확인
+        const isSmsVerificationEnabled = import.meta.env.VITE_SMS_VERIFICATION_ENABLED === 'true';
+        
+        // SMS 인증이 활성화된 경우에만 인증 완료 체크
+        if (isSmsVerificationEnabled && !formData.isPhoneVerified) {
           showError('본인인증을 완료해주세요.', '본인인증 필요');
           return false;
         }
@@ -215,7 +219,11 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
       await showError('올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)', '전화번호 형식 오류');
       return;
     }
-    if (!formData.isPhoneVerified) {
+    // SMS 인증 활성화 여부 확인
+    const isSmsVerificationEnabled = import.meta.env.VITE_SMS_VERIFICATION_ENABLED === 'true';
+    
+    // SMS 인증이 활성화된 경우에만 인증 완료 체크
+    if (isSmsVerificationEnabled && !formData.isPhoneVerified) {
       await showError('본인인증을 완료해주세요.', '본인인증 필요');
       return;
     }
@@ -232,7 +240,8 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
         termsPrivacyAgreed: formData.termsPrivacyAgreed,
         marketingConsent: formData.marketingConsent,
         phone: formData.phone,
-        verificationCode: formData.verificationCode,
+        // SMS 인증이 비활성화된 경우 더미 인증번호 전송 (서버에서 무시됨)
+        verificationCode: isSmsVerificationEnabled ? formData.verificationCode : '000000',
         memberType: formData.memberType,
         businessNumber: formData.memberType === 'business' ? formData.businessNumber : undefined,
       };

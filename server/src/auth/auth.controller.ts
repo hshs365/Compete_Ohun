@@ -11,7 +11,11 @@ import {
   HttpStatus,
   BadRequestException,
   ValidationPipe,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Express } from 'express';
 import { AuthService } from './auth.service';
 import { OAuthService } from './services/oauth.service';
 import { PhoneVerificationService } from './services/phone-verification.service';
@@ -197,17 +201,28 @@ export class AuthController {
       businessNumber: user.businessNumber || null,
       businessNumberVerified: user.businessNumberVerified || false,
       nicknameChangedAt: user.nicknameChangedAt ? user.nicknameChangedAt.toISOString() : null,
+      profileImageUrl: user.profileImageUrl || null,
     };
   }
 
   @UseGuards(JwtAuthGuard)
   @Put('me')
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('profileImage', {
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    fileFilter: (req, file, callback) => {
+      if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
+        return callback(new BadRequestException('이미지 파일만 업로드 가능합니다.'), false);
+      }
+      callback(null, true);
+    },
+  }))
   async updateProfile(
     @CurrentUser() user: User,
     @Body(ValidationPipe) updateProfileDto: UpdateProfileDto,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.authService.updateProfile(user.id, updateProfileDto);
+    return this.authService.updateProfile(user.id, updateProfileDto, file);
   }
 
   @UseGuards(JwtAuthGuard)

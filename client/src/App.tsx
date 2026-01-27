@@ -381,7 +381,7 @@ const DashboardLayout = () => {
   );
 };
 
-// 인증 필요 라우트 가드
+// 인증 필요 라우트 가드 (개인 정보가 필요한 페이지)
 const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
   const { user, isLoading } = useAuth();
 
@@ -400,34 +400,88 @@ const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
   return children;
 };
 
+// 공개 라우트 가드 (로그인 없이 접근 가능)
+const PublicRoute = ({ children }: { children: React.ReactElement }) => {
+  const { isLoading } = useAuth();
+
+  if (isLoading) {
+    return <LoadingSpinner fullScreen message="로딩 중..." />;
+  }
+
+  return children;
+};
+
 // 메인 레이아웃 컴포넌트
 const MainLayout = () => {
   return (
-    <ProtectedRoute>
+    <PublicRoute>
       <div className="flex h-screen bg-[var(--color-bg-primary)] overflow-hidden">
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
           <Routes>
+            {/* 공개 접근 가능한 페이지 */}
             <Route index element={<DashboardLayout />} />
-            <Route path="my-info" element={<MyInfoPage />} />
-            <Route path="my-schedule" element={<MySchedulePage />} />
-            <Route path="facility-reservation" element={<FacilityReservationPage />} />
             <Route path="hall-of-fame" element={<HallOfFamePage />} />
-            <Route path="favorites" element={<FavoritesPage />} />
-            <Route path="sports-equipment" element={<SportsEquipmentPage />} />
-            <Route path="event-match" element={<EventMatchPage />} />
-            <Route path="teams" element={<TeamsPage />} />
-            <Route path="teams/:teamId" element={<TeamDetailPage />} />
-            <Route path="followers" element={<FollowersPage />} />
             <Route path="notice" element={<NoticePage />} />
             <Route path="contact" element={<ContactPage />} />
-            <Route path="settings" element={<SettingsPage />} />
+            
+            {/* 인증이 필요한 페이지 */}
+            <Route path="my-info" element={
+              <ProtectedRoute>
+                <MyInfoPage />
+              </ProtectedRoute>
+            } />
+            <Route path="my-schedule" element={
+              <ProtectedRoute>
+                <MySchedulePage />
+              </ProtectedRoute>
+            } />
+            <Route path="facility-reservation" element={
+              <ProtectedRoute>
+                <FacilityReservationPage />
+              </ProtectedRoute>
+            } />
+            <Route path="favorites" element={
+              <ProtectedRoute>
+                <FavoritesPage />
+              </ProtectedRoute>
+            } />
+            <Route path="sports-equipment" element={
+              <ProtectedRoute>
+                <SportsEquipmentPage />
+              </ProtectedRoute>
+            } />
+            <Route path="event-match" element={
+              <ProtectedRoute>
+                <EventMatchPage />
+              </ProtectedRoute>
+            } />
+            <Route path="teams" element={
+              <ProtectedRoute>
+                <TeamsPage />
+              </ProtectedRoute>
+            } />
+            <Route path="teams/:teamId" element={
+              <ProtectedRoute>
+                <TeamDetailPage />
+              </ProtectedRoute>
+            } />
+            <Route path="followers" element={
+              <ProtectedRoute>
+                <FollowersPage />
+              </ProtectedRoute>
+            } />
+            <Route path="settings" element={
+              <ProtectedRoute>
+                <SettingsPage />
+              </ProtectedRoute>
+            } />
           </Routes>
         </div>
         {/* 알림 패널 - 사이드바 상단에 고정 (모든 페이지에서 표시) */}
         <NotificationPanel />
       </div>
-    </ProtectedRoute>
+    </PublicRoute>
   );
 };
 

@@ -1,4 +1,6 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+// 프로덕션에서는 상대 경로 사용, 개발 환경에서는 환경변수 또는 localhost 사용
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
+  (import.meta.env.PROD ? '' : 'http://localhost:3000');
 
 export interface ApiResponse<T> {
   data?: T;

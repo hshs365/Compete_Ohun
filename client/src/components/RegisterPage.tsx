@@ -39,7 +39,8 @@ const RegisterPage = () => {
   const [phone, setPhone] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [isPhoneVerified, setIsPhoneVerified] = useState(false);
-  const isSmsVerificationEnabled = false; // TODO: SMS 인증 재활성화 시 true로 변경
+  // 환경변수에서 SMS 인증 활성화 여부 확인 (기본값: false - 개발 환경)
+  const isSmsVerificationEnabled = import.meta.env.VITE_SMS_VERIFICATION_ENABLED === 'true';
   const isPhoneVerifiedEffective = isSmsVerificationEnabled ? isPhoneVerified : true;
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);

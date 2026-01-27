@@ -31,7 +31,7 @@ interface RegisterData {
   marketingEmailConsent?: boolean;
   marketingSmsConsent?: boolean;
   phone: string; // 전화번호 (필수)
-  verificationCode: string; // 인증번호 (필수)
+  verificationCode?: string; // 인증번호 (SMS 인증 활성화 시 필수)
   memberType?: 'individual' | 'business'; // 회원 유형
   businessNumber?: string; // 사업자등록번호 (사업자 회원인 경우)
 }
@@ -51,7 +51,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+// 프로덕션에서는 상대 경로 사용, 개발 환경에서는 환경변수 또는 localhost 사용
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
+  (import.meta.env.PROD ? '' : 'http://localhost:3000');
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);

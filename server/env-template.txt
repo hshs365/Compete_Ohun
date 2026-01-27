@@ -10,6 +10,20 @@ JWT_EXPIRES_IN=7d
 PORT=3000
 FRONTEND_URL=http://localhost:5173
 
+# 환경 설정
+NODE_ENV=development
+# NODE_ENV=production (운영 환경)
+
+# SMS 인증 활성화 여부
+# 개발 환경: false (SMS 인증 없이 회원가입 가능)
+# 운영 환경: true (SMS 인증 필수)
+SMS_VERIFICATION_ENABLED=false
+
+# 파일 업로드 디렉토리 (NFS 공유 스토리지 사용 시)
+# 예: UPLOAD_DIR=/mnt/shared/uploads
+# 개발 환경에서는 설정하지 않으면 자동으로 server/uploads 사용
+# UPLOAD_DIR=
+
 REDIS_HOST=192.168.29.162
 REDIS_PORT=6379
 REDIS_PASSWORD=

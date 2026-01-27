@@ -40,13 +40,18 @@ export class AuthService {
   ) {}
 
   async register(registerDto: RegisterDto): Promise<AuthResponse> {
-    // 본인인증 완료 여부 확인 (SMS 인증 비활성화 시 생략)
     const normalizedPhone = registerDto.phone.replace(/-/g, '');
-    // TODO: SMS 인증 재활성화 시 아래 로직 복구
-    // const isVerified = await this.phoneVerificationService.isVerified(registerDto.phone);
-    // if (!isVerified) {
-    //   throw new BadRequestException('전화번호 본인인증이 완료되지 않았습니다. 인증번호를 먼저 요청하고 인증을 완료해주세요.');
-    // }
+    
+    // SMS 인증 활성화 여부 확인 (환경변수로 제어)
+    const smsVerificationEnabled = this.configService.get<string>('SMS_VERIFICATION_ENABLED') === 'true';
+    
+    // SMS 인증이 활성화된 경우에만 인증 완료 여부 확인
+    if (smsVerificationEnabled) {
+      const isVerified = await this.phoneVerificationService.isVerified(registerDto.phone);
+      if (!isVerified) {
+        throw new BadRequestException('전화번호 본인인증이 완료되지 않았습니다. 인증번호를 먼저 요청하고 인증을 완료해주세요.');
+      }
+    }
 
     // 전화번호 중복 확인 (활성 사용자만 확인, 탈퇴한 사용자의 전화번호는 재사용 가능)
     const existingUser = await this.usersService.findByPhone(normalizedPhone);
@@ -286,8 +291,45 @@ export class AuthService {
     return { available };
   }
 
-  async updateProfile(userId: number, updateData: { nickname?: string; phone?: string; interestedSports?: string[]; skillLevel?: SkillLevel }): Promise<User> {
+  async updateProfile(userId: number, updateData: { nickname?: string; phone?: string; interestedSports?: string[]; skillLevel?: SkillLevel }, file?: Express.Multer.File): Promise<User> {
+    // 파일이 있으면 프로필 이미지 업로드 처리
+    if (file) {
+      const profileImageUrl = await this.uploadProfileImage(userId, file);
+      updateData = { ...updateData, profileImageUrl } as any;
+    }
     return this.usersService.updateUser(userId, updateData);
+  }
+
+  private async uploadProfileImage(userId: number, file: Express.Multer.File): Promise<string> {
+    const fs = require('fs').promises;
+    const path = require('path');
+    const crypto = require('crypto');
+    
+    // 업로드 디렉토리 설정
+    // 환경변수 UPLOAD_DIR이 있으면 사용 (NFS 공유 스토리지 등)
+    // 없으면 로컬 디렉토리 사용 (개발 환경)
+    const baseUploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+    const uploadDir = path.join(baseUploadDir, 'profile');
+    
+    // 디렉토리가 없으면 생성
+    try {
+      await fs.access(uploadDir);
+    } catch {
+      await fs.mkdir(uploadDir, { recursive: true });
+    }
+    
+    // 파일 확장자 추출
+    const ext = path.extname(file.originalname) || '.jpg';
+    // UUID 대신 crypto.randomBytes 사용 (uuid 패키지 없이)
+    const randomBytes = crypto.randomBytes(8).toString('hex');
+    const filename = `${userId}_${Date.now()}_${randomBytes}${ext}`;
+    const filepath = path.join(uploadDir, filename);
+    
+    // 파일 저장
+    await fs.writeFile(filepath, file.buffer);
+    
+    // URL 반환 (정적 파일 서빙 경로)
+    return `/uploads/profile/${filename}`;
   }
 
   private generateToken(user: User): string {

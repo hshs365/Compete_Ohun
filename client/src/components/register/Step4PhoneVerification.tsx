@@ -29,6 +29,16 @@ const Step4PhoneVerification: React.FC<Step4PhoneVerificationProps> = ({
   const [countdown, setCountdown] = useState(0);
   const [isComposing, setIsComposing] = useState(false);
 
+  // SMS 인증 활성화 여부 확인
+  const isSmsVerificationEnabled = import.meta.env.VITE_SMS_VERIFICATION_ENABLED === 'true';
+
+  // SMS 인증이 비활성화된 경우 자동으로 인증 완료 처리
+  useEffect(() => {
+    if (!isSmsVerificationEnabled && !isPhoneVerified) {
+      onPhoneVerified(true);
+    }
+  }, [isSmsVerificationEnabled, isPhoneVerified, onPhoneVerified]);
+
   // 카운트다운 타이머
   useEffect(() => {
     if (countdown > 0) {
@@ -47,6 +57,14 @@ const Step4PhoneVerification: React.FC<Step4PhoneVerificationProps> = ({
 
   // 인증번호 발송
   const handleRequestVerification = async () => {
+    // SMS 인증이 비활성화된 경우
+    if (!isSmsVerificationEnabled) {
+      // 자동으로 인증 완료 처리
+      onPhoneVerified(true);
+      await showSuccess('SMS 인증이 비활성화되어 있습니다. 다음 단계로 진행합니다.', '인증 생략');
+      return;
+    }
+
     if (!phone || phone.trim() === '') {
       await showWarning('전화번호를 입력해주세요.', '입력 필요');
       return;
@@ -100,9 +118,15 @@ const Step4PhoneVerification: React.FC<Step4PhoneVerificationProps> = ({
     <div className="space-y-6">
       {/* 안내 문구 */}
       <div className="mb-6">
-        <p className="text-sm text-[var(--color-text-secondary)]">
-          본인인증을 위해 전화번호 인증을 진행해주세요.
-        </p>
+        {isSmsVerificationEnabled ? (
+          <p className="text-sm text-[var(--color-text-secondary)]">
+            본인인증을 위해 전화번호 인증을 진행해주세요.
+          </p>
+        ) : (
+          <p className="text-sm text-[var(--color-text-secondary)]">
+            개발 환경에서는 SMS 인증이 비활성화되어 있습니다. 전화번호만 입력하면 됩니다.
+          </p>
+        )}
       </div>
 
       {/* 전화번호 입력 */}

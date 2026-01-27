@@ -2,13 +2,23 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { createClient } from 'redis';
 import { AppModule } from './app.module';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
 async function bootstrap() {
   // 배포 환경 기본값 설정 (환경변수가 없을 때만 적용)
   process.env.DB_HOST ||= '192.168.132.81';
   process.env.REDIS_HOST ||= '192.168.132.81';
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  
+  // 정적 파일 서빙 설정 (업로드된 파일)
+  // 환경변수 UPLOAD_DIR이 있으면 사용 (NFS 공유 스토리지 등)
+  // 없으면 로컬 디렉토리 사용 (개발 환경)
+  const uploadsPath = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads');
+  app.useStaticAssets(uploadsPath, {
+    prefix: '/uploads',
+  });
 
   // Redis 세션 스토어 연결
   const redisHost = process.env.REDIS_HOST ?? '192.168.132.81';
@@ -59,10 +69,20 @@ async function bootstrap() {
       }
       
       // 개발 환경에서는 localhost나 192.168.x.x로 시작하는 origin 허용
-      if (process.env.NODE_ENV !== 'production') {
+      const isDevelopment = process.env.NODE_ENV !== 'production';
+      if (isDevelopment) {
         if (origin.startsWith('http://localhost:') || 
             origin.startsWith('http://127.0.0.1:') ||
             origin.match(/^http:\/\/192\.168\.\d+\.\d+:5173$/)) {
+          return callback(null, true);
+        }
+      } else {
+        // 운영 환경에서는 특정 도메인만 허용
+        const productionOrigins = [
+          'https://ohun.kr',
+          'https://www.ohun.kr',
+        ];
+        if (productionOrigins.some(allowed => origin.startsWith(allowed))) {
           return callback(null, true);
         }
       }

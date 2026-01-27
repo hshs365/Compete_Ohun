@@ -50,6 +50,14 @@ export class PhoneVerificationService {
    * 실제 운영 시에는 SMS 발송 서비스(예: 알리고, 카카오 알림톡 등)를 연동해야 합니다.
    */
   private async sendSMS(phone: string, code: string): Promise<void> {
+    // SMS 인증이 비활성화된 경우 (개발 환경)
+    const smsVerificationEnabled = this.configService.get<string>('SMS_VERIFICATION_ENABLED') === 'true';
+    if (!smsVerificationEnabled) {
+      // 개발 환경에서는 콘솔에만 출력 (실제 SMS 발송 안 함)
+      console.log(`[DEV MODE] SMS 인증번호 발송 (실제 발송 안 함): ${phone} - ${code}`);
+      return;
+    }
+
     const accessKey = this.configService.get<string>('NCP_ACCESS_KEY');
     const secretKey = this.configService.get<string>('NCP_SECRET_KEY');
     const serviceId = this.configService.get<string>('NCP_SMS_SERVICE_ID');

@@ -8,6 +8,7 @@ pipeline {
 
   parameters {
     string(name: 'DEPLOY_BRANCH', defaultValue: 'main', description: 'Deploy branch name')
+    choice(name: 'ENVIRONMENT', choices: ['development', 'production'], description: 'Deploy environment')
     booleanParam(name: 'DEPLOY_WEB1', defaultValue: true, description: 'Deploy to web1')
     booleanParam(name: 'DEPLOY_CLIENT', defaultValue: false, description: 'Restart client dev server')
   }
@@ -19,6 +20,8 @@ pipeline {
     BACKEND_DIR = "${APP_DIR}/server"
     CLIENT_DIR = "${APP_DIR}/client"
     DEPLOY_CLIENT = "${params.DEPLOY_CLIENT}"
+    NODE_ENV = "${params.ENVIRONMENT}"
+    SMS_VERIFICATION_ENABLED = "${params.ENVIRONMENT == 'production' ? 'true' : 'false'}"
   }
 
   stages {
@@ -39,7 +42,7 @@ pipeline {
             sh """
             set -euo pipefail
             chmod 600 "\$SSH_KEY"
-            ssh -i "\$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 -o ServerAliveCountMax=3 "\$SSH_USER@\$WEB1_HOST" "APP_DIR='${APP_DIR}' BACKEND_DIR='${BACKEND_DIR}' CLIENT_DIR='${CLIENT_DIR}' DEPLOY_BRANCH='${params.DEPLOY_BRANCH}' DEPLOY_CLIENT='${deployClientValue}' bash -s" <<'REMOTE'
+            ssh -i "\$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 -o ServerAliveCountMax=3 "\$SSH_USER@\$WEB1_HOST" "APP_DIR='${APP_DIR}' BACKEND_DIR='${BACKEND_DIR}' CLIENT_DIR='${CLIENT_DIR}' DEPLOY_BRANCH='${params.DEPLOY_BRANCH}' DEPLOY_CLIENT='${deployClientValue}' NODE_ENV='${params.ENVIRONMENT}' SMS_VERIFICATION_ENABLED='${SMS_VERIFICATION_ENABLED}' bash -s" <<'REMOTE'
               set -euo pipefail
               trap 'echo \"REMOTE ERROR at line \$LINENO\"; exit 1' ERR
               set +x
@@ -87,6 +90,16 @@ pipeline {
               cd "\$BACKEND_DIR"
               echo "[INFO] Installing backend dependencies..."
               npm ci --silent
+              echo "[INFO] Updating environment variables..."
+              # .env 파일에 환경변수 추가/업데이트
+              if [ -f .env ]; then
+                # 기존 NODE_ENV, SMS_VERIFICATION_ENABLED 제거
+                sed -i '/^NODE_ENV=/d' .env
+                sed -i '/^SMS_VERIFICATION_ENABLED=/d' .env
+              fi
+              echo "NODE_ENV=\$NODE_ENV" >> .env
+              echo "SMS_VERIFICATION_ENABLED=\$SMS_VERIFICATION_ENABLED" >> .env
+              echo "[INFO] Environment: \$NODE_ENV, SMS Verification: \$SMS_VERIFICATION_ENABLED"
               echo "[INFO] Restarting backend..."
               "\$PM2_BIN" describe backend >/dev/null 2>&1 || "\$PM2_BIN" start npm --name backend --cwd "\$BACKEND_DIR" -- run start:dev
               "\$PM2_BIN" restart backend --update-env

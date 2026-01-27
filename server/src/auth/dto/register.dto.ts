@@ -18,11 +18,12 @@ export class RegisterDto {
   })
   phone: string; // 연락처 (필수)
 
+  @IsOptional()
   @IsString()
   @Matches(/^[0-9]{6}$/, {
     message: '인증번호는 6자리 숫자입니다.',
   })
-  verificationCode: string; // 본인인증 번호 (필수)
+  verificationCode?: string; // 본인인증 번호 (SMS 인증 활성화 시 필수)
 
   @IsString()
   @MinLength(2)
