@@ -42,7 +42,9 @@ pipeline {
               # Try to load nvm if present (non-login shells don't load it)
               if [ -s "$HOME/.nvm/nvm.sh" ]; then
                 . "$HOME/.nvm/nvm.sh"
-                nvm use --lts >/dev/null 2>&1 || true
+                set +e
+                nvm use --lts >/dev/null 2>&1
+                set -e
               fi
               NPM_PREFIX=""
               if command -v npm >/dev/null 2>&1; then
