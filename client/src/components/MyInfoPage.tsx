@@ -129,19 +129,19 @@ const MyInfoPage = () => {
       setBusinessNumber(data.businessNumber || '');
       
       // localStorage에 저장된 주소가 있으면 그대로 사용
-      const savedLocation = localStorage.getItem('userLocation');
-      if (savedLocation) {
-        try {
-          const location = JSON.parse(savedLocation);
+        const savedLocation = localStorage.getItem('userLocation');
+        if (savedLocation) {
+          try {
+            const location = JSON.parse(savedLocation);
           if (location.address && !location.address.startsWith('위도:')) {
             setUserLocation({ address: location.address });
-          } else {
+            } else {
+              setUserLocation(null);
+            }
+          } catch (e) {
             setUserLocation(null);
           }
-        } catch (e) {
-          setUserLocation(null);
-        }
-      } else {
+        } else {
         setUserLocation(null);
       }
     } catch (error) {

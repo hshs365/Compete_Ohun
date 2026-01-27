@@ -163,8 +163,8 @@ const RegisterPage = () => {
 
     if (!password || password.length < 8) {
       newErrors.password = '비밀번호는 8자 이상이어야 합니다.';
-    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
-      newErrors.password = '비밀번호는 대문자, 소문자, 숫자를 포함해야 합니다.';
+    } else if (!/(?=.*[a-zA-Z])(?=.*\d)/.test(password)) {
+      newErrors.password = '비밀번호는 영문(대/소문자 중 하나)과 숫자를 포함해야 합니다.';
     }
 
     if (password !== confirmPassword) {
@@ -315,10 +315,9 @@ const RegisterPage = () => {
                     <div className="space-y-1">
                       <p className="font-medium mb-1.5 text-xs">비밀번호 요구사항:</p>
                       <div className="text-xs space-y-0.5">
-                        <div>• 8자 이상</div>
-                        <div>• 소문자 포함</div>
-                        <div>• 대문자 포함</div>
-                        <div>• 숫자 포함</div>
+                      <div>• 8자 이상</div>
+                      <div>• 영문 포함(대/소문자 중 하나)</div>
+                      <div>• 숫자 포함</div>
                       </div>
                     </div>
                   }
@@ -358,13 +357,9 @@ const RegisterPage = () => {
                           <span>{password.length >= 8 ? '✓' : '○'}</span>
                           <span>8자 이상</span>
                         </li>
-                        <li className={`flex items-center gap-1 ${/(?=.*[a-z])/.test(password) ? 'text-green-600 dark:text-green-400' : ''}`}>
-                          <span>{/(?=.*[a-z])/.test(password) ? '✓' : '○'}</span>
-                          <span>소문자 포함</span>
-                        </li>
-                        <li className={`flex items-center gap-1 ${/(?=.*[A-Z])/.test(password) ? 'text-green-600 dark:text-green-400' : ''}`}>
-                          <span>{/(?=.*[A-Z])/.test(password) ? '✓' : '○'}</span>
-                          <span>대문자 포함</span>
+                        <li className={`flex items-center gap-1 ${/(?=.*[a-zA-Z])/.test(password) ? 'text-green-600 dark:text-green-400' : ''}`}>
+                          <span>{/(?=.*[a-zA-Z])/.test(password) ? '✓' : '○'}</span>
+                          <span>영문 포함(대/소문자 중 하나)</span>
                         </li>
                         <li className={`flex items-center gap-1 ${/(?=.*\d)/.test(password) ? 'text-green-600 dark:text-green-400' : ''}`}>
                           <span>{/(?=.*\d)/.test(password) ? '✓' : '○'}</span>
@@ -385,13 +380,9 @@ const RegisterPage = () => {
                         <span>{password.length >= 8 ? '✓' : '○'}</span>
                         <span>8자 이상</span>
                       </li>
-                      <li className={`flex items-center gap-1 ${/(?=.*[a-z])/.test(password) ? 'text-green-600 dark:text-green-400' : ''}`}>
-                        <span>{/(?=.*[a-z])/.test(password) ? '✓' : '○'}</span>
-                        <span>소문자 포함</span>
-                      </li>
-                      <li className={`flex items-center gap-1 ${/(?=.*[A-Z])/.test(password) ? 'text-green-600 dark:text-green-400' : ''}`}>
-                        <span>{/(?=.*[A-Z])/.test(password) ? '✓' : '○'}</span>
-                        <span>대문자 포함</span>
+                      <li className={`flex items-center gap-1 ${/(?=.*[a-zA-Z])/.test(password) ? 'text-green-600 dark:text-green-400' : ''}`}>
+                        <span>{/(?=.*[a-zA-Z])/.test(password) ? '✓' : '○'}</span>
+                        <span>영문 포함(대/소문자 중 하나)</span>
                       </li>
                       <li className={`flex items-center gap-1 ${/(?=.*\d)/.test(password) ? 'text-green-600 dark:text-green-400' : ''}`}>
                         <span>{/(?=.*\d)/.test(password) ? '✓' : '○'}</span>

@@ -85,12 +85,13 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const port = process.env.PORT ?? 3000;
+  const host = process.env.HOST ?? '0.0.0.0';
   
   // 포트가 이미 사용 중인지 확인하고 재시도
   let server;
   try {
-    server = await app.listen(port);
-    console.log(`🚀 서버가 http://localhost:${port}에서 실행 중입니다.`);
+    server = await app.listen(port, host);
+    console.log(`🚀 서버가 http://${host}:${port}에서 실행 중입니다.`);
   } catch (error: any) {
     if (error.code === 'EADDRINUSE') {
       console.error(`❌ 포트 ${port}가 이미 사용 중입니다.`);

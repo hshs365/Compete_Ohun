@@ -8,5 +8,6 @@ export default defineConfig({
   server: {
     host: '0.0.0.0', // 모든 네트워크 인터페이스에서 접근 가능하도록 설정
     port: 5173,
+    allowedHosts: ['ohun.kr', 'www.ohun.kr'],
   },
 });

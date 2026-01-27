@@ -3,6 +3,7 @@ pipeline {
 
   options {
     timestamps()
+    timeout(time: 30, unit: 'MINUTES')
   }
 
   parameters {
@@ -17,6 +18,7 @@ pipeline {
     APP_DIR = '/home/webmaster/my-app'
     BACKEND_DIR = "${APP_DIR}/server"
     CLIENT_DIR = "${APP_DIR}/client"
+    DEPLOY_CLIENT = "${params.DEPLOY_CLIENT}"
   }
 
   stages {
@@ -32,66 +34,70 @@ pipeline {
       }
       steps {
         withCredentials([sshUserPrivateKey(credentialsId: 'web1-ssh', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
-          sh '''
+          script {
+            def deployClientValue = params.DEPLOY_CLIENT ? 'true' : 'false'
+            sh """
             set -euo pipefail
-            chmod 600 "$SSH_KEY"
-            ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$WEB1_HOST" "APP_DIR='${APP_DIR}' BACKEND_DIR='${BACKEND_DIR}' CLIENT_DIR='${CLIENT_DIR}' DEPLOY_BRANCH='${DEPLOY_BRANCH}' DEPLOY_CLIENT='${DEPLOY_CLIENT}' bash -s" <<'REMOTE'
+            chmod 600 "\$SSH_KEY"
+            ssh -i "\$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 -o ServerAliveCountMax=3 "\$SSH_USER@\$WEB1_HOST" "APP_DIR='${APP_DIR}' BACKEND_DIR='${BACKEND_DIR}' CLIENT_DIR='${CLIENT_DIR}' DEPLOY_BRANCH='${params.DEPLOY_BRANCH}' DEPLOY_CLIENT='${deployClientValue}' bash -s" <<'REMOTE'
               set -euo pipefail
-              trap 'echo "REMOTE ERROR at line $LINENO"; exit 1' ERR
-              set -x
+              trap 'echo \"REMOTE ERROR at line \$LINENO\"; exit 1' ERR
+              set +x
               # Try to load nvm if present (non-login shells don't load it)
-              if [ -s "$HOME/.nvm/nvm.sh" ]; then
-                . "$HOME/.nvm/nvm.sh"
-                set +e
-                nvm use --lts >/dev/null 2>&1
-                set -e
+              if [ -s "\$HOME/.nvm/nvm.sh" ]; then
+                . "\$HOME/.nvm/nvm.sh"
               fi
               NPM_PREFIX=""
               if command -v npm >/dev/null 2>&1; then
-                NPM_PREFIX="$(npm prefix -g 2>/dev/null || true)"
+                NPM_PREFIX="\$(npm prefix -g 2>/dev/null || true)"
               fi
               NPM_BIN_DIR=""
-              if [ -n "$NPM_PREFIX" ]; then
-                NPM_BIN_DIR="${NPM_PREFIX}/bin"
+              if [ -n "\$NPM_PREFIX" ]; then
+                NPM_BIN_DIR="\${NPM_PREFIX}/bin"
               fi
-              export PATH="${NPM_BIN_DIR}:$HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
-              echo "PATH=$PATH"
-              echo "npm=$(command -v npm || echo notfound)"
-              echo "npm prefix -g=${NPM_PREFIX}"
-              PM2_BIN="$(command -v pm2 || true)"
-              if [ -z "$PM2_BIN" ]; then
+              export PATH="\${NPM_BIN_DIR}:\$HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin:\$PATH"
+              echo "[INFO] npm=\$(command -v npm || echo notfound)"
+              PM2_BIN="\$(command -v pm2 || true)"
+              if [ -z "\$PM2_BIN" ]; then
                 for candidate in \
                   "/usr/bin/pm2" \
                   "/usr/local/bin/pm2" \
-                  "${NPM_BIN_DIR}/pm2" \
+                  "\${NPM_BIN_DIR}/pm2" \
                   "/usr/lib/node_modules/pm2/bin/pm2" \
-                  "$HOME/.npm-global/bin/pm2" \
-                  "$HOME/.nvm/versions/node"/*/bin/pm2; do
-                  if [ -x "$candidate" ]; then
-                    PM2_BIN="$candidate"
+                  "\$HOME/.npm-global/bin/pm2" \
+                  "\$HOME/.nvm/versions/node"/*/bin/pm2; do
+                  if [ -x "\$candidate" ]; then
+                    PM2_BIN="\$candidate"
                     break
                   fi
                 done
               fi
-              if [ -z "$PM2_BIN" ] || [ ! -x "$PM2_BIN" ]; then
-                echo "pm2 not found in PATH or npm global bin"
+              if [ -z "\$PM2_BIN" ] || [ ! -x "\$PM2_BIN" ]; then
+                echo "[ERROR] pm2 not found in PATH or npm global bin"
                 exit 1
               fi
-              cd "$APP_DIR"
-              git checkout "$DEPLOY_BRANCH"
-              git pull --ff-only origin "$DEPLOY_BRANCH"
-              cd "$BACKEND_DIR"
-              npm ci
-              "$PM2_BIN" describe backend >/dev/null 2>&1 || "$PM2_BIN" start npm --name backend --cwd "$BACKEND_DIR" -- run start:dev
-              "$PM2_BIN" restart backend --update-env
-              if [ "$DEPLOY_CLIENT" = "true" ]; then
-                cd "$CLIENT_DIR"
-                npm ci
-                "$PM2_BIN" describe frontend >/dev/null 2>&1 || "$PM2_BIN" start npm --name frontend --cwd "$CLIENT_DIR" -- run dev -- --host 0.0.0.0 --port 5173
-                "$PM2_BIN" restart frontend --update-env
+              cd "\$APP_DIR"
+              echo "[INFO] Checking out branch: \$DEPLOY_BRANCH"
+              git checkout "\$DEPLOY_BRANCH"
+              echo "[INFO] Pulling latest changes..."
+              git pull --ff-only origin "\$DEPLOY_BRANCH"
+              cd "\$BACKEND_DIR"
+              echo "[INFO] Installing backend dependencies..."
+              npm ci --silent
+              echo "[INFO] Restarting backend..."
+              "\$PM2_BIN" describe backend >/dev/null 2>&1 || "\$PM2_BIN" start npm --name backend --cwd "\$BACKEND_DIR" -- run start:dev
+              "\$PM2_BIN" restart backend --update-env
+              if [ "\$DEPLOY_CLIENT" = "true" ]; then
+                echo "[INFO] Deploying client..."
+                cd "\$CLIENT_DIR"
+                npm ci --silent
+                "\$PM2_BIN" describe frontend >/dev/null 2>&1 || "\$PM2_BIN" start npm --name frontend --cwd "\$CLIENT_DIR" -- run dev -- --host 0.0.0.0 --port 5173
+                "\$PM2_BIN" restart frontend --update-env
               fi
+              echo "[INFO] Deployment completed successfully"
 REMOTE
-          '''
+            """
+          }
         }
       }
     }
