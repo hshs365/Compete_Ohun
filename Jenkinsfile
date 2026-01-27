@@ -79,6 +79,9 @@ pipeline {
               cd "\$APP_DIR"
               echo "[INFO] Checking out branch: \$DEPLOY_BRANCH"
               git checkout "\$DEPLOY_BRANCH"
+              echo "[INFO] Discarding local changes to match remote..."
+              git reset --hard HEAD
+              git clean -fd
               echo "[INFO] Pulling latest changes..."
               git pull --ff-only origin "\$DEPLOY_BRANCH"
               cd "\$BACKEND_DIR"
