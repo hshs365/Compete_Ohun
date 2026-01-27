@@ -37,6 +37,8 @@ pipeline {
             chmod 600 "$SSH_KEY"
             ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$WEB1_HOST" "APP_DIR='${APP_DIR}' BACKEND_DIR='${BACKEND_DIR}' CLIENT_DIR='${CLIENT_DIR}' DEPLOY_BRANCH='${DEPLOY_BRANCH}' DEPLOY_CLIENT='${DEPLOY_CLIENT}' bash -s" <<'REMOTE'
               set -euo pipefail
+              trap 'echo "REMOTE ERROR at line $LINENO"; exit 1' ERR
+              set -x
               # Try to load nvm if present (non-login shells don't load it)
               if [ -s "$HOME/.nvm/nvm.sh" ]; then
                 . "$HOME/.nvm/nvm.sh"
