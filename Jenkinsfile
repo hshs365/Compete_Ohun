@@ -37,6 +37,11 @@ pipeline {
             chmod 600 "$SSH_KEY"
             ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$WEB1_HOST" "APP_DIR='${APP_DIR}' BACKEND_DIR='${BACKEND_DIR}' CLIENT_DIR='${CLIENT_DIR}' DEPLOY_BRANCH='${DEPLOY_BRANCH}' DEPLOY_CLIENT='${DEPLOY_CLIENT}' bash -s" <<'REMOTE'
               set -euo pipefail
+              # Try to load nvm if present (non-login shells don't load it)
+              if [ -s "$HOME/.nvm/nvm.sh" ]; then
+                . "$HOME/.nvm/nvm.sh"
+                nvm use --lts >/dev/null 2>&1 || true
+              fi
               NPM_PREFIX=""
               if command -v npm >/dev/null 2>&1; then
                 NPM_PREFIX="$(npm prefix -g 2>/dev/null || true)"
@@ -45,7 +50,7 @@ pipeline {
               if [ -n "$NPM_PREFIX" ]; then
                 NPM_BIN_DIR="${NPM_PREFIX}/bin"
               fi
-              export PATH="${NPM_BIN_DIR}:/usr/local/bin:/usr/bin:/bin:$PATH"
+              export PATH="${NPM_BIN_DIR}:$HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
               echo "PATH=$PATH"
               echo "npm=$(command -v npm || echo notfound)"
               echo "npm prefix -g=${NPM_PREFIX}"
@@ -55,7 +60,9 @@ pipeline {
                   "/usr/bin/pm2" \
                   "/usr/local/bin/pm2" \
                   "${NPM_BIN_DIR}/pm2" \
-                  "/usr/lib/node_modules/pm2/bin/pm2"; do
+                  "/usr/lib/node_modules/pm2/bin/pm2" \
+                  "$HOME/.npm-global/bin/pm2" \
+                  "$HOME/.nvm/versions/node"/*/bin/pm2; do
                   if [ -x "$candidate" ]; then
                     PM2_BIN="$candidate"
                     break
