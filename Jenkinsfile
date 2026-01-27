@@ -37,7 +37,10 @@ pipeline {
             chmod 600 "$SSH_KEY"
             ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$WEB1_HOST" "APP_DIR='${APP_DIR}' BACKEND_DIR='${BACKEND_DIR}' CLIENT_DIR='${CLIENT_DIR}' DEPLOY_BRANCH='${DEPLOY_BRANCH}' DEPLOY_CLIENT='${DEPLOY_CLIENT}' bash -s" <<'REMOTE'
               set -euo pipefail
-              export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
+              export PATH="$(npm bin -g):/usr/local/bin:/usr/bin:/bin:$PATH"
+              if ! command -v pm2 >/dev/null 2>&1; then
+                npm install -g pm2
+              fi
               cd "$APP_DIR"
               git checkout "$DEPLOY_BRANCH"
               git pull --ff-only origin "$DEPLOY_BRANCH"
