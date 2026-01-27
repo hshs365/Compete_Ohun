@@ -38,21 +38,26 @@ pipeline {
             ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$WEB1_HOST" "APP_DIR='${APP_DIR}' BACKEND_DIR='${BACKEND_DIR}' CLIENT_DIR='${CLIENT_DIR}' DEPLOY_BRANCH='${DEPLOY_BRANCH}' DEPLOY_CLIENT='${DEPLOY_CLIENT}' bash -s" <<'REMOTE'
               set -euo pipefail
               export PATH="$(npm bin -g):/usr/local/bin:/usr/bin:/bin:$PATH"
-              if ! command -v pm2 >/dev/null 2>&1; then
-                npm install -g pm2
+              PM2_BIN="$(command -v pm2 || true)"
+              if [ -z "$PM2_BIN" ]; then
+                PM2_BIN="$(npm bin -g)/pm2"
+              fi
+              if [ ! -x "$PM2_BIN" ]; then
+                echo "pm2 not found in PATH or npm global bin"
+                exit 1
               fi
               cd "$APP_DIR"
               git checkout "$DEPLOY_BRANCH"
               git pull --ff-only origin "$DEPLOY_BRANCH"
               cd "$BACKEND_DIR"
               npm ci
-              pm2 describe backend >/dev/null 2>&1 || pm2 start npm --name backend --cwd "$BACKEND_DIR" -- run start:dev
-              pm2 restart backend --update-env
+              "$PM2_BIN" describe backend >/dev/null 2>&1 || "$PM2_BIN" start npm --name backend --cwd "$BACKEND_DIR" -- run start:dev
+              "$PM2_BIN" restart backend --update-env
               if [ "$DEPLOY_CLIENT" = "true" ]; then
                 cd "$CLIENT_DIR"
                 npm ci
-                pm2 describe frontend >/dev/null 2>&1 || pm2 start npm --name frontend --cwd "$CLIENT_DIR" -- run dev -- --host 0.0.0.0 --port 5173
-                pm2 restart frontend --update-env
+                "$PM2_BIN" describe frontend >/dev/null 2>&1 || "$PM2_BIN" start npm --name frontend --cwd "$CLIENT_DIR" -- run dev -- --host 0.0.0.0 --port 5173
+                "$PM2_BIN" restart frontend --update-env
               fi
 REMOTE
           '''
