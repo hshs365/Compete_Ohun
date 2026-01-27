@@ -35,7 +35,7 @@ pipeline {
           sh '''
             set -euo pipefail
             chmod 600 "$SSH_KEY"
-            ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$WEB1_HOST" '
+            ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$WEB1_HOST" "APP_DIR='${APP_DIR}' BACKEND_DIR='${BACKEND_DIR}' CLIENT_DIR='${CLIENT_DIR}' DEPLOY_BRANCH='${DEPLOY_BRANCH}' DEPLOY_CLIENT='${DEPLOY_CLIENT}' bash -s" <<'REMOTE'
               set -euo pipefail
               cd "$APP_DIR"
               git checkout "$DEPLOY_BRANCH"
@@ -50,7 +50,7 @@ pipeline {
                 pm2 describe frontend >/dev/null 2>&1 || pm2 start npm --name frontend --cwd "$CLIENT_DIR" -- run dev -- --host 0.0.0.0 --port 5173
                 pm2 restart frontend --update-env
               fi
-            '
+REMOTE
           '''
         }
       }
