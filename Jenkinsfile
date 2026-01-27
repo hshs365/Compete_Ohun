@@ -37,12 +37,22 @@ pipeline {
             chmod 600 "$SSH_KEY"
             ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$WEB1_HOST" "APP_DIR='${APP_DIR}' BACKEND_DIR='${BACKEND_DIR}' CLIENT_DIR='${CLIENT_DIR}' DEPLOY_BRANCH='${DEPLOY_BRANCH}' DEPLOY_CLIENT='${DEPLOY_CLIENT}' bash -s" <<'REMOTE'
               set -euo pipefail
-              export PATH="$(npm bin -g):/usr/local/bin:/usr/bin:/bin:$PATH"
-              PM2_BIN="$(command -v pm2 || true)"
-              if [ -z "$PM2_BIN" ]; then
-                PM2_BIN="$(npm bin -g)/pm2"
+              NPM_BIN_DIR=""
+              if command -v npm >/dev/null 2>&1; then
+                NPM_BIN_DIR="$(npm bin -g 2>/dev/null || true)"
               fi
-              if [ ! -x "$PM2_BIN" ]; then
+              export PATH="${NPM_BIN_DIR}:/usr/local/bin:/usr/bin:/bin:$PATH"
+              echo "PATH=$PATH"
+              echo "npm=$(command -v npm || echo notfound)"
+              echo "npm bin -g=${NPM_BIN_DIR}"
+              PM2_BIN="$(command -v pm2 || true)"
+              if [ -z "$PM2_BIN" ] && [ -n "$NPM_BIN_DIR" ]; then
+                PM2_BIN="${NPM_BIN_DIR}/pm2"
+              fi
+              if [ -z "$PM2_BIN" ] && [ -x /usr/bin/pm2 ]; then
+                PM2_BIN=/usr/bin/pm2
+              fi
+              if [ -z "$PM2_BIN" ] || [ ! -x "$PM2_BIN" ]; then
                 echo "pm2 not found in PATH or npm global bin"
                 exit 1
               fi
