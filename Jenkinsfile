@@ -89,7 +89,7 @@ pipeline {
               git pull --ff-only origin "\$DEPLOY_BRANCH"
               cd "\$BACKEND_DIR"
               echo "[INFO] Installing backend dependencies..."
-              npm ci --silent
+              npm install --no-audit --no-fund
               echo "[INFO] Updating environment variables..."
               # .env 파일에 환경변수 추가/업데이트
               if [ -f .env ]; then
@@ -106,7 +106,7 @@ pipeline {
               if [ "\$DEPLOY_CLIENT" = "true" ]; then
                 echo "[INFO] Deploying client..."
                 cd "\$CLIENT_DIR"
-                npm ci --silent
+                npm install --no-audit --no-fund
                 "\$PM2_BIN" describe frontend >/dev/null 2>&1 || "\$PM2_BIN" start npm --name frontend --cwd "\$CLIENT_DIR" -- run dev -- --host 0.0.0.0 --port 5173
                 "\$PM2_BIN" restart frontend --update-env
               fi
