@@ -53,23 +53,28 @@ const Step5AdditionalInfo: React.FC<Step5AdditionalInfoProps> = ({
 }) => {
   const [nicknameAvailable, setNicknameAvailable] = useState<boolean | null>(null);
   const [nicknameChecking, setNicknameChecking] = useState(false);
+  const [nicknameCheckError, setNicknameCheckError] = useState(false);
 
   // 닉네임 중복 검사 (디바운스)
   React.useEffect(() => {
     if (nickname.length < 2) {
       setNicknameAvailable(null);
+      setNicknameCheckError(false);
       return;
     }
 
     const timer = setTimeout(async () => {
       setNicknameChecking(true);
+      setNicknameCheckError(false);
       try {
         const result = await api.get<{ available: boolean }>(
           `/api/auth/check-nickname?nickname=${encodeURIComponent(nickname)}`
         );
         setNicknameAvailable(result.available);
       } catch (error) {
-        setNicknameAvailable(false);
+        // 502 등 서버/네트워크 오류 시 '이미 사용 중'으로 오해하지 않도록 null 유지
+        setNicknameAvailable(null);
+        setNicknameCheckError(true);
       } finally {
         setNicknameChecking(false);
       }
@@ -165,6 +170,9 @@ const Step5AdditionalInfo: React.FC<Step5AdditionalInfoProps> = ({
         )}
         {nicknameAvailable === false && nickname.length >= 2 && (
           <p className="mt-1 text-sm text-red-500">이미 사용 중인 닉네임입니다.</p>
+        )}
+        {nicknameCheckError && nickname.length >= 2 && !nicknameChecking && (
+          <p className="mt-1 text-sm text-amber-500">확인할 수 없습니다. 잠시 후 다시 시도해주세요.</p>
         )}
       </div>
 
