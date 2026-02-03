@@ -145,7 +145,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="fixed top-4 left-1/2 -translate-x-1/2 md:left-auto md:translate-x-0 md:right-6 z-[9999] flex flex-row-reverse items-start md:items-start gap-2 pointer-events-none">
+    <div className="fixed top-20 left-1/2 -translate-x-1/2 md:left-auto md:translate-x-0 md:right-6 z-[9999] flex flex-row-reverse items-start md:items-start gap-2 pointer-events-none">
       {/* 알림 아이콘 버튼 - 항상 표시 */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}

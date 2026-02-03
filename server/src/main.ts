@@ -1,45 +1,61 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import { createClient } from 'redis';
+import { createClient, type RedisClientType } from 'redis';
 import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 
+/** Redis 사용 여부: true면 연결, false/비어있으면 개발 환경에서 미사용 */
+function isRedisEnabled(): boolean {
+  const enabled = process.env.REDIS_ENABLED;
+  if (enabled === 'true') return true;
+  if (enabled === 'false') return false;
+  // REDIS_ENABLED가 없으면: 개발 환경은 미사용, 운영은 REDIS_HOST 있으면 사용
+  const isProduction = process.env.NODE_ENV === 'production';
+  const hasRedisHost = !!process.env.REDIS_HOST;
+  return isProduction && hasRedisHost;
+}
+
 async function bootstrap() {
-  // 배포 환경 기본값 설정 (환경변수가 없을 때만 적용)
-  process.env.DB_HOST ||= '192.168.132.81';
-  process.env.REDIS_HOST ||= '192.168.132.81';
+  // 배포(운영) 환경에서만 서버용 기본값 적용 (로컬 .env가 우선되도록)
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (isProduction) {
+    process.env.DB_HOST ||= '192.168.132.81';
+    process.env.REDIS_HOST ||= '192.168.132.81';
+  }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   
   // 정적 파일 서빙 설정 (업로드된 파일)
-  // 환경변수 UPLOAD_DIR이 있으면 사용 (NFS 공유 스토리지 등)
-  // 없으면 로컬 디렉토리 사용 (개발 환경)
   const uploadsPath = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads');
   app.useStaticAssets(uploadsPath, {
     prefix: '/uploads',
   });
 
-  // Redis 세션 스토어 연결
-  const redisHost = process.env.REDIS_HOST ?? '192.168.132.81';
-  const redisPort = process.env.REDIS_PORT ?? '6379';
-  const redisPassword = process.env.REDIS_PASSWORD ?? '';
-  const redisUrl = redisPassword
-    ? `redis://:${redisPassword}@${redisHost}:${redisPort}`
-    : `redis://${redisHost}:${redisPort}`;
-  const redisClient = createClient({
-    url: redisUrl,
-  });
+  // Redis: 개발 환경에서는 기본 비활성, 운영 또는 REDIS_ENABLED=true 시에만 연결
+  let redisClient: RedisClientType | null = null;
+  if (isRedisEnabled()) {
+    const redisHost = process.env.REDIS_HOST ?? '192.168.132.81';
+    const redisPort = process.env.REDIS_PORT ?? '6379';
+    const redisPassword = process.env.REDIS_PASSWORD ?? '';
+    const redisUrl = redisPassword
+      ? `redis://:${redisPassword}@${redisHost}:${redisPort}`
+      : `redis://${redisHost}:${redisPort}`;
+    redisClient = createClient({ url: redisUrl }) as RedisClientType;
 
-  redisClient.on('error', (error) => {
-    console.error('❌ Redis 연결 오류:', error);
-  });
+    redisClient.on('error', (error) => {
+      console.error('❌ Redis 연결 오류:', error);
+    });
 
-  try {
-    await redisClient.connect();
-    console.log(`✅ Redis 연결 완료 (${redisHost}:${redisPort})`);
-  } catch (error) {
-    console.error('❌ Redis 연결 실패:', error);
+    try {
+      await redisClient.connect();
+      console.log(`✅ Redis 연결 완료 (${redisHost}:${redisPort})`);
+    } catch (error) {
+      console.error('❌ Redis 연결 실패:', error);
+      redisClient = null;
+    }
+  } else {
+    console.log('ℹ️ Redis 비활성 (개발 환경 또는 REDIS_ENABLED=false)');
   }
   
   // CORS 설정 (프론트엔드와 통신)
@@ -124,19 +140,17 @@ async function bootstrap() {
     }
   }
 
-  // Graceful shutdown 처리
-  process.on('SIGTERM', async () => {
-    console.log('SIGTERM 신호를 받았습니다. 서버를 종료합니다...');
-    await redisClient.quit().catch(() => undefined);
+  // Graceful shutdown 처리 (한 번만 실행되도록 플래그 사용 → TypeORM pool 중복 종료 방지)
+  let isShuttingDown = false;
+  const shutdown = async (signal: string) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    console.log(`${signal} 신호를 받았습니다. 서버를 종료합니다...`);
+    if (redisClient) await redisClient.quit().catch(() => undefined);
     await app.close();
     process.exit(0);
-  });
-
-  process.on('SIGINT', async () => {
-    console.log('SIGINT 신호를 받았습니다. 서버를 종료합니다...');
-    await redisClient.quit().catch(() => undefined);
-    await app.close();
-    process.exit(0);
-  });
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 bootstrap();

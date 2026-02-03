@@ -37,6 +37,24 @@ export class GameSettingsDto {
   @IsBoolean()
   @IsOptional()
   balanceByRank?: boolean; // 랭커 여부 고려
+
+  /** 모임장이 참가할 포지션 (GK, DF, MF, FW). 포지션 지정 매치(축구 등)에서만 사용 */
+  @IsOptional()
+  @IsString()
+  @MaxLength(10)
+  creatorPositionCode?: string;
+
+  /** 모임장이 참가할 슬롯 라벨 (LW, RW, LB 등). 없으면 해당 행 첫 슬롯에 표시 */
+  @IsOptional()
+  @IsString()
+  @MaxLength(10)
+  creatorSlotLabel?: string;
+
+  /** 모임장이 참가할 팀 ('red' | 'blue') */
+  @IsOptional()
+  @IsString()
+  @IsIn(['red', 'blue'])
+  creatorTeam?: 'red' | 'blue';
 }
 
 export class CreateGroupDto {
@@ -119,8 +137,8 @@ export class CreateGroupDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['normal', 'event'])
-  type?: 'normal' | 'event'; // 모임 타입 (기본값: 'normal')
+  @IsIn(['normal', 'rank', 'event'])
+  type?: 'normal' | 'rank' | 'event'; // 매치 유형 (기본값: 'normal')
 }
 
 

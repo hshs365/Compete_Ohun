@@ -24,6 +24,10 @@ SMS_VERIFICATION_ENABLED=false
 # 개발 환경에서는 설정하지 않으면 자동으로 server/uploads 사용
 # UPLOAD_DIR=
 
+# Redis (운영/서버에서만 사용 권장)
+# REDIS_ENABLED=true 로 두면 개발 PC에서도 Redis 연결 시도
+# 개발 PC: REDIS_ENABLED 비우거나 false → Redis 미사용, 서버 실행만 가능
+REDIS_ENABLED=
 REDIS_HOST=192.168.29.162
 REDIS_PORT=6379
 REDIS_PASSWORD=
@@ -37,6 +41,25 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 # 네이버 지도 API (역지오코딩용)
 NAVER_MAP_CLIENT_ID=your_naver_map_client_id
 NAVER_MAP_CLIENT_SECRET=your_naver_map_client_secret
+
+# 공공데이터포털 사업자등록번호 진위확인 API (국세청)
+# 설정 시: 대표자명·개업일자와 함께 진위확인 API 호출. 미설정 시: 형식 검증만 수행.
+# 신청: https://www.data.go.kr/data/15081808/openapi.do (국세청_사업자등록정보 진위확인및상태조회)
+# DATA_GO_KR_SERVICE_KEY=your_data_go_kr_service_key
+
+# 네이버 클로바 OCR - 사업자등록증 이미지 검증용 (회원가입 시 문서와 입력 정보 비교)
+# CLOVA OCR 콘솔에서 Document OCR · 사업자등록증(bizlicense) 도메인 생성 후 Invoke URL, Secret 설정
+# 미설정 시: 사업자등록증 이미지 업로드 검증 불가 (verify-business-with-document 사용 불가)
+# NCP_OCR_SECRET=your_clova_ocr_secret
+# NCP_OCR_INVOKE_URL=https://xxxxx.apigw.ntruss.com/custom/v1/xxxx/xxxx/document/bizlicense
+
+# 대한체육회 스포츠지원포털 선수등록정보 (내정보 > 선수 등록 뱃지용)
+# 공공데이터포털(data.go.kr) CSV 다운로드 후 아래 경로 중 하나 설정. 활용신청·API 키 없이 CSV만 있으면 됨.
+# CSV는 EUC-KR 인코딩으로 자동 처리됩니다.
+# 로컬 예시 (다운로드 폴더에 둔 경우, .env에 넣을 때 아래 주석 해제 후 사용):
+# KSA_ATHLETE_CSV_PATH=C:\Users\hshs3\Downloads\대한체육회_스포츠지원포털_선수등록정보_20250529\대한체육회_스포츠지원포털 선수등록정보.csv
+# KSA_ATHLETE_CSV_PATH=data/선수등록정보.csv
+# KSA_ATHLETE_CSV_URL=https://... (CSV 다운로드 URL)
 
 NCP_ACCESS_KEY=your_ncp_access_key
 NCP_SECRET_KEY=your_ncp_secret_key

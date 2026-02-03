@@ -18,6 +18,7 @@ import { GroupsService } from './groups.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupQueryDto } from './dto/group-query.dto';
+import { JoinGroupDto } from './dto/join-group.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
@@ -46,6 +47,20 @@ export class GroupsController {
     return this.groupsService.findMyGroups(user.id);
   }
 
+  /** 내가 참가한 모임 (다른 사람이 만든 모임에 참가한 목록) */
+  @UseGuards(JwtAuthGuard)
+  @Get('my-participations')
+  async findMyParticipations(@CurrentUser() user: User) {
+    return this.groupsService.findMyParticipations(user.id);
+  }
+
+  /** 내가 생성한 모임 중 완료된 것만 (활동 기록·집계용) */
+  @UseGuards(JwtAuthGuard)
+  @Get('my-creations')
+  async findMyCreations(@CurrentUser() user: User) {
+    return this.groupsService.findMyCreationsCompleted(user.id);
+  }
+
   @Public()
   @Get(':id')
   async findOne(
@@ -65,9 +80,10 @@ export class GroupsController {
   async joinGroup(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: User,
+    @Body() body?: JoinGroupDto,
   ) {
     try {
-      return await this.groupsService.joinGroup(id, user.id);
+      return await this.groupsService.joinGroup(id, user.id, body?.positionCode, body?.team);
     } catch (error) {
       console.error('joinGroup 컨트롤러 에러:', {
         groupId: id,
@@ -113,6 +129,17 @@ export class GroupsController {
     return { success: true, message: '모임에서 나갔습니다.' };
   }
 
+  /** 찜 토글. 반환: { favorited: boolean } */
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/favorite')
+  @HttpCode(HttpStatus.OK)
+  async toggleFavorite(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+  ) {
+    return this.groupsService.toggleFavorite(id, user.id);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Patch(':id')
   update(
@@ -142,6 +169,28 @@ export class GroupsController {
   @HttpCode(HttpStatus.OK)
   reopenGroup(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: User) {
     return this.groupsService.reopenGroup(id, user.id);
+  }
+
+  /** 심판 신청 */
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/referee-apply')
+  @HttpCode(HttpStatus.OK)
+  async applyReferee(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+  ) {
+    return this.groupsService.applyReferee(id, user.id);
+  }
+
+  /** 심판 신청 취소 */
+  @UseGuards(JwtAuthGuard)
+  @Delete(':id/referee-apply')
+  @HttpCode(HttpStatus.OK)
+  async cancelReferee(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+  ) {
+    return this.groupsService.cancelReferee(id, user.id);
   }
 }
 

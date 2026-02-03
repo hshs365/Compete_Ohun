@@ -1,12 +1,14 @@
-# 환경별 설정 가이드 (Dev/Prod)
+# 환경 설정 가이드 (Dev/Prod)
 
 ## 📋 개요
 
-환경변수 기반으로 개발(Development)과 운영(Production) 환경을 분리합니다.
+환경변수로 개발(Development)과 운영(Production)을 구분합니다. 현재는 **Dev + Prod 2단계**만 사용하고, Staging은 필요 시 추가합니다.
+
+---
 
 ## 🔧 환경변수 설정
 
-### 개발 환경 (로컬 개발)
+### 개발 환경 (로컬)
 
 **server/.env:**
 ```env
@@ -29,7 +31,7 @@ VITE_SMS_VERIFICATION_ENABLED=false
 
 ### 운영 환경 (서버)
 
-**서버 .env 파일 (웹서버1):**
+**server/.env (웹서버):**
 ```env
 NODE_ENV=production
 SMS_VERIFICATION_ENABLED=true
@@ -42,119 +44,47 @@ PORT=3000
 FRONTEND_URL=https://ohun.kr,https://www.ohun.kr
 UPLOAD_DIR=/mnt/shared/uploads
 
-# SMS 인증 (NCP SENS)
+# SMS (NCP SENS)
 NCP_ACCESS_KEY=실제_액세스_키
 NCP_SECRET_KEY=실제_시크릿_키
 NCP_SMS_SERVICE_ID=실제_서비스_ID
 NCP_SMS_SENDER=01012345678
 ```
 
-**클라이언트 환경변수는 빌드 시점에 결정되므로:**
-- 개발: `VITE_SMS_VERIFICATION_ENABLED=false`
-- 운영: `VITE_SMS_VERIFICATION_ENABLED=true`
+클라이언트는 빌드 시점에 `VITE_SMS_VERIFICATION_ENABLED` 등이 결정됩니다.
 
-## 🚀 Jenkins 배포 시 환경 선택
+---
 
-### Jenkins 파이프라인 사용법
+## 🚀 Jenkins 배포
 
-1. Jenkins 웹 UI에서 "파라미터와 함께 빌드" 클릭
-2. **ENVIRONMENT** 파라미터 선택:
-   - `development`: 개발 환경 (SMS 인증 비활성화)
-   - `production`: 운영 환경 (SMS 인증 활성화)
-3. 빌드 실행
+- "파라미터와 함께 빌드" → **ENVIRONMENT**: `development` / `production` 선택
+- 선택에 따라 `NODE_ENV`, `SMS_VERIFICATION_ENABLED` 등이 자동 설정됩니다.
 
-### 자동 설정
-
-Jenkins가 선택한 환경에 따라 자동으로 설정:
-- `NODE_ENV`: 선택한 환경
-- `SMS_VERIFICATION_ENABLED`: production일 때만 `true`
+---
 
 ## 📝 환경별 동작
 
-### 개발 환경 (development)
-
-**특징:**
-- ✅ SMS 인증 없이 회원가입 가능
-- ✅ 모든 192.168.x.x origin 허용
-- ✅ 상세한 로그 출력
-- ✅ 빠른 개발 및 테스트
-
-**SMS 인증:**
-- 인증번호 요청 시 콘솔에 출력 (실제 SMS 발송 안 함)
-- 회원가입 시 인증 완료 체크 생략
-
-### 운영 환경 (production)
-
-**특징:**
-- ✅ SMS 인증 필수
-- ✅ 특정 도메인만 허용 (ohun.kr, www.ohun.kr)
-- ✅ 최소한의 로그 출력
-- ✅ 보안 강화
-
-**SMS 인증:**
-- 실제 NCP SENS API로 SMS 발송
-- 회원가입 시 인증 완료 필수
-
-## 🔄 환경 전환 방법
-
-### 로컬에서 개발 환경으로 실행
-
-```bash
-# 서버
-cd server
-# .env 파일에 NODE_ENV=development, SMS_VERIFICATION_ENABLED=false 설정
-npm run start:dev
-
-# 클라이언트
-cd client
-# .env 파일에 VITE_SMS_VERIFICATION_ENABLED=false 설정
-npm run dev
-```
-
-### 서버에서 운영 환경으로 배포
-
-**Jenkins에서:**
-1. ENVIRONMENT: `production` 선택
-2. 빌드 실행
-
-**또는 수동으로:**
-```bash
-# 서버에서
-cd /home/webmaster/my-app/server
-# .env 파일 수정
-nano .env
-# NODE_ENV=production
-# SMS_VERIFICATION_ENABLED=true
-pm2 restart backend --update-env
-```
-
-## ✅ 확인 방법
-
-### 개발 환경 확인
-
-**서버 로그에서:**
-```
-[DEV MODE] SMS 인증번호 발송 (실제 발송 안 함): 010-1234-5678 - 123456
-```
-
-**회원가입:**
-- SMS 인증 없이 바로 회원가입 가능
-
-### 운영 환경 확인
-
-**서버 로그에서:**
-- SMS 발송 API 호출 로그 확인
-
-**회원가입:**
-- SMS 인증 필수
-- 인증 완료 후에만 회원가입 가능
-
-## 🎯 요약
-
-| 항목 | 개발 환경 | 운영 환경 |
-|------|----------|----------|
+| 항목 | 개발 | 운영 |
+|------|------|------|
 | **NODE_ENV** | `development` | `production` |
 | **SMS 인증** | 비활성화 | 활성화 |
-| **CORS** | 모든 192.168.x.x 허용 | 특정 도메인만 허용 |
-| **로그** | 상세 | 최소 |
-| **회원가입** | SMS 인증 없이 가능 | SMS 인증 필수 |
+| **CORS** | 192.168.x.x 허용 | ohun.kr 등 지정 도메인만 |
+| **회원가입** | SMS 없이 가능 | SMS 인증 필수 |
+
+---
+
+## ✅ 체크리스트 및 개선 사항
+
+### 인프라 (참고)
+- 웹서버: 192.168.132.185, 192.168.132.126
+- DB 서버: 192.168.132.81
+- LB: 192.168.132.147, Jenkins: 192.168.132.191
+
+### 권장 보안 설정
+- DB 전용 사용자 생성 후 `DB_USERNAME`/`DB_PASSWORD` 사용 (예: `ohun_admin`)
+- 운영 환경: TypeORM `synchronize: false` (코드에서 `NODE_ENV === 'production'`일 때 false 처리)
+
+### 참고 문서
+- `deployment-summary.md` — 배포 요약
+- `jenkins-deploy.md` — Jenkins 배포
+- `db-server-connection-guide.md` — DB 서버 접속

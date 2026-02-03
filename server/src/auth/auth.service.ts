@@ -4,6 +4,9 @@ import { ConfigService } from '@nestjs/config';
 import type { Express } from 'express';
 import { UsersService } from '../users/users.service';
 import { PhoneVerificationService } from './services/phone-verification.service';
+import { BusinessNumberVerificationService } from './services/business-number-verification.service';
+import { BusinessRegistrationOcrService } from './services/business-registration-ocr.service';
+import type { VerifyBusinessWithDocumentDto } from './dto/verify-business-with-document.dto';
 import { User, UserStatus, SkillLevel } from '../users/entities/user.entity';
 import { SocialAccount, SocialProvider } from '../social-accounts/entities/social-account.entity';
 import { RegisterDto } from './dto/register.dto';
@@ -11,6 +14,7 @@ import { LoginDto } from './dto/login.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { SocialCallbackDto } from './dto/social-callback.dto';
 import { VerifyBusinessNumberDto } from './dto/verify-business-number.dto';
+import { ChangeBusinessNumberDto } from './dto/change-business-number.dto';
 
 export interface JwtPayload {
   sub: number; // userId
@@ -36,27 +40,30 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private phoneVerificationService: PhoneVerificationService,
+    private businessNumberVerificationService: BusinessNumberVerificationService,
+    private businessRegistrationOcrService: BusinessRegistrationOcrService,
     private configService: ConfigService,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<AuthResponse> {
-    const normalizedPhone = registerDto.phone.replace(/-/g, '');
-    
+    const hasPhone = registerDto.phone != null && registerDto.phone.trim() !== '';
+    const normalizedPhone = hasPhone ? registerDto.phone!.replace(/-/g, '') : '';
+
     // SMS 인증 활성화 여부 확인 (환경변수로 제어)
     const smsVerificationEnabled = this.configService.get<string>('SMS_VERIFICATION_ENABLED') === 'true';
-    
-    // SMS 인증이 활성화된 경우에만 인증 완료 여부 확인
-    if (smsVerificationEnabled) {
-      const isVerified = await this.phoneVerificationService.isVerified(registerDto.phone);
-      if (!isVerified) {
-        throw new BadRequestException('전화번호 본인인증이 완료되지 않았습니다. 인증번호를 먼저 요청하고 인증을 완료해주세요.');
-      }
-    }
 
-    // 전화번호 중복 확인 (활성 사용자만 확인, 탈퇴한 사용자의 전화번호는 재사용 가능)
-    const existingUser = await this.usersService.findByPhone(normalizedPhone);
-    if (existingUser && existingUser.status === UserStatus.ACTIVE) {
-      throw new BadRequestException('이미 가입된 휴대폰 번호입니다.');
+    // 전화번호가 있는 경우에만 SMS 인증·중복 확인
+    if (hasPhone) {
+      if (smsVerificationEnabled) {
+        const isVerified = await this.phoneVerificationService.isVerified(registerDto.phone!);
+        if (!isVerified) {
+          throw new BadRequestException('전화번호 본인인증이 완료되지 않았습니다. 인증번호를 먼저 요청하고 인증을 완료해주세요.');
+        }
+      }
+      const existingUser = await this.usersService.findByPhone(normalizedPhone);
+      if (existingUser && existingUser.status === UserStatus.ACTIVE) {
+        throw new BadRequestException('이미 가입된 휴대폰 번호입니다.');
+      }
     }
 
     // 사업자 회원인 경우 사업자등록번호 검증
@@ -71,14 +78,19 @@ export class AuthService {
       if (!businessNumberVerified) {
         throw new BadRequestException('사업자등록번호 검증에 실패했습니다. 올바른 사업자등록번호를 입력해주세요.');
       }
+      // 이미 다른 계정에서 사용 중인 사업자번호인지 확인
+      const existingByBusinessNumber = await this.usersService.findByBusinessNumber(registerDto.businessNumber);
+      if (existingByBusinessNumber) {
+        throw new BadRequestException('이미 등록된 사업자번호입니다. 다른 사업자번호를 입력해주세요.');
+      }
     }
 
     // 사용자 생성
     const user = await this.usersService.createUser({
       email: registerDto.email,
       passwordHash: registerDto.password,
-      phone: normalizedPhone,
-      phoneVerified: true, // SMS 인증 비활성화로 임시 true 처리
+      phone: hasPhone ? normalizedPhone : null,
+      phoneVerified: hasPhone, // 번호가 있으면 인증 완료(또는 SMS 비활성화), 없으면 미인증
       realName: registerDto.realName, // 실명 저장
       realNameVerified: true, // 전화번호 인증과 함께 실명인증 완료로 간주 (나중에 외부 API로 업그레이드 가능)
       nickname: registerDto.nickname,
@@ -116,23 +128,151 @@ export class AuthService {
   }
 
   /**
-   * 회원가입 시 사업자등록번호 검증
-   * 실제 운영 시에는 국세청 API나 사업자번호 검증 서비스를 사용해야 합니다.
+   * 회원가입 시 사업자등록번호 검증 (내부/공개 API 공통)
+   * - 국세청(공공데이터포털) API 키가 있고 대표자명·개업일자를 넘기면 진위확인 API 호출
+   * - 그 외에는 형식 검증만 수행
    */
-  private async verifyBusinessNumberForRegistration(businessNumber: string): Promise<boolean> {
-    // 사업자번호 형식 검증
+  private async verifyBusinessNumberForRegistration(
+    businessNumber: string,
+    options?: { representativeName?: string; openingDate?: string },
+  ): Promise<boolean> {
     const businessNumberRegex = /^\d{3}-\d{2}-\d{5}$/;
     if (!businessNumberRegex.test(businessNumber)) {
       return false;
     }
 
-    // TODO: 실제 사업자등록번호 조회 API 연동
-    // 공공데이터포털의 사업자등록번호 진위확인 API 또는 외부 서비스 사용
-    // 예: https://www.data.go.kr/tcs/dss/selectApiDataDetailView.do?publicDataPk=15012008
-    
-    // 현재는 형식만 검증하고 검증 완료로 처리
-    // 실제 운영 시에는 여기서 외부 API를 호출하여 검증해야 합니다.
-    return true;
+    const result = await this.businessNumberVerificationService.verifyWithNts(
+      businessNumber,
+      options,
+    );
+    if (result === null) {
+      return true;
+    }
+    return result.verified;
+  }
+
+  /**
+   * 회원가입 단계에서 호출하는 사업자등록번호 검증 (비로그인 공개 API)
+   * - 대표자명·개업일자를 함께 보내면 국세청 진위확인 API로 일치 여부 확인 (네이버클라우드와 유사)
+   * - 이미 다른 계정에서 사용 중이면 verified: false 반환
+   */
+  async verifyBusinessNumberForRegistrationPublic(
+    businessNumber: string,
+    options?: { representativeName?: string; openingDate?: string },
+  ): Promise<{
+    verified: boolean;
+    message?: string;
+    apiUsed?: boolean;
+  }> {
+    const businessNumberRegex = /^\d{3}-\d{2}-\d{5}$/;
+    if (!businessNumberRegex.test(businessNumber)) {
+      return { verified: false, message: '사업자등록번호는 XXX-XX-XXXXX 형식으로 입력해주세요.' };
+    }
+
+    const existing = await this.usersService.findByBusinessNumber(businessNumber);
+    if (existing) {
+      return { verified: false, message: '이미 등록된 사업자번호입니다. 다른 사업자번호를 입력해주세요.' };
+    }
+
+    const result = await this.businessNumberVerificationService.verifyWithNts(
+      businessNumber,
+      options,
+    );
+    if (result !== null) {
+      return {
+        verified: result.verified,
+        message: result.message,
+        apiUsed: true,
+      };
+    }
+
+    const verified = await this.verifyBusinessNumberForRegistration(businessNumber, options);
+    if (!verified) {
+      return {
+        verified: false,
+        message: '사업자등록번호 검증에 실패했습니다. 올바른 사업자등록번호를 입력해주세요.',
+      };
+    }
+    return { verified: true };
+  }
+
+  /**
+   * 사업자등록증 이미지 업로드 → OCR 추출 → 앞서 인증한 실명(대표자명)과 매칭 → 국세청 진위확인
+   * - OCR 미설정 시: BadRequest
+   * - OCR 추출 실패: BadRequest
+   * - 문서 대표자명 ≠ 실명(실명인증): BadRequest (타인 사업자등록증 사용 방지)
+   * - 일치 시 국세청 API + 중복 검사 후 verified + businessNumber 반환
+   */
+  async verifyBusinessWithDocumentForRegistration(
+    file: Express.Multer.File,
+    dto: VerifyBusinessWithDocumentDto,
+  ): Promise<{ verified: boolean; message?: string; businessNumber?: string }> {
+    if (!file?.buffer) {
+      throw new BadRequestException('사업자등록증 이미지 파일을 업로드해 주세요.');
+    }
+
+    if (!this.businessRegistrationOcrService.isConfigured()) {
+      throw new BadRequestException(
+        '사업자등록증 검증(OCR) 서비스가 설정되지 않았습니다. 관리자에게 문의해 주세요.',
+      );
+    }
+
+    const ocrResult = await this.businessRegistrationOcrService.extractFromFile(file);
+    if (!ocrResult) {
+      throw new BadRequestException(
+        '사업자등록증 이미지에서 정보를 읽을 수 없습니다. 선명한 사업자등록증 이미지를 올려주세요.',
+      );
+    }
+
+    const normalizeName = (s: string | undefined): string =>
+      (s ?? '').replace(/\s/g, '').trim();
+
+    const realName = normalizeName(dto.realName);
+    const ocrRepresentativeName = normalizeName(ocrResult.representativeName);
+    if (!ocrRepresentativeName) {
+      throw new BadRequestException(
+        '사업자등록증에서 대표자명을 읽을 수 없습니다. 선명한 이미지를 올려주세요.',
+      );
+    }
+    if (realName !== ocrRepresentativeName) {
+      throw new BadRequestException(
+        '사업자등록증의 대표자명과 앞서 인증한 실명이 일치하지 않습니다. 본인 명의의 사업자등록증을 올려주세요.',
+      );
+    }
+
+    const businessNumber = ocrResult.businessNumber;
+    const formatOk = /^\d{3}-\d{2}-\d{5}$/.test(businessNumber);
+    if (!formatOk) {
+      throw new BadRequestException(
+        '사업자등록증에서 올바른 사업자번호를 읽을 수 없습니다. 이미지를 확인해 주세요.',
+      );
+    }
+
+    const existing = await this.usersService.findByBusinessNumber(businessNumber);
+    if (existing) {
+      return {
+        verified: false,
+        message: '이미 등록된 사업자번호입니다. 다른 사업자번호의 사업자등록증을 올려주세요.',
+      };
+    }
+
+    const ntsResult = await this.businessNumberVerificationService.verifyWithNts(
+      businessNumber,
+      {
+        representativeName: ocrResult.representativeName,
+        openingDate: ocrResult.openingDate,
+      },
+    );
+    if (ntsResult !== null && !ntsResult.verified) {
+      return {
+        verified: false,
+        message:
+          ntsResult.message ??
+          '사업자등록정보(국세청)와 일치하지 않습니다. 정확한 사업자등록증을 올려주세요.',
+      };
+    }
+
+    return { verified: true, businessNumber };
   }
 
   async login(loginDto: LoginDto): Promise<AuthResponse> {
@@ -260,6 +400,7 @@ export class AuthService {
       residenceSido: profileDto.residenceSido,
       residenceSigungu: profileDto.residenceSigungu,
       interestedSports: profileDto.interestedSports || [],
+      sportPositions: profileDto.sportPositions || [],
       skillLevel: profileDto.skillLevel,
       termsServiceAgreed: profileDto.termsServiceAgreed,
       termsPrivacyAgreed: profileDto.termsPrivacyAgreed,
@@ -291,7 +432,7 @@ export class AuthService {
     return { available };
   }
 
-  async updateProfile(userId: number, updateData: { nickname?: string; phone?: string; interestedSports?: string[]; skillLevel?: SkillLevel }, file?: Express.Multer.File): Promise<User> {
+  async updateProfile(userId: number, updateData: { nickname?: string; phone?: string; interestedSports?: string[]; sportPositions?: { sport: string; positions: string[] }[]; skillLevel?: SkillLevel }, file?: Express.Multer.File): Promise<User> {
     // 파일이 있으면 프로필 이미지 업로드 처리
     if (file) {
       const profileImageUrl = await this.uploadProfileImage(userId, file);
@@ -351,9 +492,8 @@ export class AuthService {
   }
 
   /**
-   * 사업자번호 검증
-   * 실제 운영 시에는 국세청 API나 사업자번호 검증 서비스를 사용해야 합니다.
-   * 현재는 형식 검증만 수행합니다.
+   * 사업자번호 검증 (로그인 후)
+   * - 대표자명·개업일자를 함께 보내면 국세청 진위확인 API로 일치 여부 확인
    */
   async verifyBusinessNumber(userId: number, verifyDto: VerifyBusinessNumberDto): Promise<User> {
     const user = await this.usersService.findById(userId);
@@ -361,20 +501,68 @@ export class AuthService {
       throw new UnauthorizedException('사용자를 찾을 수 없습니다.');
     }
 
-    // 사업자번호 형식 검증 (이미 DTO에서 검증됨)
-    // 실제 운영 시에는 여기서 외부 API를 호출하여 검증해야 합니다.
-    // 예: 국세청 사업자번호 조회 API, 사업자번호 검증 서비스 등
-
-    // TODO: 실제 사업자번호 검증 API 연동
-    // 현재는 형식만 검증하고 검증 완료로 처리
-    // 실제 검증이 완료되면 businessNumberVerified를 true로 설정
-
-    const updatedUser = await this.usersService.updateUser(userId, {
-      businessNumber: verifyDto.businessNumber,
-      businessNumberVerified: true, // 실제 검증 API 연동 후 검증 결과에 따라 설정
+    const verified = await this.verifyBusinessNumberForRegistration(verifyDto.businessNumber, {
+      representativeName: verifyDto.representativeName,
+      openingDate: verifyDto.openingDate,
     });
+    if (!verified) {
+      throw new BadRequestException(
+        '사업자등록번호 검증에 실패했습니다. 사업자번호·대표자명·개업일자를 확인해 주세요.',
+      );
+    }
 
-    return updatedUser;
+    return this.usersService.updateUser(userId, {
+      businessNumber: verifyDto.businessNumber,
+      businessNumberVerified: true,
+    });
+  }
+
+  /**
+   * 비밀번호만 확인 (사업자번호 변경 1단계 등에서 사용)
+   */
+  async verifyPasswordOnly(userId: number, password: string): Promise<void> {
+    const user = await this.usersService.findById(userId);
+    if (!user || !user.passwordHash) {
+      throw new UnauthorizedException('비밀번호를 확인할 수 없습니다.');
+    }
+    const isValid = await this.usersService.verifyPassword(password, user.passwordHash);
+    if (!isValid) {
+      throw new UnauthorizedException('비밀번호가 일치하지 않습니다.');
+    }
+  }
+
+  /**
+   * 사업자번호 변경 (비밀번호 확인 후 API 검증 및 중복 검사)
+   */
+  async changeBusinessNumber(userId: number, dto: ChangeBusinessNumberDto): Promise<User> {
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('사용자를 찾을 수 없습니다.');
+    }
+    if (!user.passwordHash) {
+      throw new BadRequestException('비밀번호로 가입한 계정만 사업자번호를 변경할 수 있습니다.');
+    }
+
+    const isPasswordValid = await this.usersService.verifyPassword(dto.password, user.passwordHash);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('비밀번호가 일치하지 않습니다.');
+    }
+
+    const newBusinessNumber = dto.newBusinessNumber.trim();
+    const verified = await this.verifyBusinessNumberForRegistration(newBusinessNumber, undefined);
+    if (!verified) {
+      throw new BadRequestException('사업자등록번호 검증에 실패했습니다. 올바른 사업자등록번호를 입력해주세요.');
+    }
+
+    const existing = await this.usersService.findByBusinessNumber(newBusinessNumber, userId);
+    if (existing) {
+      throw new BadRequestException('이미 다른 계정에서 사용 중인 사업자번호입니다. 다른 사업자번호를 입력해주세요.');
+    }
+
+    return this.usersService.updateUser(userId, {
+      businessNumber: newBusinessNumber,
+      businessNumberVerified: true,
+    });
   }
 
   /**

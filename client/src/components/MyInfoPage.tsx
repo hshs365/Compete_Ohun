@@ -7,27 +7,24 @@ import {
   CameraIcon,
   PencilIcon,
   TrashIcon,
-  UserGroupIcon,
-  PlusCircleIcon,
-  HeartIcon,
-  CalendarIcon,
   ArrowRightOnRectangleIcon,
   MapPinIcon,
   TrophyIcon,
   BuildingOfficeIcon,
+  ShieldCheckIcon,
   XMarkIcon,
-  CheckCircleIcon,
   ChartBarIcon,
+  ChevronRightIcon,
 } from '@heroicons/react/24/outline';
 import { showError, showSuccess, showWarning, showInfo, showConfirm } from '../utils/swal';
 import ToggleSwitch from './ToggleSwitch';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../utils/api';
-import { SPORTS_LIST } from '../constants/sports';
 import { useNavigate } from 'react-router-dom';
-import Tooltip from './Tooltip';
 import LoadingSpinner from './LoadingSpinner';
 import SportsStatisticsModal from './SportsStatisticsModal';
+import { getEarnedTitles, getCountByCategory } from '../utils/titles';
+import { getOhunRankStyle } from '../constants/ohunRank';
 
 interface UserProfileData {
   id: number;
@@ -41,6 +38,7 @@ interface UserProfileData {
   residenceSido: string | null;
   residenceSigungu: string | null;
   interestedSports: string[];
+  sportPositions?: { sport: string; positions: string[] }[];
   skillLevel: string | null;
   isProfileComplete: boolean;
   createdAt: string;
@@ -51,28 +49,19 @@ interface UserProfileData {
   profileImage?: string | null;
   businessNumber?: string | null;
   businessNumberVerified?: boolean;
+  isAdmin?: boolean;
   nicknameChangedAt?: string | null;
   socialAccounts: {
     kakao: boolean;
     naver: boolean;
     google: boolean;
   };
+  realName?: string | null;
+  athleteVerified?: boolean;
+  athleteData?: { sport?: string; subSport?: string; registeredYear?: number; [key: string]: unknown } | null;
+  /** 종목별 오운 랭크 (S~F). 랭크매치 참여 후 심판이 승패 기록한 종목만 포함 */
+  effectiveRanks?: Record<string, string>;
 }
-
-// 급수 계산 함수
-const calculateRank = (competitions: number, bestResult: string): string => {
-  if (competitions === 0) return '미등급';
-  
-  // 대회 참가 횟수와 성적을 기반으로 급수 계산
-  // 예시: 1-2회 참가 = 초급, 3-5회 = 중급, 6회 이상 = 고급
-  // 실제 성적(순위, 기록 등)도 고려할 수 있음
-  if (competitions >= 10) return '1급';
-  if (competitions >= 7) return '2급';
-  if (competitions >= 5) return '3급';
-  if (competitions >= 3) return '4급';
-  if (competitions >= 1) return '5급';
-  return '미등급';
-};
 
 const MyInfoPage = () => {
   const { user: authUser, logout } = useAuth();
@@ -85,14 +74,74 @@ const MyInfoPage = () => {
   const [phone, setPhone] = useState('');
   const [userLocation, setUserLocation] = useState<{ address: string } | null>(null);
   const [isSavingLocation, setIsSavingLocation] = useState(false);
-  const [isEditingBusinessNumber, setIsEditingBusinessNumber] = useState(false);
-  const [businessNumber, setBusinessNumber] = useState('');
-  const [isVerifyingBusinessNumber, setIsVerifyingBusinessNumber] = useState(false);
   const [showFacilityRegistrationModal, setShowFacilityRegistrationModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [showStatisticsModal, setShowStatisticsModal] = useState(false);
+  const [showChangeBusinessNumberModal, setShowChangeBusinessNumberModal] = useState(false);
+  const [changeBusinessNumberStep, setChangeBusinessNumberStep] = useState<1 | 2>(1);
+  const [changeBusinessNumberPassword, setChangeBusinessNumberPassword] = useState('');
+  const [changeBusinessNumberNew, setChangeBusinessNumberNew] = useState('');
+  const [isChangingBusinessNumber, setIsChangingBusinessNumber] = useState(false);
+  const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
 
+  const closeChangeBusinessNumberModal = () => {
+    setShowChangeBusinessNumberModal(false);
+    setChangeBusinessNumberStep(1);
+    setChangeBusinessNumberPassword('');
+    setChangeBusinessNumberNew('');
+  };
+
+  // 사업자번호 형식 (하이픈 자동)
+  const formatBusinessNumber = (value: string) => {
+    const normalized = value.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+    const numbers = normalized.replace(/\D/g, '');
+    if (numbers.length <= 3) return numbers;
+    if (numbers.length <= 5) return `${numbers.slice(0, 3)}-${numbers.slice(3)}`;
+    return `${numbers.slice(0, 3)}-${numbers.slice(3, 5)}-${numbers.slice(5, 10)}`;
+  };
+
+  /** 1단계: 비밀번호 확인 */
+  const handleVerifyPasswordForChangeBusinessNumber = async () => {
+    if (!changeBusinessNumberPassword.trim()) {
+      await showWarning('비밀번호를 입력해주세요.', '입력 필요');
+      return;
+    }
+    setIsVerifyingPassword(true);
+    try {
+      await api.post('/api/auth/verify-password', { password: changeBusinessNumberPassword });
+      setChangeBusinessNumberStep(2);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : '비밀번호가 일치하지 않습니다.';
+      await showError(msg, '인증 실패');
+    } finally {
+      setIsVerifyingPassword(false);
+    }
+  };
+
+  /** 2단계: 새 사업자번호로 변경 */
+  const handleChangeBusinessNumberSubmit = async () => {
+    const formatted = formatBusinessNumber(changeBusinessNumberNew);
+    if (formatted.length !== 12) {
+      await showWarning('사업자번호는 XXX-XX-XXXXX 형식으로 입력해주세요.', '형식 오류');
+      return;
+    }
+    setIsChangingBusinessNumber(true);
+    try {
+      await api.post('/api/auth/change-business-number', {
+        password: changeBusinessNumberPassword,
+        newBusinessNumber: formatted,
+      });
+      await showSuccess('사업자번호가 변경되었습니다.', '변경 완료');
+      closeChangeBusinessNumberModal();
+      fetchUserData();
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : '사업자번호 변경에 실패했습니다.';
+      await showError(msg, '변경 실패');
+    } finally {
+      setIsChangingBusinessNumber(false);
+    }
+  };
 
   // 사용자 정보 로드 함수 (외부에서도 호출 가능하도록 useCallback 사용)
   const fetchUserData = useCallback(async () => {
@@ -126,7 +175,6 @@ const MyInfoPage = () => {
       setProfileData(profileDataWithImage);
       setNickname(data.nickname || '');
       setPhone(data.phone || '');
-      setBusinessNumber(data.businessNumber || '');
       
       // localStorage에 저장된 주소가 있으면 그대로 사용
         const savedLocation = localStorage.getItem('userLocation');
@@ -219,6 +267,9 @@ const MyInfoPage = () => {
     favoriteGroups: 0,
     upcomingGroups: 0,
   });
+  // 내가 참가한/생성한 모임 목록 (API 연동)
+  const [myParticipations, setMyParticipations] = useState<Array<{ id: number; name: string; category: string; meetingTime: string | null; location: string; participantCount: number; creator?: { nickname: string } }>>([]);
+  const [myCreations, setMyCreations] = useState<Array<{ id: number; name: string; category: string; meetingTime: string | null; location: string; participantCount: number }>>([]);
 
   // 팔로워/팔로잉 수 상태
   const [followStats, setFollowStats] = useState({
@@ -226,83 +277,73 @@ const MyInfoPage = () => {
     following: 0,
   });
 
-  // 운동별 성적 및 급수 상태
-  const [sportRecords, setSportRecords] = useState<Record<string, {
-    competitions: number;
-    bestResult: string;
-    rank: string;
-  }>>({});
-  
-  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
-  const [selectedSport, setSelectedSport] = useState<string>('');
-  const [competitionName, setCompetitionName] = useState('');
-  const [competitionResult, setCompetitionResult] = useState('');
-  const [competitionDate, setCompetitionDate] = useState('');
-  const [sportRank, setSportRank] = useState<string>('미등급');
-  
+  const [isAthleteRegistering, setIsAthleteRegistering] = useState(false);
+  /** 랭크 매치 점수가 있는 종목을 시간에 따라 자동 전환 (오운 랭크 패널) */
+  const [rankCycleIndex, setRankCycleIndex] = useState(0);
+
   // 모달 배경 클릭 감지용 (드래그와 클릭 구분)
   const modalMouseDownRef = useRef<{ x: number; y: number } | null>(null);
 
-  // 활동 기록 데이터 가져오기
+  const handleAthleteRegister = async () => {
+    if (!profileData?.realName?.trim()) {
+      await showWarning('선수 등록을 위해 먼저 실명을 등록해 주세요.', '실명 필요');
+      return;
+    }
+    setIsAthleteRegistering(true);
+    try {
+      const res = await api.post<{ success: boolean; message?: string }>('/api/users/athlete-register');
+      if (res?.success) {
+        const data = await api.get<UserProfileData>('/api/auth/me');
+        const savedProfileImage = profileData?.id ? localStorage.getItem(`profileImage_${profileData.id}`) : null;
+        const profileDataWithImage = (savedProfileImage && data?.id)
+          ? { ...data, profileImage: savedProfileImage }
+          : { ...data, profileImage: data?.profileImageUrl ?? null };
+        setProfileData(profileDataWithImage);
+        await showSuccess('대한체육회 선수로 등록되어 있습니다. 선수 뱃지가 적용되었습니다.', '선수 등록 완료');
+      } else {
+        await showError(res?.message ?? '선수 등록에 실패했습니다.', '선수 등록 실패');
+      }
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } }; message?: string };
+      const msg = e?.response?.data?.message ?? (e?.message as string) ?? '선수 등록 요청에 실패했습니다.';
+      await showError(msg, '선수 등록 실패');
+    } finally {
+      setIsAthleteRegistering(false);
+    }
+  };
+
+  // 활동 기록 데이터 가져오기 (내가 참가한/생성한 모임 API 연동)
   useEffect(() => {
     const fetchActivityStats = async () => {
       if (!authUser || !profileData) return;
-      
+
       try {
         const userId = profileData.id;
-        
-        // 모든 매치 가져오기 (나중에 API에 participant/creator 필터 추가 필요)
-        // TODO: API에 /api/groups/my-participations, /api/groups/my-creations 엔드포인트 추가
-        const allGroupsResponse = await api.get<{ groups: any[]; total: number }>('/api/groups?limit=1000');
-        const allGroups = allGroupsResponse.groups || [];
 
-        // 생성한 매치 수 (creatorId로 필터링)
-        const createdGroups = allGroups.filter((group: any) => group.creatorId === userId);
-        const createdCount = createdGroups.length;
+        const [participations, creations] = await Promise.all([
+          api.get<Array<{ id: number; name: string; category: string; meetingTime: string | null; location: string; participantCount: number; creator?: { nickname: string } }>>('/api/groups/my-participations'),
+          api.get<Array<{ id: number; name: string; category: string; meetingTime: string | null; location: string; participantCount: number }>>('/api/groups/my-creations'),
+        ]);
 
-        // 참여한 매치 수 (각 매치의 상세 정보를 가져와서 확인)
-        // 참여 여부는 각 매치의 상세 API를 호출해야 정확히 알 수 있음
-        // 일단 생성한 매치를 제외한 모든 매치를 가져와서 확인
-        let joinedCount = 0;
-        try {
-          // 각 매치의 상세 정보를 가져와서 isUserParticipant 확인
-          const participationChecks = await Promise.allSettled(
-            allGroups
-              .filter((group: any) => group.creatorId !== userId) // 생성한 매치 제외
-              .slice(0, 50) // 성능을 위해 최대 50개만 확인
-              .map((group: any) => api.get(`/api/groups/${group.id}`))
-          );
-          
-          joinedCount = participationChecks.filter(
-            (result) => result.status === 'fulfilled' && (result.value as any)?.isUserParticipant === true
-          ).length;
-        } catch (error) {
-          console.error('참여 매치 확인 실패:', error);
-        }
+        const participationsList = Array.isArray(participations) ? participations : [];
+        const creationsList = Array.isArray(creations) ? creations : [];
 
-        // 찜한 매치 수 (API가 있다면)
-        // TODO: 찜한 매치 API 구현 후 활성화
+        setMyParticipations(participationsList);
+        setMyCreations(creationsList);
+
+        // 찜한 매치 수 (API 구현 후 활성화)
         const favoritesCount = 0;
-
-        // 참여 예정 매치 수 (참여한 매치 중 미래 매치)
-        // TODO: meetingTime 파싱 로직 구현 필요
+        // 참여 예정 매치 수 (meetingTime 파싱 로직 구현 후)
         const upcomingCount = 0;
 
-        // 운동별 성적 데이터 가져오기 (로컬 스토리지에서)
-        // TODO: 백엔드 API 구현 후 변경
-        const savedRecords = localStorage.getItem(`sportRecords_${userId}`);
-        const records = savedRecords ? JSON.parse(savedRecords) : {};
-        setSportRecords(records);
-
         setActivityStats({
-          joinedGroups: joinedCount,
-          createdGroups: createdCount,
+          joinedGroups: participationsList.length,
+          createdGroups: creationsList.length,
           favoriteGroups: favoritesCount,
           upcomingGroups: upcomingCount,
         });
       } catch (error) {
         console.error('활동 기록 조회 실패:', error);
-        // 에러 발생 시 기본값 유지
       }
     };
 
@@ -336,6 +377,17 @@ const MyInfoPage = () => {
       fetchFollowStats();
     }
   }, [authUser, profileData]);
+
+  // 오운 랭크: 점수가 있는 종목을 일정 간격으로 자동 전환 (3초)
+  useEffect(() => {
+    const entries = Object.entries(profileData?.effectiveRanks || {});
+    if (entries.length <= 1) return;
+    const t = setInterval(
+      () => setRankCycleIndex((i) => (i + 1) % entries.length),
+      3000
+    );
+    return () => clearInterval(t);
+  }, [profileData?.effectiveRanks]);
 
   const handleProfileImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -445,38 +497,6 @@ const MyInfoPage = () => {
     }
   };
 
-  const handleBusinessNumberVerify = async () => {
-    if (!profileData || !businessNumber) return;
-
-    // 사업자번호 형식 검증 (XXX-XX-XXXXX)
-    const businessNumberRegex = /^\d{3}-\d{2}-\d{5}$/;
-    if (!businessNumberRegex.test(businessNumber)) {
-      await showWarning('사업자번호는 XXX-XX-XXXXX 형식으로 입력해주세요. (예: 123-45-67890)', '사업자번호 형식 오류');
-      return;
-    }
-
-    setIsVerifyingBusinessNumber(true);
-    try {
-      const updatedUser = await api.post<{ businessNumber: string; businessNumberVerified: boolean }>('/api/auth/verify-business-number', {
-        businessNumber,
-      });
-      
-      setProfileData({
-        ...profileData,
-        businessNumber: updatedUser.businessNumber,
-        businessNumberVerified: updatedUser.businessNumberVerified,
-      });
-      setIsEditingBusinessNumber(false);
-      // 시설 등록 안내 모달 표시
-      setShowFacilityRegistrationModal(true);
-    } catch (error) {
-      console.error('사업자번호 검증 실패:', error);
-      await showError(error instanceof Error ? error.message : '사업자번호 검증에 실패했습니다.', '사업자번호 검증 실패');
-    } finally {
-      setIsVerifyingBusinessNumber(false);
-    }
-  };
-
   const handlePasswordChange = () => {
     // TODO: 비밀번호 변경 모달/페이지 이동
     console.log('비밀번호 변경');
@@ -559,6 +579,12 @@ const MyInfoPage = () => {
     }
   };
 
+  // 획득 타이틀: 참여·생성 매치 종목별 횟수 기반 (일반 + 애호가/마스터)
+  const earnedTitles = (() => {
+    const countByCategory = getCountByCategory(myParticipations, myCreations);
+    return getEarnedTitles(countByCategory);
+  })();
+
   // 주소 검색으로 위치 설정
   const handleSearchAddress = () => {
     // Daum Postcode API 스크립트 로드
@@ -623,85 +649,133 @@ const MyInfoPage = () => {
     );
   }
 
-  // 멤버십은 아직 구현되지 않았으므로 기본값 사용
-  const membership = '일반'; // TODO: 실제 멤버십 정보 가져오기
   const joinDate = profileData.createdAt ? new Date(profileData.createdAt).toISOString().split('T')[0] : '';
+  const effectiveRanks = profileData.effectiveRanks || {};
+  const rankEntries = Object.entries(effectiveRanks);
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto w-full space-y-6 pb-12">
-      <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)] mb-6 md:mb-8">내 정보</h1>
+    <div className="flex flex-col flex-1 w-full min-h-0 bg-[var(--color-bg-primary)]">
+      {/* 히어로 / 상단 (스포츠용품 페이지와 동일 톤) */}
+      <header className="flex-shrink-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)]">
+        <div className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-12">
+          <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-text-primary)] mb-2">
+            내 정보
+          </h1>
+          <p className="text-[var(--color-text-secondary)] max-w-2xl">
+            프로필과 오운 랭크를 확인하고, 계정을 관리하세요.
+          </p>
+        </div>
+      </header>
 
-      {/* 프로필 요약 */}
-      <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6">
-        <h2 className="text-xl font-semibold text-[var(--color-text-primary)] mb-4">프로필 요약</h2>
-        <div className="flex flex-col md:flex-row items-center md:items-start space-y-4 md:space-y-0 md:space-x-6">
-          {/* 프로필 사진 */}
-          <div className="relative">
-            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-[var(--color-bg-secondary)] flex items-center justify-center overflow-hidden">
-              {profileData.profileImage ? (
-                <img src={profileData.profileImage} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                <UserCircleIcon className="w-20 h-20 text-[var(--color-text-secondary)]" />
-              )}
-            </div>
-            <label className="absolute bottom-0 right-0 bg-[var(--color-blue-primary)] text-white rounded-full p-2 cursor-pointer hover:opacity-90 transition-opacity">
-              <CameraIcon className="w-4 h-4" />
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleProfileImageChange}
-                className="hidden"
-              />
-            </label>
-          </div>
-
-          {/* 닉네임 및 정보 */}
-          <div className="flex-1 w-full md:w-auto text-center md:text-left">
-            <div className="flex items-center justify-center md:justify-start space-x-3 mb-2">
-              {isEditingNickname ? (
-                <div className="flex items-center space-x-2 flex-1">
-                  <input
-                    type="text"
-                    value={nickname}
-                    onChange={(e) => setNickname(e.target.value)}
-                    className="flex-1 px-3 py-1 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                    autoFocus
-                  />
-                  <button
-                    onClick={handleNicknameSave}
-                    className="px-3 py-1 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90"
-                  >
-                    저장
-                  </button>
-                  <button
-                    onClick={() => {
-                      setNickname(profileData.nickname || '');
-                      setIsEditingNickname(false);
-                    }}
-                    className="px-3 py-1 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-lg hover:opacity-80"
-                  >
-                    취소
-                  </button>
+      <div className="max-w-4xl mx-auto w-full px-4 md:px-6 py-6 space-y-6 pb-12">
+      {/* 프로필 요약 (랭크 매치 참여 시에만 오운 랭크 패널 표시) */}
+      <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] overflow-hidden shadow-sm">
+        {/* 오운 랭크 패널: 랭크 티어가 있는 사용자만 표시. 점수 있는 종목 자동 전환, 클릭 시 명예의전당 */}
+        {rankEntries.length > 0 && (
+          <button
+            type="button"
+            onClick={() => navigate('/hall-of-fame')}
+            className="w-full text-left px-6 py-4 md:py-5 bg-[var(--color-bg-secondary)]/60 border-b border-[var(--color-border-card)] hover:bg-[var(--color-bg-secondary)]/80 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] focus:ring-inset"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3 min-w-0">
+                <span className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider flex items-center gap-1.5 shrink-0">
+                  <TrophyIcon className="w-4 h-4 text-amber-500" />
+                  오운 랭크
+                </span>
+                <div className="flex items-center gap-2 min-h-[2.25rem]" key={rankCycleIndex}>
+                  {(() => {
+                    const [sport, rank] = rankEntries[rankCycleIndex % rankEntries.length];
+                    return (
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold bg-gradient-to-r ${getOhunRankStyle(rank)} shadow-sm animate-[fadeIn_0.3s_ease-out]`}
+                        title={`${sport} ${rank}랭크`}
+                      >
+                        <TrophyIcon className="w-4 h-4 opacity-90" />
+                        {sport} <span className="opacity-95">{rank}</span>
+                      </span>
+                    );
+                  })()}
                 </div>
-              ) : (
-                <>
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <h3 className="text-2xl font-bold text-[var(--color-text-primary)]">
-                        {profileData.nickname || '닉네임 없음'}
-                      </h3>
-                      {profileData.tag && (
-                        <span className="text-lg text-[var(--color-text-secondary)]">
-                          {profileData.tag}
-                        </span>
+              </div>
+              <span className="text-xs font-medium text-[var(--color-blue-primary)] flex items-center gap-1 shrink-0">
+                명예의전당 보기
+                <ChevronRightIcon className="w-4 h-4" />
+              </span>
+            </div>
+          </button>
+        )}
+
+        <div className="p-6">
+          <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">프로필 요약</h2>
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
+            {/* 프로필 사진 */}
+            <div className="relative">
+              <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-[var(--color-bg-secondary)] flex items-center justify-center overflow-hidden ring-2 ring-[var(--color-border-card)]">
+                {profileData.profileImage ? (
+                  <img src={profileData.profileImage} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <UserCircleIcon className="w-20 h-20 text-[var(--color-text-secondary)]" />
+                )}
+              </div>
+              <label className="absolute bottom-0 right-0 bg-[var(--color-blue-primary)] text-white rounded-full p-2 cursor-pointer hover:opacity-90 transition-opacity shadow-md">
+                <CameraIcon className="w-4 h-4" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProfileImageChange}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {/* 닉네임 및 정보 */}
+            <div className="flex-1 w-full md:w-auto text-center md:text-left">
+              <div className="flex items-center justify-center md:justify-start space-x-3 mb-2">
+                {isEditingNickname ? (
+                  <div className="flex items-center space-x-2 flex-1">
+                    <input
+                      type="text"
+                      value={nickname}
+                      onChange={(e) => setNickname(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleNicknameSave}
+                      className="px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-xl hover:opacity-90 transition-opacity font-medium text-sm"
+                    >
+                      저장
+                    </button>
+                    <button
+                      onClick={() => {
+                        setNickname(profileData.nickname || '');
+                        setIsEditingNickname(false);
+                      }}
+                      className="px-4 py-2 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-xl hover:opacity-80 transition-opacity text-sm"
+                    >
+                      취소
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <h3 className="text-2xl font-bold text-[var(--color-text-primary)]">
+                          {profileData.nickname || '닉네임 없음'}
+                        </h3>
+                        {profileData.tag && (
+                          <span className="text-lg text-[var(--color-text-secondary)]">
+                            {profileData.tag}
+                          </span>
+                        )}
+                      </div>
+                      {profileData.realName && (
+                        <p className="text-sm text-[var(--color-text-secondary)] mt-1">
+                          실명: {profileData.realName}
+                        </p>
                       )}
-                    </div>
-                    {profileData.realName && (
-                      <p className="text-sm text-[var(--color-text-secondary)] mt-1">
-                        실명: {profileData.realName}
-                      </p>
-                    )}
-                    {profileData.nicknameChangedAt && (() => {
+                      {profileData.nicknameChangedAt && (() => {
                       const lastChange = new Date(profileData.nicknameChangedAt);
                       const threeMonthsAgo = new Date();
                       threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
@@ -756,18 +830,56 @@ const MyInfoPage = () => {
                 </>
               )}
             </div>
-            {/* 타이틀/역할 */}
+            {/* 타이틀 뱃지: 활동 기반 획득 타이틀(일반/애호가/마스터) + 비즈니스·선수. 사업자는 '일반' 제외 */}
             <div className="flex items-center space-x-2 text-sm flex-wrap gap-2 mt-2">
-              <span className="px-3 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full font-semibold">
-                {membership}
-              </span>
+              {earnedTitles
+                .filter((title) => !profileData.businessNumberVerified || title !== '일반')
+                .map((title) => (
+                  <span
+                    key={title}
+                    className="px-3 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full font-semibold"
+                  >
+                    {title}
+                  </span>
+                ))}
               {profileData.businessNumberVerified && (
                 <span className="px-3 py-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-full font-semibold flex items-center gap-1">
                   <BuildingOfficeIcon className="w-4 h-4" />
-                  체육센터 사장님
+                  비즈니스
+                </span>
+              )}
+              {profileData.isAdmin && (
+                <span className="px-3 py-1 bg-gradient-to-r from-slate-600 to-slate-700 text-white rounded-full font-semibold flex items-center gap-1" title="시설·상품 등록, 이벤트매치 개최 등 모든 기능 이용 가능">
+                  <ShieldCheckIcon className="w-4 h-4" />
+                  관리자
+                </span>
+              )}
+              {profileData.athleteVerified && (
+                <span className="px-3 py-1 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-full font-semibold flex items-center gap-1" title={profileData.athleteData?.sport ? `종목: ${profileData.athleteData.sport}` : undefined}>
+                  <TrophyIcon className="w-4 h-4" />
+                  선수
+                  {profileData.athleteData?.sport && (
+                    <span className="opacity-90 text-xs">({profileData.athleteData.sport})</span>
+                  )}
                 </span>
               )}
             </div>
+            {!profileData.athleteVerified && (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={handleAthleteRegister}
+                  disabled={isAthleteRegistering || !profileData.realName?.trim()}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl border-2 border-[var(--color-border-card)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-primary)] hover:border-[var(--color-blue-primary)]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <TrophyIcon className="w-4 h-4" />
+                  {isAthleteRegistering ? '조회 중...' : '선수 등록'}
+                </button>
+                <p className="text-xs text-[var(--color-text-secondary)] mt-1">
+                  대한체육회 스포츠지원포털에 등록된 선수라면 실명으로 조회 후 선수 뱃지를 받을 수 있습니다.
+                </p>
+              </div>
+            )}
             
             {/* 가입일 및 팔로워/팔로잉 수 */}
             <div className="mt-3 space-y-2">
@@ -796,11 +908,12 @@ const MyInfoPage = () => {
             </div>
           </div>
         </div>
+        </div>
       </section>
 
       {/* 계정 정보 */}
-      <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6">
-        <h2 className="text-xl font-semibold text-[var(--color-text-primary)] mb-4">계정 정보</h2>
+      <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">계정 정보</h2>
         <div className="space-y-4">
           {/* 이메일 (수정 불가) */}
           <div className="flex items-center justify-between py-3 border-b border-[var(--color-border-card)]">
@@ -827,7 +940,7 @@ const MyInfoPage = () => {
             </div>
             <button
               onClick={handlePasswordChange}
-              className="px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium"
+              className="px-4 py-2.5 bg-[var(--color-blue-primary)] text-white rounded-xl hover:opacity-90 transition-opacity text-sm font-medium"
             >
               변경
             </button>
@@ -889,8 +1002,8 @@ const MyInfoPage = () => {
       </section>
 
       {/* 연락처 정보 */}
-      <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6">
-        <h2 className="text-xl font-semibold text-[var(--color-text-primary)] mb-4">연락처 정보</h2>
+      <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">연락처 정보</h2>
         <div className="space-y-4">
           {/* 휴대전화 번호 */}
           <div className="flex items-center justify-between py-3 border-b border-[var(--color-border-card)]">
@@ -902,12 +1015,12 @@ const MyInfoPage = () => {
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                    className="flex-1 px-3 py-2 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
                     placeholder="010-1234-5678"
                   />
                   <button
                     onClick={handlePhoneSave}
-                    className="px-3 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90"
+                    className="px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-xl hover:opacity-90 transition-opacity text-sm font-medium"
                   >
                     저장
                   </button>
@@ -916,7 +1029,7 @@ const MyInfoPage = () => {
                       setPhone(profileData.phone || '');
                       setIsEditingPhone(false);
                     }}
-                    className="px-3 py-2 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-lg hover:opacity-80"
+                    className="px-4 py-2 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-xl hover:opacity-80 transition-opacity text-sm"
                   >
                     취소
                   </button>
@@ -969,84 +1082,39 @@ const MyInfoPage = () => {
             )}
           </div>
 
-          {/* 사업자번호 (사업자 회원만 표시) */}
-          {(profileData.businessNumber || profileData.businessNumberVerified) && (
+          {/* 사업자번호 (사업자 회원, 가입 시 인증 완료된 경우만 표시·읽기 전용) */}
+          {profileData.businessNumber && profileData.businessNumberVerified && (
             <div className="pt-3 border-t border-[var(--color-border-card)]">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <BuildingOfficeIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
                   <div>
                     <div className="text-sm text-[var(--color-text-secondary)]">사업자번호</div>
                     <div className="text-xs text-[var(--color-text-secondary)]">
-                      {profileData.businessNumberVerified 
-                        ? '검증 완료 - 체육센터 등록 가능' 
-                        : '체육센터 사장님만 등록 가능'}
+                      가입 시 인증 완료 · 체육센터/스포츠용품 등록 가능
                     </div>
                   </div>
                 </div>
               </div>
-            {isEditingBusinessNumber ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={businessNumber}
-                    onChange={(e) => {
-                      // 숫자와 하이픈만 허용
-                      const value = e.target.value.replace(/[^\d-]/g, '');
-                      // 자동으로 하이픈 추가 (XXX-XX-XXXXX)
-                      let formatted = value.replace(/-/g, '');
-                      if (formatted.length > 3) {
-                        formatted = formatted.slice(0, 3) + '-' + formatted.slice(3);
-                      }
-                      if (formatted.length > 6) {
-                        formatted = formatted.slice(0, 6) + '-' + formatted.slice(6, 11);
-                      }
-                      setBusinessNumber(formatted);
-                    }}
-                    placeholder="사업자번호를 입력해주세요"
-                    maxLength={12}
-                    className="flex-1 px-3 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                  />
-                  <Tooltip content="사업자번호는 자동으로 하이픈(-)이 추가됩니다. 숫자만 입력해주세요. (형식: XXX-XX-XXXXX)" />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleBusinessNumberVerify}
-                    disabled={isVerifyingBusinessNumber}
-                    className="flex-1 px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isVerifyingBusinessNumber ? '검증 중...' : '검증하기'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setBusinessNumber(profileData.businessNumber || '');
-                      setIsEditingBusinessNumber(false);
-                    }}
-                    className="px-4 py-2 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-lg hover:opacity-80 transition-opacity text-sm font-medium"
-                  >
-                    취소
-                  </button>
-                </div>
-                <p className="text-xs text-[var(--color-text-secondary)]">
-                  검증 완료 후 체육센터를 등록할 수 있습니다.
-                </p>
+              <div className="mt-2 text-[var(--color-text-primary)] font-medium">
+                {profileData.businessNumber}
               </div>
-            ) : (
-              <div className="flex items-center justify-between">
-                <div className="text-[var(--color-text-primary)] font-medium">
-                  {profileData.businessNumber || '등록된 사업자번호 없음'}
-                </div>
-                {!profileData.businessNumberVerified && (
-                  <button
-                    onClick={() => setIsEditingBusinessNumber(true)}
-                    className="px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium"
-                  >
-                    등록/검증
-                  </button>
-                )}
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowChangeBusinessNumberModal(true)}
+                  className="text-sm font-medium px-3 py-1.5 rounded-lg border border-[var(--color-border-card)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] transition-colors"
+                >
+                  사업자번호 변경
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowFacilityRegistrationModal(true)}
+                  className="text-sm text-[var(--color-blue-primary)] hover:underline"
+                >
+                  시설 등록 방법 보기
+                </button>
               </div>
-            )}
             </div>
           )}
 
@@ -1078,228 +1146,130 @@ const MyInfoPage = () => {
         </div>
       </section>
 
-      {/* 활동 기록 */}
-      <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">활동 기록</h2>
+      {/* 활동 기록 요약 → 전용 페이지로 이동 */}
+      <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1">활동 기록</h2>
+            <p className="text-sm text-[var(--color-text-secondary)]">
+              참여한 매치 {activityStats.joinedGroups}건 · 생성한 매치 {activityStats.createdGroups}건
+            </p>
+          </div>
           <button
-            onClick={() => setShowStatisticsModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium"
+            onClick={() => navigate('/my-activity')}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all border-2 border-[var(--color-blue-primary)] text-[var(--color-blue-primary)] bg-transparent hover:bg-[var(--color-blue-primary)] hover:text-white text-sm"
           >
             <ChartBarIcon className="w-5 h-5" />
-            운동 통계 보기
+            활동기록 보기
           </button>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-          <div className="flex flex-col items-center p-4 bg-[var(--color-bg-primary)] rounded-lg hover:bg-[var(--color-bg-secondary)] transition-colors cursor-pointer">
-            <UserGroupIcon className="w-8 h-8 text-[var(--color-blue-primary)] mb-2" />
-            <div className="text-2xl font-bold text-[var(--color-text-primary)]">{activityStats.joinedGroups}</div>
-            <div className="text-sm text-[var(--color-text-secondary)]">참여한 매치</div>
-          </div>
-          <div className="flex flex-col items-center p-4 bg-[var(--color-bg-primary)] rounded-lg hover:bg-[var(--color-bg-secondary)] transition-colors cursor-pointer">
-            <PlusCircleIcon className="w-8 h-8 text-[var(--color-blue-primary)] mb-2" />
-            <div className="text-2xl font-bold text-[var(--color-text-primary)]">{activityStats.createdGroups}</div>
-            <div className="text-sm text-[var(--color-text-secondary)]">생성한 매치</div>
-          </div>
-          <div className="flex flex-col items-center p-4 bg-[var(--color-bg-primary)] rounded-lg hover:bg-[var(--color-bg-secondary)] transition-colors cursor-pointer">
-            <HeartIcon className="w-8 h-8 text-[var(--color-blue-primary)] mb-2" />
-            <div className="text-2xl font-bold text-[var(--color-text-primary)]">{activityStats.favoriteGroups}</div>
-            <div className="text-sm text-[var(--color-text-secondary)]">찜한 매치</div>
-          </div>
-          <div className="flex flex-col items-center p-4 bg-[var(--color-bg-primary)] rounded-lg hover:bg-[var(--color-bg-secondary)] transition-colors cursor-pointer">
-            <CalendarIcon className="w-8 h-8 text-[var(--color-blue-primary)] mb-2" />
-            <div className="text-2xl font-bold text-[var(--color-text-primary)]">{activityStats.upcomingGroups}</div>
-            <div className="text-sm text-[var(--color-text-secondary)]">참여 예정</div>
-          </div>
         </div>
       </section>
 
-      {/* 운동별 성적 및 급수 */}
-      <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">운동별 성적 및 급수</h2>
-          <button
-            onClick={() => setIsRecordModalOpen(true)}
-            className="px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium"
-          >
-            성적 추가
-          </button>
-        </div>
-        {Object.keys(sportRecords).length === 0 ? (
-          <div className="text-center py-8 text-[var(--color-text-secondary)]">
-            <TrophyIcon className="w-12 h-12 mx-auto mb-2 text-[var(--color-text-secondary)] opacity-50" />
-            <p>등록된 대회 성적이 없습니다.</p>
-            <p className="text-sm mt-1">성적을 추가하여 급수를 받아보세요!</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {Object.entries(sportRecords).map(([sport, record]) => (
-              <div key={sport} className="p-4 bg-[var(--color-bg-primary)] rounded-lg border border-[var(--color-border-card)]">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">{sport}</h3>
-                  <span className="px-3 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full text-sm font-semibold">
-                    {record.rank || '미등급'}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <span className="text-[var(--color-text-secondary)]">참가 대회:</span>
-                    <span className="ml-2 font-medium text-[var(--color-text-primary)]">{record.competitions}회</span>
-                  </div>
-                  {record.bestResult && (
-                    <div>
-                      <span className="text-[var(--color-text-secondary)]">최고 성적:</span>
-                      <span className="ml-2 font-medium text-[var(--color-text-primary)]">{record.bestResult}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* 대회 성적 추가 모달 */}
-      {isRecordModalOpen && (
-        <div 
+      {/* 사업자번호 변경 모달 (2단계: 비밀번호 인증 → 새 사업자번호 입력) */}
+      {showChangeBusinessNumberModal && (
+        <div
           className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4"
-          onMouseDown={(e) => {
-            // 모달 내용이 아닌 배경을 클릭한 경우에만 기록
-            if (e.target === e.currentTarget) {
-              modalMouseDownRef.current = { x: e.clientX, y: e.clientY };
-            }
-          }}
+          onMouseDown={(e) => e.target === e.currentTarget && (modalMouseDownRef.current = { x: e.clientX, y: e.clientY })}
           onMouseUp={(e) => {
-            // 모달 내용이 아닌 배경을 클릭한 경우에만 처리
             if (e.target === e.currentTarget && modalMouseDownRef.current) {
-              const distance = Math.sqrt(
-                Math.pow(e.clientX - modalMouseDownRef.current.x, 2) +
-                Math.pow(e.clientY - modalMouseDownRef.current.y, 2)
-              );
-              // 5px 이내 이동이면 클릭으로 간주, 그 이상이면 드래그로 간주
-              if (distance < 5) {
-                setIsRecordModalOpen(false);
-              }
+              const dx = e.clientX - modalMouseDownRef.current.x;
+              const dy = e.clientY - modalMouseDownRef.current.y;
+              if (Math.sqrt(dx * dx + dy * dy) < 5) closeChangeBusinessNumberModal();
               modalMouseDownRef.current = null;
             }
           }}
         >
-          <div className="bg-[var(--color-bg-card)] rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-xl font-semibold text-[var(--color-text-primary)] mb-4">대회 성적 추가</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">운동 종목</label>
-                <select
-                  value={selectedSport}
-                  onChange={(e) => setSelectedSport(e.target.value)}
-                  className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
-                >
-                  <option value="">선택하세요</option>
-                  {SPORTS_LIST.map((sport) => (
-                    <option key={sport} value={sport}>{sport}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">대회명</label>
-                <input
-                  type="text"
-                  value={competitionName}
-                  onChange={(e) => setCompetitionName(e.target.value)}
-                  placeholder="대회명을 입력해주세요"
-                  className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">성적</label>
-                <input
-                  type="text"
-                  value={competitionResult}
-                  onChange={(e) => setCompetitionResult(e.target.value)}
-                  placeholder="성적을 입력해주세요"
-                  className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">대회 날짜</label>
-                <input
-                  type="date"
-                  value={competitionDate}
-                  onChange={(e) => setCompetitionDate(e.target.value)}
-                  className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] date-input-dark"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">급수</label>
-                <input
-                  type="text"
-                  value={sportRank}
-                  onChange={(e) => setSportRank(e.target.value)}
-                  placeholder="급수를 입력해주세요"
-                  className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]"
-                />
-                <p className="text-xs text-[var(--color-text-secondary)] mt-1">
-                  운동별로 급수 체계가 다를 수 있습니다 (예: 배드민턴 A~E급, 기타 1~5급 등)
-                </p>
-              </div>
-              <div className="flex space-x-3 pt-2">
-                <button
-                  onClick={() => {
-                    if (!selectedSport || !competitionName) {
-                      showWarning('운동 종목과 대회명을 입력해주세요.', '입력 오류');
-                      return;
-                    }
-                    
-                    const userId = profileData?.id;
-                    if (!userId) return;
-
-                    const updatedRecords = { ...sportRecords };
-                    if (!updatedRecords[selectedSport]) {
-                      updatedRecords[selectedSport] = {
-                        competitions: 0,
-                        bestResult: '',
-                        rank: '미등급',
-                      };
-                    }
-                    
-                    updatedRecords[selectedSport].competitions += 1;
-                    if (!updatedRecords[selectedSport].bestResult || 
-                        (competitionResult && competitionResult.includes('우승'))) {
-                      updatedRecords[selectedSport].bestResult = competitionResult || '참가';
-                    }
-                    // 사용자가 입력한 급수 사용
-                    updatedRecords[selectedSport].rank = sportRank;
-
-                    setSportRecords(updatedRecords);
-                    localStorage.setItem(`sportRecords_${userId}`, JSON.stringify(updatedRecords));
-
-                    // 폼 초기화
-                    setSelectedSport('');
-                    setCompetitionName('');
-                    setCompetitionResult('');
-                    setCompetitionDate('');
-                    setSportRank('미등급');
-                    setIsRecordModalOpen(false);
-                  }}
-                  className="flex-1 px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90 transition-opacity font-medium"
-                >
-                  저장
-                </button>
-                <button
-                  onClick={() => {
-                    setSelectedSport('');
-                    setCompetitionName('');
-                    setCompetitionResult('');
-                    setCompetitionDate('');
-                    setSportRank('미등급');
-                    setIsRecordModalOpen(false);
-                  }}
-                  className="flex-1 px-4 py-2 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-lg hover:opacity-80 transition-opacity font-medium"
-                >
-                  취소
-                </button>
-              </div>
+          <div
+            className="bg-[var(--color-bg-card)] rounded-2xl shadow-2xl max-w-md w-full border border-[var(--color-border-card)] p-6"
+            onClick={(ev) => ev.stopPropagation()}
+            onMouseDown={(ev) => ev.stopPropagation()}
+            onMouseUp={(ev) => ev.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-[var(--color-text-primary)] flex items-center gap-2">
+                <BuildingOfficeIcon className="w-6 h-6 text-[var(--color-blue-primary)]" />
+                사업자번호 변경 {changeBusinessNumberStep === 2 && <span className="text-sm font-normal text-[var(--color-text-secondary)]">(2/2)</span>}
+              </h2>
+              <button
+                type="button"
+                onClick={closeChangeBusinessNumberModal}
+                className="p-2 hover:bg-[var(--color-bg-secondary)] rounded-lg transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5 text-[var(--color-text-primary)]" />
+              </button>
             </div>
+
+            {changeBusinessNumberStep === 1 ? (
+              <>
+                <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+                  본인 확인을 위해 현재 비밀번호를 입력해주세요.
+                </p>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">비밀번호</label>
+                  <input
+                    type="password"
+                    value={changeBusinessNumberPassword}
+                    onChange={(e) => setChangeBusinessNumberPassword(e.target.value)}
+                    placeholder="현재 비밀번호"
+                    className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                  />
+                </div>
+                <div className="mt-6 flex gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={closeChangeBusinessNumberModal}
+                    className="px-4 py-2 rounded-lg border border-[var(--color-border-card)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleVerifyPasswordForChangeBusinessNumber}
+                    disabled={isVerifyingPassword || !changeBusinessNumberPassword.trim()}
+                    className="px-4 py-2 rounded-lg bg-[var(--color-blue-primary)] text-white font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isVerifyingPassword ? '확인 중...' : '다음'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+                  변경할 새 사업자번호를 입력해주세요. API 검증 후 변경됩니다.
+                </p>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">새 사업자번호</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={changeBusinessNumberNew}
+                    onChange={(e) => setChangeBusinessNumberNew(formatBusinessNumber(e.target.value))}
+                    placeholder="123-45-67890"
+                    maxLength={12}
+                    className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                  />
+                  <p className="mt-1 text-xs text-[var(--color-text-secondary)]">숫자만 입력하면 하이픈이 자동 추가됩니다.</p>
+                </div>
+                <div className="mt-6 flex gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setChangeBusinessNumberStep(1)}
+                    className="px-4 py-2 rounded-lg border border-[var(--color-border-card)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] transition-colors"
+                  >
+                    이전
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleChangeBusinessNumberSubmit}
+                    disabled={isChangingBusinessNumber || formatBusinessNumber(changeBusinessNumberNew).length !== 12}
+                    className="px-4 py-2 rounded-lg bg-[var(--color-blue-primary)] text-white font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isChangingBusinessNumber ? '변경 중...' : '변경하기'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1333,8 +1303,8 @@ const MyInfoPage = () => {
           >
             <div className="sticky top-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)] p-4 md:p-6 flex items-center justify-between z-10">
               <h2 className="text-xl md:text-2xl font-bold text-[var(--color-text-primary)] flex items-center gap-2">
-                <CheckCircleIcon className="w-6 h-6 text-green-500" />
-                사업자번호 검증 완료
+                <BuildingOfficeIcon className="w-6 h-6 text-[var(--color-blue-primary)]" />
+                시설 등록 안내
               </h2>
               <button
                 onClick={() => setShowFacilityRegistrationModal(false)}
@@ -1345,10 +1315,10 @@ const MyInfoPage = () => {
             </div>
 
             <div className="p-4 md:p-6 space-y-6">
-              {/* 성공 메시지 */}
-              <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                <p className="text-green-700 dark:text-green-400 font-medium">
-                  🎉 사업자번호 검증이 완료되었습니다! 이제 체육센터를 등록할 수 있습니다.
+              {/* 안내 메시지 */}
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-blue-700 dark:text-blue-400 font-medium">
+                  체육센터를 등록하려면 아래 방법을 따라주세요.
                 </p>
               </div>
 
@@ -1515,21 +1485,22 @@ const MyInfoPage = () => {
       )}
 
       {/* 로그아웃 및 회원 탈퇴 */}
-      <div className="flex justify-between items-center pt-4 border-t border-[var(--color-border-card)]">
+      <div className="flex justify-between items-center pt-6 mt-2">
         <button
           onClick={handleLogout}
-          className="flex items-center space-x-2 px-4 py-2 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-lg hover:bg-[var(--color-bg-primary)] transition-colors text-sm font-medium"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-primary)] transition-colors text-sm font-medium border border-[var(--color-border-card)]"
         >
           <ArrowRightOnRectangleIcon className="w-4 h-4" />
           <span>로그아웃</span>
         </button>
         <button
           onClick={handleWithdraw}
-          className="flex items-center space-x-2 text-[var(--color-text-secondary)] hover:text-red-500 transition-colors text-sm"
+          className="flex items-center gap-2 text-[var(--color-text-secondary)] hover:text-red-500 transition-colors text-sm font-medium"
         >
           <TrashIcon className="w-4 h-4" />
           <span>회원 탈퇴</span>
         </button>
+      </div>
       </div>
     </div>
   );

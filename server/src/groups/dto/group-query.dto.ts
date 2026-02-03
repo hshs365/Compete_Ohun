@@ -41,8 +41,8 @@ export class GroupQueryDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['normal', 'event'])
-  type?: 'normal' | 'event'; // 모임 타입 필터
+  @IsIn(['normal', 'rank', 'event'])
+  type?: 'normal' | 'rank' | 'event'; // 매치 유형 필터 (일반/랭크/이벤트)
 }
 
 

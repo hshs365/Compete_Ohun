@@ -94,7 +94,7 @@ const Step6AdditionalInfo: React.FC<Step6AdditionalInfoProps> = ({
 
         onResidenceChange({
           residenceSido: data.sido,
-          residenceSigungu: data.sigungu,
+          residenceSigungu: (data.sigungu && data.sigungu.trim()) ? data.sigungu : data.sido,
           selectedAddress: addr + extraAddr,
         });
       },

@@ -13,6 +13,11 @@ import {
   CameraIcon,
   SunIcon,
   MoonIcon,
+  UserGroupIcon,
+  UserPlusIcon,
+  ChartBarIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
 } from '@heroicons/react/24/outline';
 
 interface SettingItemProps {
@@ -21,11 +26,12 @@ interface SettingItemProps {
   description?: string;
   isOn: boolean;
   onToggle: () => void;
+  disabled?: boolean;
 }
 
-const SettingItem: React.FC<SettingItemProps> = ({ icon: Icon, label, description, isOn, onToggle }) => {
+const SettingItem: React.FC<SettingItemProps> = ({ icon: Icon, label, description, isOn, onToggle, disabled }) => {
   return (
-    <div className="flex items-center justify-between py-3 border-b border-[var(--color-border-card)] last:border-b-0">
+    <div className={`flex items-center justify-between py-3 border-b border-[var(--color-border-card)] last:border-b-0 ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}>
       <div className="flex items-center space-x-3 flex-1">
         <div className="p-2 bg-[var(--color-bg-secondary)] rounded-lg">
           <Icon className="w-5 h-5 text-[var(--color-text-primary)]" />
@@ -37,7 +43,7 @@ const SettingItem: React.FC<SettingItemProps> = ({ icon: Icon, label, descriptio
           )}
         </div>
       </div>
-      <ToggleSwitch isOn={isOn} handleToggle={onToggle} label="" />
+      <ToggleSwitch isOn={isOn} handleToggle={disabled ? () => {} : onToggle} label="" />
     </div>
   );
 };
@@ -45,8 +51,14 @@ const SettingItem: React.FC<SettingItemProps> = ({ icon: Icon, label, descriptio
 const SettingsPage = () => {
   const { theme, setTheme } = useTheme();
   
-  // 알림 및 통신 설정
-  const [pushNotifications, setPushNotifications] = useState(true);
+  // 알림 설정
+  const [pushNotificationsAll, setPushNotificationsAll] = useState(true);
+  const [pushSectionOpen, setPushSectionOpen] = useState(true); // 전체 푸시 알림 섹션 펼침
+  const [matchInviteGeneral, setMatchInviteGeneral] = useState(true);
+  const [matchInviteRank, setMatchInviteRank] = useState(true);
+  const [matchInviteEvent, setMatchInviteEvent] = useState(true);
+  const [teamInviteNotifications, setTeamInviteNotifications] = useState(true);
+  const [rankScoreNotifications, setRankScoreNotifications] = useState(true);
   const [chatNotifications, setChatNotifications] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(false);
   const [chatEnabled, setChatEnabled] = useState(true);
@@ -100,20 +112,95 @@ const SettingsPage = () => {
       <div className="bg-[var(--color-bg-card)] rounded-xl shadow-md p-4 md:p-6 border border-[var(--color-border-card)]">
         <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">알림 설정</h2>
         <div className="space-y-0">
-          <SettingItem
-            icon={BellIcon}
-            label="푸시 알림"
-            description="앱에서 발생하는 알림 받기"
-            isOn={pushNotifications}
-            onToggle={() => setPushNotifications(!pushNotifications)}
-          />
-          <SettingItem
-            icon={ChatBubbleLeftEllipsisIcon}
-            label="채팅 알림"
-            description="새로운 메시지 알림 받기"
-            isOn={chatNotifications}
-            onToggle={() => setChatNotifications(!chatNotifications)}
-          />
+          {/* 전체 푸시 알림 - 클릭 시 펼침/접힘 */}
+          <div className="py-3 border-b border-[var(--color-border-card)]">
+            <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setPushSectionOpen(!pushSectionOpen)}
+                className="flex items-center gap-2 flex-1 min-w-0 text-left"
+              >
+                <div className="p-2 bg-[var(--color-bg-secondary)] rounded-lg shrink-0">
+                  <BellIcon className="w-5 h-5 text-[var(--color-text-primary)]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[var(--color-text-primary)] font-medium">전체 푸시 알림</span>
+                    {pushSectionOpen ? (
+                      <ChevronDownIcon className="w-5 h-5 shrink-0 text-[var(--color-text-secondary)]" />
+                    ) : (
+                      <ChevronRightIcon className="w-5 h-5 shrink-0 text-[var(--color-text-secondary)]" />
+                    )}
+                  </div>
+                  <div className="text-sm text-[var(--color-text-secondary)]">아래 항목 일괄 on/off</div>
+                </div>
+              </button>
+              <div onClick={(e) => e.stopPropagation()}>
+                <ToggleSwitch
+                  isOn={pushNotificationsAll}
+                  handleToggle={() => setPushNotificationsAll(!pushNotificationsAll)}
+                  label=""
+                />
+              </div>
+            </div>
+            {pushSectionOpen && (
+              <div className="mt-3 pt-3 border-t border-[var(--color-border-card)] pl-8 md:pl-10">
+                <div className="text-xs font-medium text-[var(--color-text-secondary)] mb-2">매치 초대 알림</div>
+                <div className="space-y-0.5">
+                  <SettingItem
+                    icon={UserGroupIcon}
+                    label="일반 매치"
+                    description="일반 매치에 초대될 때"
+                    isOn={matchInviteGeneral}
+                    onToggle={() => setMatchInviteGeneral(!matchInviteGeneral)}
+                    disabled={!pushNotificationsAll}
+                  />
+                  <SettingItem
+                    icon={UserGroupIcon}
+                    label="랭크 매치"
+                    description="랭크 매치에 초대될 때"
+                    isOn={matchInviteRank}
+                    onToggle={() => setMatchInviteRank(!matchInviteRank)}
+                    disabled={!pushNotificationsAll}
+                  />
+                  <SettingItem
+                    icon={UserGroupIcon}
+                    label="이벤트 매치"
+                    description="이벤트 매치에 초대될 때"
+                    isOn={matchInviteEvent}
+                    onToggle={() => setMatchInviteEvent(!matchInviteEvent)}
+                    disabled={!pushNotificationsAll}
+                  />
+                </div>
+                <div className="mt-3 pt-2 border-t border-[var(--color-border-card)] space-y-0">
+                  <SettingItem
+                    icon={UserPlusIcon}
+                    label="팀 초대 알림"
+                    description="팀에 초대될 때 알림"
+                    isOn={teamInviteNotifications}
+                    onToggle={() => setTeamInviteNotifications(!teamInviteNotifications)}
+                    disabled={!pushNotificationsAll}
+                  />
+                  <SettingItem
+                    icon={ChartBarIcon}
+                    label="랭크 점수 변동 알림"
+                    description="랭크 점수 변경 시 알림"
+                    isOn={rankScoreNotifications}
+                    onToggle={() => setRankScoreNotifications(!rankScoreNotifications)}
+                    disabled={!pushNotificationsAll}
+                  />
+                  <SettingItem
+                    icon={ChatBubbleLeftEllipsisIcon}
+                    label="채팅 알림"
+                    description="새 메시지 알림"
+                    isOn={chatNotifications}
+                    onToggle={() => setChatNotifications(!chatNotifications)}
+                    disabled={!pushNotificationsAll}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
           <SettingItem
             icon={BellIcon}
             label="이메일 알림"

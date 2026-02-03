@@ -102,10 +102,10 @@ export class Group {
   })
   gameSettings: GroupGameSettings | null;
 
-  // 모임 타입
+  // 매치 유형 (종목별·유형별 관리)
   @Column({ type: 'varchar', length: 20, default: 'normal' })
   @Index()
-  type: 'normal' | 'event'; // 'normal': 일반 모임, 'event': 이벤트매치
+  type: 'normal' | 'rank' | 'event'; // normal: 일반 매치, rank: 랭크매치, event: 이벤트매치
 
   // 모임 상태
   @Column({ type: 'boolean', default: true })

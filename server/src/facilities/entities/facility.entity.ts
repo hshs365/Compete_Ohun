@@ -40,6 +40,10 @@ export class Facility {
   @Column({ type: 'varchar', length: 100, nullable: true })
   operatingHours: string | null; // 운영시간 (예: 06:00 - 22:00)
 
+  /** 예약 단위(시간). 예: 2이면 2시간 단위로만 예약 가능 (06:00-08:00, 08:00-10:00 등) */
+  @Column({ type: 'int', default: 2 })
+  reservationSlotHours: number;
+
   @Column({ type: 'varchar', length: 100, nullable: true })
   price: string | null; // 가격 (예: 시간당 15,000원)
 
@@ -49,8 +53,17 @@ export class Facility {
   @Column({ type: 'text', array: true, default: [] })
   amenities: string[]; // 편의시설 (주차, 샤워실, 락커룸 등)
 
+  /** 시설에서 가능한 운동 종목 (체육센터 등 다목적 시설용) */
+  @Column({ type: 'text', array: true, default: [] })
+  availableSports: string[];
+
+  /** 대표 이미지 URL (목록·썸네일용). images[0]과 동기화 */
   @Column({ type: 'text', nullable: true })
-  image: string | null; // 시설 이미지 URL
+  image: string | null;
+
+  /** 시설 이미지 URL 목록 (다중 각도) */
+  @Column({ type: 'simple-json', nullable: true })
+  images: string[] | null;
 
   // 평점 및 리뷰
   @Column({ type: 'decimal', precision: 3, scale: 2, default: 0 })

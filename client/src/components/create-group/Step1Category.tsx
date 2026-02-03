@@ -10,14 +10,10 @@ interface Step1CategoryProps {
 const Step1Category: React.FC<Step1CategoryProps> = ({ category, onCategoryChange }) => {
   return (
     <div className="space-y-6">
-      {/* 안내 문구 */}
       <div className="mb-6">
         <h3 className="text-xl font-bold text-[var(--color-text-primary)] mb-2">
           어떤 운동 모임을 만들까요?
         </h3>
-        <p className="text-sm text-[var(--color-text-secondary)]">
-          운동 종류를 선택하면 해당 운동에 맞는 설정 옵션이 제공됩니다.
-        </p>
       </div>
 
       {/* 카테고리 선택 */}

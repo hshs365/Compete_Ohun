@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { TrophyIcon, StarIcon, FireIcon } from '@heroicons/react/24/solid';
-import { TrophyIcon as TrophyOutlineIcon, FunnelIcon } from '@heroicons/react/24/outline';
+import { TrophyIcon, StarIcon, FireIcon, SparklesIcon } from '@heroicons/react/24/solid';
+import { TrophyIcon as TrophyOutlineIcon, FunnelIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 import { SPORTS_CATEGORIES } from '../constants/sports';
-import { KOREAN_CITIES } from '../utils/locationUtils';
+import { KOREAN_CITIES, getRegionDisplayName } from '../utils/locationUtils';
 import { api } from '../utils/api';
 import RankerDetail from './RankerDetail';
 
@@ -28,6 +28,7 @@ const HallOfFamePage = () => {
   const [rankings, setRankings] = useState<Ranker[]>([]);
   const [myRank, setMyRank] = useState<{ rank: number | null; score: number } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // 연도 목록 생성 (현재 연도부터 5년 전까지)
   const years = Array.from({ length: 6 }, (_, i) => currentYear - i);
@@ -91,195 +92,230 @@ const HallOfFamePage = () => {
     if (rank === 1) return <TrophyIcon className="w-6 h-6 text-yellow-400" />;
     if (rank === 2) return <TrophyIcon className="w-6 h-6 text-gray-300" />;
     if (rank === 3) return <TrophyIcon className="w-6 h-6 text-orange-400" />;
-    return <span className="text-[var(--color-text-secondary)] font-bold">{rank}</span>;
+    return <span className="text-[var(--color-text-secondary)] font-bold text-lg">{rank}</span>;
   };
 
   const getRankBackground = (rank: number) => {
-    if (rank === 1) return 'bg-gradient-to-r from-yellow-400/20 to-yellow-600/20 border-yellow-400/50';
-    if (rank === 2) return 'bg-gradient-to-r from-gray-300/20 to-gray-400/20 border-gray-300/50';
-    if (rank === 3) return 'bg-gradient-to-r from-orange-400/20 to-orange-600/20 border-orange-400/50';
-    return 'bg-[var(--color-bg-primary)] border-[var(--color-border-card)]';
-  };
-
-  // 지역명 간소화 (API는 시/도만 사용)
-  const getRegionDisplayName = (region: string) => {
-    if (region === '전국') return '전국';
-    // '서울특별시' -> '서울' 등으로 변환
-    return region.replace('특별시', '').replace('광역시', '').replace('특별자치시', '').replace('도', '');
+    if (rank === 1) return 'bg-gradient-to-r from-yellow-400/10 to-yellow-600/10 border-yellow-400/30';
+    if (rank === 2) return 'bg-gradient-to-r from-gray-300/10 to-gray-400/10 border-gray-300/30';
+    if (rank === 3) return 'bg-gradient-to-r from-orange-400/10 to-orange-600/10 border-orange-400/30';
+    return 'bg-[var(--color-bg-card)] border-[var(--color-border-card)]';
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-6xl mx-auto w-full pb-12">
-      <div className="mb-6 md:mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)] mb-2">
-          명예의 전당
-        </h1>
-        <p className="text-[var(--color-text-secondary)]">
-          가장 활동적인 운동인들을 만나보세요
-        </p>
-      </div>
-
-      {/* 필터 */}
-      <div className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-4 md:p-6 mb-6">
-        {/* 연도 필터 */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">
-            연도
-          </label>
-          <div className="flex gap-2 flex-wrap">
-            {years.map((year) => (
-              <button
-                key={year}
-                onClick={() => setSelectedYear(year)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  selectedYear === year
-                    ? 'bg-[var(--color-blue-primary)] text-white'
-                    : 'bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] border border-[var(--color-border-card)] hover:bg-[var(--color-bg-secondary)]'
-                }`}
-              >
-                {year}년
-              </button>
-            ))}
+    <div className="flex flex-col flex-1 w-full min-h-0 bg-[var(--color-bg-primary)]">
+      {/* 히어로 섹션 (스포츠용품 스타일) */}
+      <header className="flex-shrink-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)]">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 md:py-12">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-3 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-xl">
+              <TrophyIcon className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-text-primary)]">
+              명예의 전당
+            </h1>
           </div>
-        </div>
-
-        {/* 지역 필터 */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">
-            지역
-          </label>
-          <div className="flex gap-2 flex-wrap">
-            {KOREAN_CITIES.map((city) => {
-              const displayName = city === '전체' ? '전국' : getRegionDisplayName(city);
-              return (
-                <button
-                  key={city}
-                  onClick={() => setSelectedRegion(city === '전체' ? '전국' : city)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    selectedRegion === (city === '전체' ? '전국' : city)
-                      ? 'bg-[var(--color-blue-primary)] text-white'
-                      : 'bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] border border-[var(--color-border-card)] hover:bg-[var(--color-bg-secondary)]'
-                  }`}
-                >
-                  {displayName}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* 운동 카테고리 필터 */}
-        <div>
-          <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">
-            <FunnelIcon className="w-4 h-4 inline mr-1" />
-            운동 카테고리
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {SPORTS_CATEGORIES.map((category) => (
-              <button
-                key={category}
-                onClick={() => setSelectedSport(category)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  selectedSport === category
-                    ? 'bg-[var(--color-blue-primary)] text-white'
-                    : 'bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] border border-[var(--color-border-card)] hover:bg-[var(--color-bg-secondary)]'
-                }`}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* 랭킹 목록 */}
-      {loading ? (
-        <div className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-12 text-center">
-          <p className="text-[var(--color-text-secondary)] text-lg">로딩 중...</p>
-        </div>
-      ) : rankings.length === 0 ? (
-        <div className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-12 text-center">
-          <TrophyOutlineIcon className="w-16 h-16 mx-auto text-[var(--color-text-secondary)] mb-4" />
-          <p className="text-[var(--color-text-secondary)] text-lg">
-            선택한 카테고리에 해당하는 랭킹 데이터가 없습니다.
+          <p className="text-[var(--color-text-secondary)] mb-6 max-w-2xl">
+            가장 활동적이고 뛰어난 운동인들의 기록을 확인하세요. 당신도 명예의 전당에 이름을 올릴 수 있습니다.
           </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {rankings.map((ranker) => (
-            <div
-              key={ranker.id}
-              onClick={() => setSelectedRanker(ranker)}
-              className={`flex items-center gap-4 p-4 rounded-xl border-2 ${getRankBackground(ranker.rank)} transition-all hover:scale-[1.02] cursor-pointer`}
-            >
-              {/* 순위 */}
-              <div className="flex-shrink-0 w-12 text-center">
-                {getRankIcon(ranker.rank)}
-              </div>
-
-              {/* 프로필 */}
-              <div className="flex-shrink-0">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
-                  {ranker.nickname.charAt(0)}
-                </div>
-              </div>
-
-              {/* 정보 */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-lg font-bold text-[var(--color-text-primary)]">
-                    {ranker.nickname}
-                    {ranker.tag && <span className="text-sm font-normal text-[var(--color-text-secondary)]">{ranker.tag}</span>}
-                  </h3>
-                  {ranker.badge && <span className="text-2xl">{ranker.badge}</span>}
-                  {ranker.rank <= 3 && (
-                    <FireIcon className="w-5 h-5 text-orange-500" />
-                  )}
-                  <span className="px-2 py-1 bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] text-xs rounded">
-                    {ranker.sportCategory}
+          {/* 내 순위 표시 (히어로 내부) */}
+          {myRank && myRank.rank !== null && (
+            <div className="inline-flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-400/30 rounded-xl">
+              <TrophyOutlineIcon className="w-6 h-6 text-[var(--color-blue-primary)]" />
+              <div>
+                <p className="text-xs text-[var(--color-text-secondary)]">나의 순위</p>
+                <p className="text-lg font-bold text-[var(--color-text-primary)]">
+                  {myRank.rank}위{' '}
+                  <span className="text-sm font-normal text-[var(--color-text-secondary)]">
+                    ({myRank.score.toLocaleString()}점)
                   </span>
-                  <span className="px-2 py-1 bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] text-xs rounded">
-                    {getRegionDisplayName(ranker.region)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-4 text-sm text-[var(--color-text-secondary)]">
-                  <span>{selectedYear}년</span>
-                  <span>총점: {ranker.score.toLocaleString()}점</span>
-                </div>
-              </div>
-
-              {/* 점수 */}
-              <div className="flex-shrink-0 text-right">
-                <div className="text-2xl font-bold text-[var(--color-text-primary)]">
-                  {ranker.score.toLocaleString()}
-                </div>
-                <div className="text-xs text-[var(--color-text-secondary)]">점</div>
+                </p>
               </div>
             </div>
-          ))}
+          )}
         </div>
-      )}
+      </header>
 
-      {/* 내 순위 표시 */}
-      {myRank && myRank.rank !== null && (
-        <div className="mt-8 p-4 bg-[var(--color-bg-card)] rounded-2xl border-2 border-[var(--color-blue-primary)]">
-          <div className="flex items-center justify-between">
+      {/* 메인: 좌측 사이드바 + 랭킹 그리드 */}
+      <div className="flex flex-1 min-h-0 max-w-7xl mx-auto w-full px-4 md:px-6 py-6">
+        {/* 좌측 필터 사이드바 (스포츠용품 스타일) */}
+        <aside
+          className={`flex-shrink-0 border-r border-[var(--color-border-card)] pr-6 transition-all duration-200 ${
+            sidebarOpen ? 'w-56 min-w-[14rem] md:w-64 md:min-w-[16rem]' : 'w-0 overflow-hidden pr-0 opacity-0'
+          }`}
+        >
+          <div className="sticky top-4 space-y-6">
+            <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
+              필터 <span className="text-[var(--color-text-secondary)] font-normal">({rankings.length})</span>
+            </h2>
+
+            {/* 연도 필터 (드롭다운) */}
             <div>
-              <p className="text-sm text-[var(--color-text-secondary)] mb-1">나의 순위</p>
-              <p className="text-2xl font-bold text-[var(--color-text-primary)]">
-                {myRank.rank}위{' '}
-                <span className="text-base font-normal text-[var(--color-text-secondary)]">
-                  ({myRank.score.toLocaleString()}점)
-                </span>
-              </p>
-              <p className="text-xs text-[var(--color-text-secondary)] mt-1">
-                {selectedYear}년 · {getRegionDisplayName(selectedRegion)} · {selectedSport === '전체' ? '전체' : selectedSport}
-              </p>
+              <p className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">연도</p>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="w-full py-2.5 pl-3 pr-8 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] appearance-none bg-no-repeat bg-[length:1rem_1rem] bg-[right_0.5rem_center]"
+                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")` }}
+              >
+                {years.map((year) => (
+                  <option key={year} value={year}>{year}년</option>
+                ))}
+              </select>
             </div>
-            <TrophyOutlineIcon className="w-12 h-12 text-[var(--color-blue-primary)]" />
+
+            {/* 지역 필터 */}
+            <div className="pt-4 border-t border-[var(--color-border-card)] min-w-0">
+              <p className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">지역</p>
+              <div className="space-y-1 max-h-64 overflow-y-auto overflow-x-hidden min-w-0">
+                {KOREAN_CITIES.map((city) => {
+                  const displayName = city === '전체' ? '전국' : getRegionDisplayName(city);
+                  const regionValue = city === '전체' ? '전국' : city;
+                  return (
+                    <button
+                      key={city}
+                      type="button"
+                      onClick={() => setSelectedRegion(regionValue)}
+                      className={`block w-full min-w-0 text-left py-2 px-3 text-sm rounded-lg transition-colors break-words whitespace-normal ${
+                        selectedRegion === regionValue
+                          ? 'font-semibold text-[var(--color-blue-primary)] bg-[var(--color-blue-primary)]/10'
+                          : 'text-[var(--color-text-primary)] hover:text-[var(--color-blue-primary)] hover:bg-[var(--color-bg-secondary)]'
+                      }`}
+                    >
+                      {displayName}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 운동 카테고리 필터 */}
+            <div className="pt-4 border-t border-[var(--color-border-card)]">
+              <p className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">
+                <FunnelIcon className="w-3.5 h-3.5 inline mr-1" />
+                운동 종목
+              </p>
+              <div className="space-y-1">
+                {SPORTS_CATEGORIES.map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => setSelectedSport(category)}
+                    className={`block w-full text-left py-2 px-3 text-sm rounded-lg transition-colors ${
+                      selectedSport === category
+                        ? 'font-semibold text-[var(--color-blue-primary)] bg-[var(--color-blue-primary)]/10'
+                        : 'text-[var(--color-text-primary)] hover:text-[var(--color-blue-primary)] hover:bg-[var(--color-bg-secondary)]'
+                    }`}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        </aside>
+
+        {/* 메인 콘텐츠: 툴바 + 랭킹 그리드 */}
+        <main className="flex-1 min-w-0 pl-6">
+          {/* 툴바: 필터 숨기기 / 정보 */}
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-primary)] hover:text-[var(--color-blue-primary)] transition-colors"
+            >
+              {sidebarOpen ? (
+                <>
+                  <XMarkIcon className="w-4 h-4" />
+                  필터 숨기기
+                </>
+              ) : (
+                <>
+                  <Bars3Icon className="w-4 h-4" />
+                  필터 보기
+                </>
+              )}
+            </button>
+            <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
+              <SparklesIcon className="w-4 h-4" />
+              <span>{selectedYear}년 · {getRegionDisplayName(selectedRegion)} · {selectedSport}</span>
+            </div>
+          </div>
+
+          {/* 랭킹 그리드 */}
+          {loading ? (
+            <div className="py-16 text-center text-[var(--color-text-secondary)]">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-[var(--color-border-card)] border-t-[var(--color-blue-primary)] mb-4"></div>
+              <p className="text-lg">로딩 중...</p>
+            </div>
+          ) : rankings.length === 0 ? (
+            <div className="py-16 text-center text-[var(--color-text-secondary)]">
+              <TrophyOutlineIcon className="w-16 h-16 mx-auto mb-4 opacity-30" />
+              <p className="text-lg">선택한 카테고리에 해당하는 랭킹 데이터가 없습니다.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3">
+              {rankings.map((ranker) => (
+                <div
+                  key={ranker.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedRanker(ranker)}
+                  onKeyDown={(e) => e.key === 'Enter' && setSelectedRanker(ranker)}
+                  className={`group flex items-center gap-4 p-4 md:p-5 rounded-xl border-2 ${getRankBackground(ranker.rank)} transition-all hover:shadow-lg hover:scale-[1.01] cursor-pointer`}
+                >
+                  {/* 순위 */}
+                  <div className="flex-shrink-0 w-12 h-12 flex items-center justify-center">
+                    {getRankIcon(ranker.rank)}
+                  </div>
+
+                  {/* 프로필 */}
+                  <div className="flex-shrink-0">
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg">
+                      {ranker.nickname.charAt(0)}
+                    </div>
+                  </div>
+
+                  {/* 정보 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <h3 className="text-lg font-bold text-[var(--color-text-primary)] group-hover:text-[var(--color-blue-primary)] transition-colors">
+                        {ranker.nickname}
+                      </h3>
+                      {ranker.tag && (
+                        <span className="text-sm font-normal text-[var(--color-text-secondary)]">{ranker.tag}</span>
+                      )}
+                      {ranker.badge && <span className="text-2xl">{ranker.badge}</span>}
+                      {ranker.rank <= 3 && (
+                        <FireIcon className="w-5 h-5 text-orange-500 animate-pulse" />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2.5 py-1 bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] text-xs rounded-lg font-medium">
+                        {ranker.sportCategory}
+                      </span>
+                      <span className="px-2.5 py-1 bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] text-xs rounded-lg font-medium">
+                        {getRegionDisplayName(ranker.region)}
+                      </span>
+                      <span className="text-xs text-[var(--color-text-secondary)]">
+                        {selectedYear}년
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 점수 */}
+                  <div className="flex-shrink-0 text-right">
+                    <div className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">
+                      {ranker.score.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider">점수</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </main>
+      </div>
 
       {/* 랭커 상세 정보 모달 */}
       {selectedRanker && (
@@ -293,4 +329,3 @@ const HallOfFamePage = () => {
 };
 
 export default HallOfFamePage;
-

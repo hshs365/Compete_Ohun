@@ -5,19 +5,30 @@ import { api } from '../utils/api';
 import { showError, showSuccess, showWarning, showConfirm } from '../utils/swal';
 import { isTeamSport, getMinParticipantsForSport, SPORT_TEAM_SIZE } from '../constants/sports';
 import { getEquipmentBySport } from '../constants/equipment';
+import { MATCH_TYPE_THEME } from './HomeMatchTypeChoice';
+import ToggleSwitch from './ToggleSwitch';
 
 // Step 컴포넌트들
 import Step1Category from './create-group/Step1Category';
 import Step2GameSettings from './create-group/Step2GameSettings';
+import Step2PositionSettings from './create-group/Step2PositionSettings';
+import Step2LevelSettings from './create-group/Step2LevelSettings';
 import Step3CommonSettings from './create-group/Step3CommonSettings';
 import Step4Equipment from './create-group/Step4Equipment';
 import Step5Review from './create-group/Step5Review';
+
+type MatchType = 'general' | 'rank' | 'event';
+type FreeMatchSubType = 'threeWay' | 'twoWay';
 
 interface MultiStepCreateGroupProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (groupData: Omit<SelectedGroup, 'id'>) => void;
   onSuccess?: () => void;
+  /** 진입 시 이미 선택된 종목 (있으면 카테고리 단계 생략) */
+  initialCategory?: string;
+  /** 진입 시 이미 선택된 매치 종류 (일반/랭크/이벤트) */
+  initialMatchType?: MatchType;
 }
 
 const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
@@ -25,32 +36,63 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
   onClose,
   onSubmit,
   onSuccess,
+  initialCategory,
+  initialMatchType = 'general',
 }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [mapKey, setMapKey] = useState(0);
-  const [mapZoom, setMapZoom] = useState(15);
+  // 주소 선택 후 팝업 지도: 대략적인 위치를 알 수 있도록 줌 아웃 (15→11, 카카오 레벨 기준)
+  const [mapZoom, setMapZoom] = useState(11);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [createdGroupId, setCreatedGroupId] = useState<number | null>(null);
   const [following, setFollowing] = useState<Array<{ id: number; nickname: string; tag?: string; profileImageUrl?: string }>>([]);
   const [selectedFollowers, setSelectedFollowers] = useState<number[]>([]);
   const [loadingFollowers, setLoadingFollowers] = useState(false);
+  const freeMatchSubTypeRef = useRef<FreeMatchSubType | null>(null);
+  /** 이전 정보 불러오기 토글 — ON일 때만 내 정보 주소·이전 매치 데이터 적용 */
+  const [loadPreviousInfo, setLoadPreviousInfo] = useState(false);
 
-  // 사용자 위치 가져오기
+  // 사용자 위치 가져오기 (좌표만)
   const getUserLocation = (): [number, number] => {
     try {
       const savedLocation = localStorage.getItem('userLocation');
       if (savedLocation) {
         const location = JSON.parse(savedLocation);
-        if (location.latitude && location.longitude) {
-          return [location.latitude, location.longitude];
+        if (location.latitude != null && location.longitude != null) {
+          return [Number(location.latitude), Number(location.longitude)];
         }
       }
     } catch (e) {
       // 무시
     }
     return [37.5665, 126.9780]; // 서울 시청 (기본값)
+  };
+
+  // 내 정보에 저장된 주소·좌표를 기본값으로 (매치 생성자 주소 디폴트)
+  const getDefaultLocation = (): { location: string; coordinates: [number, number] } => {
+    try {
+      const savedLocation = localStorage.getItem('userLocation');
+      if (savedLocation) {
+        const loc = JSON.parse(savedLocation);
+        const address = loc?.address;
+        const lat = loc?.latitude != null ? Number(loc.latitude) : null;
+        const lng = loc?.longitude != null ? Number(loc.longitude) : null;
+        if (typeof address === 'string' && address.trim() && !address.startsWith('위도:')) {
+          if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+            return { location: address.trim(), coordinates: [lat, lng] };
+          }
+          return { location: address.trim(), coordinates: getUserLocation() };
+        }
+        if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+          return { location: '', coordinates: [lat, lng] };
+        }
+      }
+    } catch (e) {
+      // 무시
+    }
+    return { location: '', coordinates: getUserLocation() };
   };
 
   // 오늘 날짜에 오후 6시를 기본값으로 설정
@@ -67,6 +109,45 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
 
   const defaultDateTime = getDefaultDateTime();
 
+  /** 모든 칸이 비어 있는 폼 상태 (이전 정보 불러오기 OFF일 때 사용) */
+  const getEmptyFormState = (keepInitial?: boolean) => {
+    const resetDateTime = getDefaultDateTime();
+    const category = keepInitial && initialCategory ? initialCategory : '';
+    const matchType = keepInitial && initialMatchType ? initialMatchType : 'general';
+    const gameType = matchType === 'general' && category === '축구' ? 'individual' : 'team';
+    const minP = category && matchType === 'general' && category !== '축구' ? (getMinParticipantsForSport(category)?.toString() ?? '') : '';
+    return {
+      category,
+      name: '',
+      location: '',
+      coordinates: getUserLocation(),
+      meetingDate: resetDateTime.date,
+      meetingTime: resetDateTime.time,
+      minParticipants: minP,
+      maxParticipants: '',
+      genderRestriction: null as 'male' | 'female' | null,
+      hasFee: false,
+      feeAmount: '',
+      facilityId: null as number | null,
+      selectedFacility: null as { id: number; name: string; address: string } | null,
+      reservationId: null as number | null,
+      description: '',
+      equipment: [] as string[],
+      gameType,
+      matchType: matchType as MatchType,
+      freeMatchSubType: null as FreeMatchSubType | null,
+      teamSettings: {
+        positions: [] as string[],
+        balanceByExperience: false,
+        balanceByRank: false,
+        minPlayersPerTeam: 1,
+        creatorPositionCode: '',
+        creatorSlotLabel: '',
+        creatorTeam: 'red' as 'red' | 'blue',
+      },
+    };
+  };
+
   // 전체 폼 데이터
   const [formData, setFormData] = useState({
     category: '',
@@ -82,16 +163,74 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
     feeAmount: '',
     facilityId: null as number | null,
     selectedFacility: null as { id: number; name: string; address: string } | null,
+    reservationId: null as number | null,
     description: '',
     equipment: [] as string[],
     gameType: 'team' as 'team' | 'individual',
+    matchType: 'general' as MatchType,
+    freeMatchSubType: null as FreeMatchSubType | null,
     teamSettings: {
       positions: [] as string[],
       balanceByExperience: false,
       balanceByRank: false,
       minPlayersPerTeam: 1,
+      creatorPositionCode: '' as string,
+      creatorSlotLabel: '' as string,
+      creatorTeam: 'red' as 'red' | 'blue',
     },
   });
+
+  /** API에서 이전 그룹 목록 가져와 localStorage에 저장한 뒤, 해당 카테고리 이전 예약 적용 */
+  const runLoadPreviousGroup = async (categoryToLoad: string) => {
+    try {
+      const myGroups = await api.get<Array<{
+        id: number;
+        name: string;
+        location: string;
+        latitude: number;
+        longitude: number;
+        category: string;
+        description: string | null;
+        meetingTime: string | null;
+        equipment: string[];
+        maxParticipants: number | null;
+        minParticipants: number | null;
+        hasFee: boolean;
+        feeAmount: number | null;
+        facilityId: number | null;
+      }>>('/api/groups/my-groups');
+      if (myGroups?.length > 0) {
+        const resetDateTime = getDefaultDateTime();
+        myGroups.forEach((group) => {
+          const latitude = typeof group.latitude === 'string' ? parseFloat(group.latitude) : Number(group.latitude);
+          const longitude = typeof group.longitude === 'string' ? parseFloat(group.longitude) : Number(group.longitude);
+          if (!isNaN(latitude) && !isNaN(longitude)) {
+            const bookingData = {
+              category: group.category,
+              name: group.name,
+              location: group.location,
+              coordinates: [latitude, longitude] as [number, number],
+              meetingDate: resetDateTime.date,
+              meetingTime: resetDateTime.time,
+              minParticipants: group.minParticipants ? group.minParticipants.toString() : '',
+              maxParticipants: group.maxParticipants ? group.maxParticipants.toString() : '',
+              hasFee: group.hasFee || false,
+              feeAmount: group.feeAmount ? group.feeAmount.toString() : '',
+              facilityId: group.facilityId || null,
+              selectedFacility: null,
+              reservationId: null,
+              description: group.description || '',
+              equipment: group.equipment || [],
+            };
+            localStorage.setItem(`lastGroupBooking_${group.category}`, JSON.stringify(bookingData));
+          }
+        });
+      }
+      if (categoryToLoad) loadPreviousBooking(categoryToLoad);
+    } catch (e) {
+      if (categoryToLoad) loadPreviousBooking(categoryToLoad);
+    }
+  };
 
   // 이전 예약 내역 불러오기 (localStorage에서, 카테고리별)
   const loadPreviousBooking = (category: string) => {
@@ -103,11 +242,11 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
         const booking = JSON.parse(savedBooking);
         const resetDateTime = getDefaultDateTime();
         
-        // 해당 카테고리의 데이터로 완전히 교체 (카테고리 변경 시 다른 카테고리 데이터가 남지 않도록)
+        // 해당 카테고리의 데이터로 완전히 교체 (freeMatchSubType 등 현재 단계 선택값은 유지)
         setFormData((prev) => ({
           ...prev,
-          category: category, // 현재 선택된 카테고리 유지
-          name: booking.name || '', // 다른 카테고리의 이름이 남지 않도록 빈 문자열로 초기화
+          category: category,
+          name: booking.name || '',
           location: booking.location || prev.location,
           coordinates: booking.coordinates || prev.coordinates,
           meetingDate: booking.meetingDate || resetDateTime.date,
@@ -119,10 +258,12 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
           feeAmount: booking.feeAmount || '',
           facilityId: booking.facilityId || null,
           selectedFacility: booking.selectedFacility || null,
+          reservationId: booking.reservationId ?? null,
           description: booking.description || '',
           equipment: booking.equipment || [],
           gameType: booking.gameType || prev.gameType,
           teamSettings: booking.teamSettings || prev.teamSettings,
+          freeMatchSubType: prev.freeMatchSubType,
         }));
         
         if (booking.coordinates) {
@@ -130,12 +271,13 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
           setMapKey((prev) => prev + 1);
         }
       } else {
-        // 해당 카테고리의 저장된 데이터가 없으면 기본값으로 초기화 (다른 카테고리 데이터가 남지 않도록)
+        // 해당 카테고리의 저장된 데이터가 없으면 기본값으로 초기화 (위치는 내 정보 주소 유지)
         const resetDateTime = getDefaultDateTime();
+        const defaultLoc = getDefaultLocation();
         setFormData((prev) => ({
           ...prev,
           category: category,
-          name: '', // 다른 카테고리의 이름이 남지 않도록 초기화
+          name: '',
           description: '',
           equipment: [],
           minParticipants: '',
@@ -145,6 +287,9 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
           feeAmount: '',
           facilityId: null,
           selectedFacility: null,
+          reservationId: null,
+          location: prev.location || defaultLoc.location,
+          coordinates: (prev.coordinates[0] && prev.coordinates[1]) ? prev.coordinates : defaultLoc.coordinates,
         }));
       }
     } catch (error) {
@@ -156,113 +301,46 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
   useEffect(() => {
     if (!isOpen) {
       setCurrentStep(1);
-      const resetDateTime = getDefaultDateTime();
-      setFormData({
-        category: '',
-        name: '',
-        location: '',
-        coordinates: getUserLocation(),
-        meetingDate: resetDateTime.date,
-        meetingTime: resetDateTime.time,
-        minParticipants: '',
-        maxParticipants: '',
-        hasFee: false,
-        feeAmount: '',
-        facilityId: null,
-        selectedFacility: null,
-        description: '',
-        equipment: [],
-        gameType: 'team',
-        teamSettings: {
-          positions: [],
-          balanceByExperience: false,
-          balanceByRank: false,
-          minPlayersPerTeam: 1,
-        },
-      });
+      setLoadPreviousInfo(false);
+      setFormData(getEmptyFormState(false));
       setShowMap(false);
       return;
     }
 
-    // 이전 그룹 데이터 불러오기 (API에서) - 모든 카테고리의 데이터를 localStorage에 저장만 함
-    const loadPreviousGroup = async () => {
-      try {
-        const myGroups = await api.get<Array<{
-          id: number;
-          name: string;
-          location: string;
-          latitude: number;
-          longitude: number;
-          category: string;
-          description: string | null;
-          meetingTime: string | null;
-          equipment: string[];
-          maxParticipants: number | null;
-          minParticipants: number | null;
-          hasFee: boolean;
-          feeAmount: number | null;
-          facilityId: number | null;
-        }>>('/api/groups/my-groups');
+    // 모달이 열리면 기본은 빈 폼 (이전 정보 불러오기 OFF). initialCategory/initialMatchType만 유지
+    setFormData(getEmptyFormState(true));
 
-        if (myGroups && myGroups.length > 0) {
-          const resetDateTime = getDefaultDateTime();
-          
-          // 각 그룹을 카테고리별로 localStorage에 저장
-          myGroups.forEach((group) => {
-            const latitude = typeof group.latitude === 'string' 
-              ? parseFloat(group.latitude) 
-              : Number(group.latitude);
-            const longitude = typeof group.longitude === 'string' 
-              ? parseFloat(group.longitude) 
-              : Number(group.longitude);
-            
-            if (!isNaN(latitude) && !isNaN(longitude)) {
-              const bookingData = {
-                category: group.category,
-                name: group.name,
-                location: group.location,
-                coordinates: [latitude, longitude] as [number, number],
-                meetingDate: resetDateTime.date,
-                meetingTime: resetDateTime.time,
-                minParticipants: group.minParticipants ? group.minParticipants.toString() : '',
-                maxParticipants: group.maxParticipants ? group.maxParticipants.toString() : '',
-                hasFee: group.hasFee || false,
-                feeAmount: group.feeAmount ? group.feeAmount.toString() : '',
-                facilityId: group.facilityId || null,
-                selectedFacility: null,
-                description: group.description || '',
-                equipment: group.equipment || [],
-              };
-              // 카테고리별로 저장
-              localStorage.setItem(`lastGroupBooking_${group.category}`, JSON.stringify(bookingData));
-            }
-          });
-        }
-        
-        // API에서 데이터를 가져온 후, 현재 선택된 카테고리의 데이터를 불러오기
-        if (formData.category) {
-          loadPreviousBooking(formData.category);
-        }
-      } catch (error) {
-        console.log('이전 그룹 데이터를 불러올 수 없습니다:', error);
-        // API 실패 시 localStorage에서 불러오기 (현재 카테고리 기준)
-        if (formData.category) {
-          loadPreviousBooking(formData.category);
-        }
-      }
-    };
+    if (initialCategory && initialMatchType) {
+      freeMatchSubTypeRef.current = null;
+      const minP = initialMatchType === 'general' && initialCategory === '축구' ? '' : (getMinParticipantsForSport(initialCategory)?.toString() ?? '');
+      setFormData((prev) => ({
+        ...prev,
+        category: initialCategory,
+        matchType: initialMatchType,
+        gameType: initialMatchType === 'general' && initialCategory === '축구' ? 'individual' : prev.gameType,
+        minParticipants: minP,
+        freeMatchSubType: null,
+      }));
+      setCurrentStep(1);
+    }
 
-    loadPreviousGroup();
+    if (loadPreviousInfo) {
+      const defaultLoc = getDefaultLocation();
+      setFormData((prev) => ({
+        ...prev,
+        location: defaultLoc.location,
+        coordinates: defaultLoc.coordinates,
+      }));
+      runLoadPreviousGroup(initialCategory || formData.category || '');
+    }
   }, [isOpen]);
 
-  // 카테고리 변경 시 해당 카테고리의 이전 데이터 불러오기
+  // 카테고리 변경 시 — 이전 정보 불러오기가 켜져 있을 때만 해당 카테고리 저장 데이터 적용
   useEffect(() => {
-    if (isOpen && formData.category) {
-      // 카테고리가 변경되면 해당 카테고리의 데이터만 불러오기
-      // 기존 데이터는 유지하되, 해당 카테고리의 저장된 데이터로 덮어쓰기
+    if (!isOpen) return;
+    if (loadPreviousInfo && formData.category) {
       loadPreviousBooking(formData.category);
-    } else if (isOpen && !formData.category) {
-      // 카테고리가 없으면 기본값으로 초기화
+    } else if (!formData.category) {
       const resetDateTime = getDefaultDateTime();
       setFormData((prev) => ({
         ...prev,
@@ -277,11 +355,12 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
         feeAmount: '',
         facilityId: null,
         selectedFacility: null,
+        reservationId: null,
         description: '',
         equipment: [],
       }));
     }
-  }, [formData.category, isOpen]);
+  }, [formData.category, isOpen, loadPreviousInfo]);
 
   // 카테고리 변경 시 준비물 목록 업데이트
   useEffect(() => {
@@ -294,8 +373,16 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
     }
   }, [formData.category]);
 
-  // 총 단계 수 (팀 게임이면 5단계, 개인 운동이면 4단계)
-  const totalSteps = formData.category && isTeamSport(formData.category) ? 5 : 4;
+  const skipCategoryStep = Boolean(initialCategory && initialMatchType);
+  const isFootballGeneral = formData.category === '축구' && formData.matchType === 'general';
+  const hasPositionStep = formData.category === '축구' && formData.gameType === 'team' && formData.matchType !== 'general';
+  const hasLevelStep = formData.category === '축구' && formData.gameType === 'individual' && formData.matchType !== 'general';
+  const isFootballSixSteps = hasPositionStep || hasLevelStep;
+  const totalSteps = skipCategoryStep && isFootballGeneral
+    ? 4
+    : isFootballSixSteps
+      ? (skipCategoryStep ? 5 : 6)
+      : (formData.category && isTeamSport(formData.category) ? (skipCategoryStep ? 4 : 5) : (skipCategoryStep ? 3 : 4));
 
   // 다음 단계로 이동
   const handleNext = () => {
@@ -311,34 +398,123 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
     }
   };
 
-  // 각 단계별 유효성 검사
+  const isCommonStepForValidate = skipCategoryStep && isFootballGeneral
+    ? (step: number) => step === 2
+    : isFootballSixSteps
+      ? (step: number) => step === 4
+      : (step: number) => step === 3;
+  const isPositionStepForValidate = hasPositionStep
+    ? (skipCategoryStep ? (step: number) => step === 2 : (step: number) => step === 3)
+    : () => false;
+
   const validateStep = async (step: number): Promise<boolean> => {
-    switch (step) {
-      case 1:
-        if (!formData.category) {
-          await showError('운동 종류를 선택해주세요.', '카테고리 선택 필요');
+    const isPositionStep = isPositionStepForValidate(step);
+    const isCommonStep = isCommonStepForValidate(step);
+
+    if (skipCategoryStep && isFootballGeneral) {
+      if (step === 1) {
+        const effectiveFree = formData.freeMatchSubType ?? freeMatchSubTypeRef.current;
+        if (!effectiveFree) {
+          await showWarning('3파전 또는 2파전을 선택해 주세요.', '매치 방식 선택');
           return false;
         }
         return true;
-      case 2:
-        // 팀 게임이 아니면 건너뛰기
-        if (!isTeamSport(formData.category)) {
-          return true;
-        }
-        return true;
-      case 3:
+      }
+      if (step === 2) {
         if (!formData.location || formData.location.trim() === '') {
-          await showWarning('위치를 선택해주세요. 주소 찾기 버튼을 클릭하거나 지도에서 마커를 드래그하여 위치를 선택하세요.', '위치 선택 필요');
+          await showWarning('위치를 선택해주세요.', '위치 선택 필요');
+          return false;
+        }
+        if (formData.reservationId == null) {
+          await showWarning('시설 예약을 먼저 진행해 주세요. 시설을 선택한 뒤 예약 가능한 시간에서 예약해 주세요.', '시설 예약 필수');
           return false;
         }
         if (!formData.name || formData.name.trim() === '') {
           await showError('매치 이름을 입력해주세요.', '매치 이름 필요');
           return false;
         }
+        if (!formData.meetingDate || !formData.meetingTime) {
+          await showWarning('매치 일정(날짜·시간)을 선택해주세요.', '매치 일정 필수');
+          return false;
+        }
+        const meetingDt = new Date(`${formData.meetingDate}T${formData.meetingTime}:00`);
+        const minAllowed = new Date(Date.now() + 2 * 60 * 60 * 1000);
+        if (meetingDt.getTime() < minAllowed.getTime()) {
+          await showWarning('모임 일시는 현재 시각으로부터 최소 2시간 이후로 설정해 주세요.', '일정 제한');
+          return false;
+        }
+        return true;
+      }
+      return true;
+    }
+
+    switch (step) {
+      case 1:
+        if (!skipCategoryStep && !formData.category) {
+          await showError('운동 종류를 선택해주세요.', '카테고리 선택 필요');
+          return false;
+        }
+        return true;
+      case 2:
+        return true;
+      case 3:
+        if (isPositionStep) {
+          if (!formData.teamSettings.creatorPositionCode || formData.teamSettings.creatorPositionCode.trim() === '') {
+            await showWarning('모임장이 참가할 포지션을 선택해 주세요.', '포지션 선택 필요');
+            return false;
+          }
+          return true;
+        }
+        if (isCommonStep) {
+          if (!formData.location || formData.location.trim() === '') {
+            await showWarning('위치를 선택해주세요.', '위치 선택 필요');
+            return false;
+          }
+          if (formData.reservationId == null) {
+            await showWarning('시설 예약을 먼저 진행해 주세요. 시설을 선택한 뒤 예약 가능한 시간에서 예약해 주세요.', '시설 예약 필수');
+            return false;
+          }
+          if (!formData.name || formData.name.trim() === '') {
+            await showError('매치 이름을 입력해주세요.', '매치 이름 필요');
+            return false;
+          }
+          if (!formData.meetingDate || !formData.meetingTime) {
+            await showWarning('매치 일정(날짜·시간)을 선택해주세요.', '매치 일정 필수');
+            return false;
+          }
+          const meetingDt = new Date(`${formData.meetingDate}T${formData.meetingTime}:00`);
+          const minAllowed = new Date(Date.now() + 2 * 60 * 60 * 1000);
+          if (meetingDt.getTime() < minAllowed.getTime()) {
+            await showWarning('모임 일시는 현재 시각으로부터 최소 2시간 이후로 설정해 주세요.', '일정 제한');
+            return false;
+          }
+        }
         return true;
       case 4:
-        return true;
-      case 5:
+        if (isCommonStep) {
+          if (!formData.location || formData.location.trim() === '') {
+            await showWarning('위치를 선택해주세요.', '위치 선택 필요');
+            return false;
+          }
+          if (formData.reservationId == null) {
+            await showWarning('시설 예약을 먼저 진행해 주세요. 시설을 선택한 뒤 예약 가능한 시간에서 예약해 주세요.', '시설 예약 필수');
+            return false;
+          }
+          if (!formData.name || formData.name.trim() === '') {
+            await showError('매치 이름을 입력해주세요.', '매치 이름 필요');
+            return false;
+          }
+          if (!formData.meetingDate || !formData.meetingTime) {
+            await showWarning('매치 일정(날짜·시간)을 선택해주세요.', '매치 일정 필수');
+            return false;
+          }
+          const meetingDt4 = new Date(`${formData.meetingDate}T${formData.meetingTime}:00`);
+          const minAllowed4 = new Date(Date.now() + 2 * 60 * 60 * 1000);
+          if (meetingDt4.getTime() < minAllowed4.getTime()) {
+            await showWarning('모임 일시는 현재 시각으로부터 최소 2시간 이후로 설정해 주세요.', '일정 제한');
+            return false;
+          }
+        }
         return true;
       default:
         return true;
@@ -443,6 +619,16 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
         return;
       }
 
+      // 일정 입력 시 최소 2시간 이후만 허용
+      if (meetingDateTime) {
+        const minAllowed = new Date(Date.now() + 2 * 60 * 60 * 1000);
+        if (meetingDateTime.getTime() < minAllowed.getTime()) {
+          await showWarning('모임 일시는 현재 시각으로부터 최소 2시간 이후로 설정해 주세요.', '일정 제한');
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       const groupData: any = {
         name: formData.name,
         location: formData.location,
@@ -477,6 +663,9 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
           minPlayersPerTeam: formData.teamSettings.minPlayersPerTeam || undefined,
           balanceByExperience: formData.teamSettings.balanceByExperience || undefined,
           balanceByRank: formData.teamSettings.balanceByRank || undefined,
+          creatorPositionCode: formData.teamSettings.creatorPositionCode || undefined,
+          creatorSlotLabel: formData.teamSettings.creatorSlotLabel || undefined,
+          creatorTeam: formData.teamSettings.creatorTeam || undefined,
         };
       }
 
@@ -526,6 +715,7 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
         feeAmount: formData.feeAmount,
         facilityId: formData.facilityId,
         selectedFacility: formData.selectedFacility,
+        reservationId: formData.reservationId,
         description: formData.description,
         equipment: formData.equipment,
         gameType: formData.gameType,
@@ -562,6 +752,9 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
 
   if (!isOpen) return null;
 
+  const modalMatchType = formData.matchType || initialMatchType;
+  const modalAccentHex = MATCH_TYPE_THEME[modalMatchType]?.accentHex ?? MATCH_TYPE_THEME.general.accentHex;
+
   return (
     <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
       <div
@@ -572,11 +765,14 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
         <div className="sticky top-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)] p-4 md:p-6 flex items-center justify-between z-10">
           <div>
             <h2 className="text-xl md:text-2xl font-bold text-[var(--color-text-primary)]">
-              새 매치 만들기
+              {(() => {
+                const category = formData.category || initialCategory;
+                const matchTypeVal = formData.matchType || initialMatchType;
+                const matchTypeLabel = matchTypeVal === 'general' ? '일반 매치' : matchTypeVal === 'rank' ? '랭크매치' : matchTypeVal === 'event' ? '이벤트매치' : null;
+                if (category && matchTypeLabel) return `${category} · ${matchTypeLabel} 생성`;
+                return '새 매치 만들기';
+              })()}
             </h2>
-            <p className="text-sm text-[var(--color-text-secondary)] mt-1">
-              {currentStep} / {totalSteps} 단계
-            </p>
           </div>
           <button
             onClick={onClose}
@@ -590,20 +786,19 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
         <div className="px-4 md:px-6 pt-4">
           <div className="w-full bg-[var(--color-bg-secondary)] rounded-full h-2">
             <div
-              className="bg-[var(--color-blue-primary)] h-2 rounded-full transition-all duration-300"
-              style={{ width: `${(currentStep / totalSteps) * 100}%` }}
+              className="h-2 rounded-full transition-all duration-300"
+              style={{ width: `${(currentStep / totalSteps) * 100}%`, backgroundColor: modalAccentHex }}
             />
           </div>
         </div>
 
         {/* 폼 내용 */}
         <div className="p-4 md:p-6">
-          {/* Step 1: 카테고리 선택 */}
-          {currentStep === 1 && (
+          {/* Step 1: 카테고리 선택 (진입 시 종목·매치타입이 정해진 경우 생략) */}
+          {!skipCategoryStep && currentStep === 1 && (
             <Step1Category
               category={formData.category}
               onCategoryChange={(category) => {
-                // 카테고리 변경 시 최소인원 자동 설정
                 const minParticipants = getMinParticipantsForSport(category);
                 const defaultMinPlayersPerTeam = isTeamSport(category)
                   ? (SPORT_TEAM_SIZE[category] || 1)
@@ -621,20 +816,47 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
             />
           )}
 
-          {/* Step 2: 게임 설정 */}
-          {currentStep === 2 && (
+          {/* Step 1(스킵 시) / Step 2: 게임 설정 — 일반+축구는 3파전/2파전만 */}
+          {((skipCategoryStep && currentStep === 1) || (!skipCategoryStep && currentStep === 2)) && (
             <Step2GameSettings
               category={formData.category}
               gameType={formData.gameType}
               onGameTypeChange={(gameType) => setFormData((prev) => ({ ...prev, gameType }))}
               teamSettings={formData.teamSettings}
               onTeamSettingsChange={(teamSettings) => setFormData((prev) => ({ ...prev, teamSettings }))}
+              onlyMatchType={formData.category === '축구'}
+              matchType={formData.matchType}
+              accentHex={modalAccentHex}
+              freeMatchSubType={formData.freeMatchSubType}
+              onFreeMatchSubTypeChange={(v) => {
+                freeMatchSubTypeRef.current = v;
+                setFormData((prev) => ({
+                  ...prev,
+                  freeMatchSubType: v,
+                  minParticipants: v === 'threeWay' ? '33' : prev.minParticipants,
+                }));
+              }}
             />
           )}
 
-          {/* Step 3: 공통 설정 */}
-          {currentStep === 3 && (
+          {/* Step 3: 축구 포지션 지정 → 포지션/팀 설정 (랭크만), 축구 자유 → 경기 레벨 (랭크만), 그 외 → 공통 설정 */}
+          {(skipCategoryStep ? currentStep === 2 : currentStep === 3) && hasPositionStep && (
+            <Step2PositionSettings
+              category={formData.category}
+              teamSettings={formData.teamSettings}
+              onTeamSettingsChange={(teamSettings) => setFormData((prev) => ({ ...prev, teamSettings }))}
+            />
+          )}
+          {(skipCategoryStep ? currentStep === 2 : currentStep === 3) && hasLevelStep && (
+            <Step2LevelSettings
+              category={formData.category}
+              teamSettings={formData.teamSettings}
+              onTeamSettingsChange={(teamSettings) => setFormData((prev) => ({ ...prev, teamSettings }))}
+            />
+          )}
+          {(skipCategoryStep ? currentStep === 2 : currentStep === 3) && !hasPositionStep && !hasLevelStep && !isFootballGeneral && (
             <Step3CommonSettings
+              category={formData.category}
               name={formData.name}
               onNameChange={(name) => setFormData((prev) => ({ ...prev, name }))}
               location={formData.location}
@@ -675,6 +897,8 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
               onSelectedFacilityChange={(facility) =>
                 setFormData((prev) => ({ ...prev, selectedFacility: facility }))
               }
+              reservationId={formData.reservationId}
+              onReservationIdChange={(id) => setFormData((prev) => ({ ...prev, reservationId: id }))}
               showMap={showMap}
               onToggleMap={() => setShowMap(!showMap)}
               mapKey={mapKey}
@@ -683,8 +907,119 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
             />
           )}
 
-          {/* Step 4: 준비물 및 설명 */}
-          {currentStep === 4 && (
+          {/* Step 2(축구+일반) / Step 4(축구 6단계): 매치 기본 정보 */}
+          {((skipCategoryStep && isFootballGeneral && currentStep === 2) || (!skipCategoryStep && currentStep === 4 && isFootballSixSteps)) && (
+            <Step3CommonSettings
+              category={formData.category}
+              name={formData.name}
+              onNameChange={(name) => setFormData((prev) => ({ ...prev, name }))}
+              location={formData.location}
+              coordinates={formData.coordinates}
+              onLocationChange={(location, coordinates) =>
+                setFormData((prev) => ({ ...prev, location, coordinates }))
+              }
+              meetingDate={formData.meetingDate}
+              meetingTime={formData.meetingTime}
+              onDateTimeChange={(date, time) =>
+                setFormData((prev) => ({ ...prev, meetingDate: date, meetingTime: time }))
+              }
+              minParticipants={formData.minParticipants}
+              onMinParticipantsChange={(value) =>
+                setFormData((prev) => ({ ...prev, minParticipants: value }))
+              }
+              maxParticipants={formData.maxParticipants}
+              onMaxParticipantsChange={(value) =>
+                setFormData((prev) => ({ ...prev, maxParticipants: value }))
+              }
+              genderRestriction={formData.genderRestriction}
+              onGenderRestrictionChange={(gender) =>
+                setFormData((prev) => ({ ...prev, genderRestriction: gender }))
+              }
+              hasFee={formData.hasFee}
+              onHasFeeChange={(hasFee) =>
+                setFormData((prev) => ({ ...prev, hasFee, feeAmount: hasFee ? prev.feeAmount : '' }))
+              }
+              feeAmount={formData.feeAmount}
+              onFeeAmountChange={(value) =>
+                setFormData((prev) => ({ ...prev, feeAmount: value }))
+              }
+              facilityId={formData.facilityId}
+              onFacilityIdChange={(facilityId) =>
+                setFormData((prev) => ({ ...prev, facilityId }))
+              }
+              selectedFacility={formData.selectedFacility}
+              onSelectedFacilityChange={(facility) =>
+                setFormData((prev) => ({ ...prev, selectedFacility: facility }))
+              }
+              reservationId={formData.reservationId}
+              onReservationIdChange={(id) => setFormData((prev) => ({ ...prev, reservationId: id }))}
+              showMap={showMap}
+              onToggleMap={() => setShowMap(!showMap)}
+              mapKey={mapKey}
+              mapZoom={mapZoom}
+              onMarkerDragEnd={handleMarkerDragEnd}
+              hideDescription={skipCategoryStep || isFootballGeneral}
+              timeStepHourOnly={isFootballGeneral}
+              defaultMinParticipants={formData.freeMatchSubType === 'threeWay' ? 33 : undefined}
+            />
+          )}
+
+          {/* Step 4: 축구 6단계일 때 공통 설정 (기존 플로우) */}
+          {!skipCategoryStep && currentStep === 4 && isFootballSixSteps && (
+            <Step3CommonSettings
+              category={formData.category}
+              name={formData.name}
+              onNameChange={(name) => setFormData((prev) => ({ ...prev, name }))}
+              location={formData.location}
+              coordinates={formData.coordinates}
+              onLocationChange={(location, coordinates) =>
+                setFormData((prev) => ({ ...prev, location, coordinates }))
+              }
+              meetingDate={formData.meetingDate}
+              meetingTime={formData.meetingTime}
+              onDateTimeChange={(date, time) =>
+                setFormData((prev) => ({ ...prev, meetingDate: date, meetingTime: time }))
+              }
+              minParticipants={formData.minParticipants}
+              onMinParticipantsChange={(value) =>
+                setFormData((prev) => ({ ...prev, minParticipants: value }))
+              }
+              maxParticipants={formData.maxParticipants}
+              onMaxParticipantsChange={(value) =>
+                setFormData((prev) => ({ ...prev, maxParticipants: value }))
+              }
+              genderRestriction={formData.genderRestriction}
+              onGenderRestrictionChange={(gender) =>
+                setFormData((prev) => ({ ...prev, genderRestriction: gender }))
+              }
+              hasFee={formData.hasFee}
+              onHasFeeChange={(hasFee) =>
+                setFormData((prev) => ({ ...prev, hasFee, feeAmount: hasFee ? prev.feeAmount : '' }))
+              }
+              feeAmount={formData.feeAmount}
+              onFeeAmountChange={(value) =>
+                setFormData((prev) => ({ ...prev, feeAmount: value }))
+              }
+              facilityId={formData.facilityId}
+              onFacilityIdChange={(facilityId) =>
+                setFormData((prev) => ({ ...prev, facilityId }))
+              }
+              selectedFacility={formData.selectedFacility}
+              onSelectedFacilityChange={(facility) =>
+                setFormData((prev) => ({ ...prev, selectedFacility: facility }))
+              }
+              reservationId={formData.reservationId}
+              onReservationIdChange={(id) => setFormData((prev) => ({ ...prev, reservationId: id }))}
+              showMap={showMap}
+              onToggleMap={() => setShowMap(!showMap)}
+              mapKey={mapKey}
+              mapZoom={mapZoom}
+              onMarkerDragEnd={handleMarkerDragEnd}
+            />
+          )}
+
+          {/* Step 3(축구+일반) / Step 4(다른 팀 종목) / Step 5(축구 6단계): 준비물 및 설명 */}
+          {((skipCategoryStep && isFootballGeneral && currentStep === 3) || (currentStep === 4 && !isFootballSixSteps) || (currentStep === 5 && isFootballSixSteps)) && (
             <Step4Equipment
               category={formData.category}
               selectedEquipment={formData.equipment}
@@ -696,6 +1031,14 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
                     : [...prev.equipment, equipment],
                 }));
               }}
+              onEquipmentAdd={(item) => {
+                const trimmed = item.trim();
+                if (!trimmed) return;
+                setFormData((prev) => ({
+                  ...prev,
+                  equipment: prev.equipment.includes(trimmed) ? prev.equipment : [...prev.equipment, trimmed],
+                }));
+              }}
               description={formData.description}
               onDescriptionChange={(description) => 
                 setFormData((prev) => ({ ...prev, description }))
@@ -703,8 +1046,8 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
             />
           )}
 
-          {/* Step 5: 최종 확인 (팀 게임인 경우만) */}
-          {currentStep === 5 && (
+          {/* Step 4(축구+일반) / Step 5(다른 팀 종목) / Step 6(축구 6단계): 최종 확인 */}
+          {((skipCategoryStep && isFootballGeneral && currentStep === 4) || (currentStep === 5 && !isFootballSixSteps) || (currentStep === 6 && isFootballSixSteps)) && (
             <Step5Review
               category={formData.category}
               name={formData.name}
@@ -741,7 +1084,8 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
             <button
               type="button"
               onClick={handleNextClick}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-[var(--color-blue-primary)] text-white rounded-lg font-semibold hover:opacity-90 transition-opacity"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 text-white rounded-lg font-semibold hover:opacity-90 transition-opacity"
+              style={{ backgroundColor: modalAccentHex }}
             >
               다음
               <ChevronRightIcon className="w-5 h-5" />
@@ -751,10 +1095,39 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
               type="button"
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="flex-1 px-4 py-3 bg-[var(--color-blue-primary)] text-white rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-3 text-white rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ backgroundColor: modalAccentHex }}
             >
               {isSubmitting ? '생성 중...' : '매치 만들기'}
             </button>
+          )}
+        </div>
+
+        {/* 이전 정보 불러오기 토글 — 모달 하단 */}
+        <div className="px-4 md:px-6 py-3 border-t border-[var(--color-border-card)]">
+          <ToggleSwitch
+            label="이전 정보 불러오기"
+            isOn={loadPreviousInfo}
+            handleToggle={() => {
+              if (loadPreviousInfo) {
+                setLoadPreviousInfo(false);
+                setFormData(getEmptyFormState(Boolean(initialCategory && initialMatchType)));
+              } else {
+                setLoadPreviousInfo(true);
+                const defaultLoc = getDefaultLocation();
+                setFormData((prev) => ({
+                  ...prev,
+                  location: defaultLoc.location,
+                  coordinates: defaultLoc.coordinates,
+                }));
+                runLoadPreviousGroup(initialCategory || formData.category || '');
+              }
+            }}
+          />
+          {loadPreviousInfo && (
+            <p className="text-xs text-[var(--color-text-secondary)] mt-1">
+              내 정보 주소와 이전에 생성한 매치 정보가 적용됩니다.
+            </p>
           )}
         </div>
       </div>

@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../utils/api';
 import { SPORTS_LIST } from '../constants/sports';
+import { SPORTS_WITH_POSITIONS, getPositionsBySport, getPositionLabel } from '../constants/positions';
 import { useNavigate } from 'react-router-dom';
 import { showWarning, showError } from '../utils/swal';
 
@@ -44,7 +45,8 @@ const WelcomeGuide: React.FC<WelcomeGuideProps> = ({ onClose }) => {
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isAthlete, setIsAthlete] = useState<boolean>(false);
   const [selectedSports, setSelectedSports] = useState<string[]>([]);
-  
+  const [sportPositions, setSportPositions] = useState<{ sport: string; positions: string[] }[]>([]);
+
   // SPORTS_LIST를 그대로 사용 (정렬 순서 통일)
   const sortedSports = SPORTS_LIST;
 
@@ -234,6 +236,9 @@ const WelcomeGuide: React.FC<WelcomeGuideProps> = ({ onClose }) => {
       if (selectedSports.length > 0) {
         updateData.interestedSports = selectedSports;
       }
+      if (sportPositions.length > 0) {
+        updateData.sportPositions = sportPositions;
+      }
 
       if (Object.keys(updateData).length > 0) {
         await api.put('/api/auth/me', updateData);
@@ -253,9 +258,26 @@ const WelcomeGuide: React.FC<WelcomeGuideProps> = ({ onClose }) => {
 
   // 종목 선택 토글
   const toggleSport = (sport: string) => {
-    setSelectedSports((prev) =>
-      prev.includes(sport) ? prev.filter((s) => s !== sport) : [...prev, sport]
-    );
+    setSelectedSports((prev) => {
+      const next = prev.includes(sport) ? prev.filter((s) => s !== sport) : [...prev, sport];
+      if (!next.includes(sport)) {
+        setSportPositions((pos) => pos.filter((p) => p.sport !== sport));
+      }
+      return next;
+    });
+  };
+
+  // 포지션 토글 (종목별)
+  const togglePosition = (sport: string, position: string) => {
+    setSportPositions((prev) => {
+      const entry = prev.find((p) => p.sport === sport);
+      const current = entry?.positions ?? [];
+      const nextPos = current.includes(position)
+        ? current.filter((p) => p !== position)
+        : [...current, position];
+      const rest = prev.filter((p) => p.sport !== sport);
+      return nextPos.length > 0 ? [...rest, { sport, positions: nextPos }] : rest;
+    });
   };
 
   // 단계별 렌더링
@@ -554,6 +576,40 @@ const WelcomeGuide: React.FC<WelcomeGuideProps> = ({ onClose }) => {
                 <p className="text-sm text-[var(--color-text-primary)] font-medium">
                   선택한 종목: {selectedSports.join(', ')}
                 </p>
+              </div>
+            )}
+
+            {/* 포지션 선택 (축구·풋살 선택 시) */}
+            {selectedSports.some((s) => SPORTS_WITH_POSITIONS.includes(s)) && (
+              <div className="mt-6 p-4 bg-[var(--color-bg-card)] border border-[var(--color-border-card)] rounded-xl max-w-2xl mx-auto">
+                <p className="text-sm font-medium text-[var(--color-text-primary)] mb-3">포지션 (선택사항)</p>
+                {selectedSports
+                  .filter((s) => SPORTS_WITH_POSITIONS.includes(s))
+                  .map((sport) => {
+                    const positions = getPositionsBySport(sport);
+                    const selected = sportPositions.find((p) => p.sport === sport)?.positions ?? [];
+                    return (
+                      <div key={sport} className="mb-4 last:mb-0">
+                        <p className="text-xs text-[var(--color-text-secondary)] mb-2">{sport}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {positions.map((pos) => (
+                            <button
+                              key={pos}
+                              type="button"
+                              onClick={() => togglePosition(sport, pos)}
+                              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                                selected.includes(pos)
+                                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
+                                  : 'bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] border border-[var(--color-border-card)] hover:opacity-80'
+                              }`}
+                            >
+                              {getPositionLabel(sport, pos)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             )}
           </div>

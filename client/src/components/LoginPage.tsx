@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EnvelopeIcon, LockClosedIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,42 +18,6 @@ const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
-
-  useEffect(() => {
-    // 로그인 페이지 진입 시 항상 다크 테마 적용
-    const savedTheme = localStorage.getItem('theme') || 'light';
-    
-    // 무조건 다크 테마 적용
-    document.documentElement.classList.add('dark');
-    
-    // MutationObserver를 사용하여 dark 클래스가 제거되면 다시 추가
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-          if (!document.documentElement.classList.contains('dark')) {
-            document.documentElement.classList.add('dark');
-          }
-        }
-      });
-    });
-    
-    // html 요소의 class 속성 변경 감지
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class']
-    });
-    
-    // 컴포넌트 언마운트 시 정리
-    return () => {
-      observer.disconnect();
-      // 원래 테마로 복원
-      if (savedTheme === 'light') {
-        document.documentElement.classList.remove('dark');
-      } else {
-        document.documentElement.classList.add('dark');
-      }
-    };
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,7 +89,16 @@ const LoginPage = () => {
   const handleGoogleLogin = async () => {
     setError('');
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+      // API 베이스 URL 결정 (api.ts와 동일한 로직)
+      const getApiBaseUrl = (): string => {
+        if (import.meta.env.VITE_API_BASE_URL) {
+          return import.meta.env.VITE_API_BASE_URL;
+        }
+        const hostname = window.location.hostname;
+        const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.');
+        return !isLocalhost ? '' : 'http://localhost:3000';
+      };
+      const API_BASE_URL = getApiBaseUrl();
       const response = await fetch(
         `${API_BASE_URL}/api/auth/social/auth-url?provider=google`,
       );

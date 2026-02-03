@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, IsEnum, IsOptional, IsArray, IsBoolean, Matches } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsEnum, IsOptional, IsArray, IsBoolean, Matches, ValidateIf } from 'class-validator';
 import { Gender, SkillLevel } from '../../users/entities/user.entity';
 
 export class RegisterDto {
@@ -7,16 +7,19 @@ export class RegisterDto {
 
   @IsString()
   @MinLength(8)
-  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
-    message: '비밀번호는 최소 8자 이상이며 대문자, 소문자, 숫자를 포함해야 합니다.',
+  @Matches(/^(?=.*[a-zA-Z])(?=.*\d)/, {
+    message: '비밀번호는 최소 8자 이상이며 영문(대/소문자 중 하나)과 숫자를 포함해야 합니다.',
   })
   password: string;
 
+  /** 연락처. SMS 인증 비활성화 시 선택 입력(빈 값 허용) */
+  @IsOptional()
+  @ValidateIf((o) => o.phone != null && o.phone !== '')
   @IsString()
   @Matches(/^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/, {
     message: '올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)',
   })
-  phone: string; // 연락처 (필수)
+  phone?: string;
 
   @IsOptional()
   @IsString()

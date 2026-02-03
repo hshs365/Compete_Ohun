@@ -1,19 +1,66 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { XMarkIcon, MapPinIcon, BuildingOfficeIcon, PhoneIcon, ClockIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { api } from '../utils/api';
 import NaverMap from './NaverMap';
 import Tooltip from './Tooltip';
 import { showError, showSuccess, showWarning } from '../utils/swal';
 
+export interface FacilityForEdit {
+  id: number;
+  name: string;
+  type: string;
+  address: string;
+  phone?: string | null;
+  operatingHours?: string | null;
+  price?: string | null;
+  description?: string | null;
+  amenities?: string[];
+  availableSports?: string[];
+  latitude?: number | null;
+  longitude?: number | null;
+  reservationSlotHours?: number;
+}
+
 interface CreateFacilityModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  facility?: FacilityForEdit;
 }
 
-const facilityTypes = ['체육센터', '체육관', '풋살장', '테니스장', '수영장', '골프연습장', '기타'];
+const facilityTypes = ['체육센터', '체육관', '축구장', '풋살장', '테니스장', '수영장', '골프연습장', '기타'];
 
-const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClose, onSuccess }) => {
+const AVAILABLE_SPORTS = ['축구', '풋살', '농구', '배드민턴', '테니스', '수영', '골프', '탁구', '배구', '볼링', '당구', '요가', '필라테스', '클라이밍', '러닝', '등산', '야구', '기타'];
+
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({
+  value: String(i).padStart(2, '0'),
+  label: i === 0 ? '오전 12' : i < 12 ? `오전 ${i}` : i === 12 ? '오후 12' : `오후 ${i - 12}`,
+}));
+const MINUTE_OPTIONS_30 = [
+  { value: '00', label: '00' },
+  { value: '30', label: '30' },
+];
+
+const parseOperatingHours = (hours: string | null | undefined): { start: string; end: string } => {
+  if (!hours || typeof hours !== 'string') return { start: '09:00', end: '21:00' };
+  const parts = hours.split(/\s*-\s*/).map((s) => s.trim());
+  if (parts.length >= 2) return { start: parts[0], end: parts[1] };
+  return { start: '09:00', end: '21:00' };
+};
+
+const parsePrice = (price: string | null | undefined): { priceType: 'hourly' | 'daily' | 'monthly' | 'package'; price: string } => {
+  if (!price || typeof price !== 'string') return { priceType: 'hourly', price: '' };
+  const hourly = /시간당|시간\s*당/i.test(price);
+  const daily = /일일|일\s*일/i.test(price);
+  const monthly = /월간|월\s*간/i.test(price);
+  const pkg = /패키지/i.test(price);
+  const priceType = hourly ? 'hourly' : daily ? 'daily' : monthly ? 'monthly' : pkg ? 'package' : 'hourly';
+  const numMatch = price.replace(/,/g, '').match(/(\d+)/);
+  const priceStr = numMatch ? Number(numMatch[1]).toLocaleString() : '';
+  return { priceType, price: priceStr };
+};
+
+const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClose, onSuccess, facility: initialFacility }) => {
   // 사용자 위치 가져오기 (localStorage 또는 기본값)
   const getUserLocation = (): [number, number] => {
     try {
@@ -38,16 +85,61 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
     phone: '',
     operatingHoursStart: '09:00',
     operatingHoursEnd: '21:00',
+    reservationSlotHours: 2,
     priceType: 'hourly' as 'hourly' | 'daily' | 'monthly' | 'package',
     price: '',
     description: '',
     amenities: [] as string[],
+    availableSports: [] as string[],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [mapKey, setMapKey] = useState(0);
   const [mapZoom, setMapZoom] = useState(15);
   const modalMouseDownRef = useRef<{ x: number; y: number } | null>(null);
+
+  // 수정 모드: initialFacility가 있으면 폼 초기화
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialFacility) {
+      const { start, end } = parseOperatingHours(initialFacility.operatingHours);
+      const { priceType, price } = parsePrice(initialFacility.price);
+      const coords: [number, number] = initialFacility.latitude != null && initialFacility.longitude != null
+        ? [Number(initialFacility.latitude), Number(initialFacility.longitude)]
+        : getUserLocation();
+      setFormData({
+        name: initialFacility.name ?? '',
+        type: initialFacility.type ?? '체육센터',
+        address: initialFacility.address ?? '',
+        coordinates: coords,
+        phone: initialFacility.phone ?? '',
+        operatingHoursStart: start,
+        operatingHoursEnd: end,
+        reservationSlotHours: initialFacility.reservationSlotHours ?? 2,
+        priceType,
+        price,
+        description: initialFacility.description ?? '',
+        amenities: initialFacility.amenities ?? [],
+        availableSports: initialFacility.availableSports ?? [],
+      });
+    } else {
+      setFormData({
+        name: '',
+        type: '체육센터',
+        address: '',
+        coordinates: getUserLocation(),
+        phone: '',
+        operatingHoursStart: '09:00',
+        operatingHoursEnd: '21:00',
+        reservationSlotHours: 2,
+        priceType: 'hourly',
+        price: '',
+        description: '',
+        amenities: [],
+        availableSports: [],
+      });
+    }
+  }, [isOpen, initialFacility]);
 
   const commonAmenities = ['주차', '샤워실', '락커룸', '매점', '카페', '프로샵', '관람석', '간이탈의실', '수영용품 판매'];
 
@@ -61,6 +153,15 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
       amenities: prev.amenities.includes(amenity)
         ? prev.amenities.filter((a) => a !== amenity)
         : [...prev.amenities, amenity],
+    }));
+  };
+
+  const handleAvailableSportToggle = (sport: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      availableSports: prev.availableSports.includes(sport)
+        ? prev.availableSports.filter((s) => s !== sport)
+        : [...prev.availableSports, sport],
     }));
   };
 
@@ -267,44 +368,54 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
         ? `${formData.priceType === 'hourly' ? '시간당' : formData.priceType === 'daily' ? '일일' : formData.priceType === 'monthly' ? '월간' : '패키지'} ${formData.price}원`
         : undefined;
 
-      await api.post('/api/facilities', {
+      const payload = {
         name: formData.name,
         type: formData.type,
         address: formData.address,
         latitude: formData.coordinates[0],
         longitude: formData.coordinates[1],
         phone: formData.phone || undefined,
-        operatingHours: operatingHours,
+        operatingHours,
         price: priceString,
         description: formData.description || undefined,
         amenities: formData.amenities,
-      });
+        availableSports: formData.availableSports,
+        reservationSlotHours: formData.reservationSlotHours,
+      };
 
-      // 폼 초기화
-      setFormData({
-        name: '',
-        type: '체육센터',
-        address: '',
-        coordinates: getUserLocation(),
-        phone: '',
-        operatingHoursStart: '09:00',
-        operatingHoursEnd: '21:00',
-        priceType: 'hourly',
-        price: '',
-        description: '',
-        amenities: [],
-      });
-      setShowMap(false);
-
-      if (onSuccess) {
-        onSuccess();
+      if (initialFacility?.id) {
+        await api.patch(`/api/facilities/${initialFacility.id}`, payload);
+        if (onSuccess) onSuccess();
+        onClose();
+        await showSuccess('시설이 수정되었습니다.', '시설 수정');
+      } else {
+        await api.post('/api/facilities', payload);
+        setFormData({
+          name: '',
+          type: '체육센터',
+          address: '',
+          coordinates: getUserLocation(),
+          phone: '',
+          operatingHoursStart: '09:00',
+          operatingHoursEnd: '21:00',
+          reservationSlotHours: 2,
+          priceType: 'hourly',
+          price: '',
+          description: '',
+          amenities: [],
+          availableSports: [],
+        });
+        setShowMap(false);
+        if (onSuccess) onSuccess();
+        onClose();
+        await showSuccess('시설이 등록되었습니다.', '시설 등록');
       }
-
-      onClose();
-      await showSuccess('시설이 등록되었습니다.', '시설 등록');
     } catch (error) {
-      console.error('시설 등록 실패:', error);
-      await showError(error instanceof Error ? error.message : '시설 등록에 실패했습니다.', '시설 등록 실패');
+      console.error(initialFacility?.id ? '시설 수정 실패' : '시설 등록 실패', error);
+      await showError(
+        error instanceof Error ? error.message : initialFacility?.id ? '시설 수정에 실패했습니다.' : '시설 등록에 실패했습니다.',
+        initialFacility?.id ? '시설 수정 실패' : '시설 등록 실패',
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -338,9 +449,13 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
       >
         <div className="sticky top-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)] p-4 md:p-6 flex items-center justify-between z-10">
           <div>
-            <h2 className="text-xl md:text-2xl font-bold text-[var(--color-text-primary)]">시설 등록</h2>
+            <h2 className="text-xl md:text-2xl font-bold text-[var(--color-text-primary)]">
+              {initialFacility?.id ? '시설 수정' : '시설 등록'}
+            </h2>
             <p className="text-xs text-[var(--color-text-secondary)] mt-1">
-              시설 정보를 입력하여 등록해주세요. 등록된 시설은 사용자들이 예약할 수 있습니다.
+              {initialFacility?.id
+                ? '시설 정보를 수정한 뒤 저장해주세요.'
+                : '시설 정보를 입력하여 등록해주세요. 등록된 시설은 사용자들이 예약할 수 있습니다.'}
             </p>
           </div>
           <button
@@ -495,38 +610,88 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
             />
           </div>
 
-          {/* 운영시간 */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              <ClockIcon className="w-4 h-4 inline mr-1" />
-              운영시간 <span className="text-xs text-[var(--color-text-secondary)] font-normal">(선택사항)</span>
-            </label>
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <label htmlFor="operatingHoursStart" className="block text-xs text-[var(--color-text-secondary)] mb-1">
-                  시작 시간
-                </label>
-                <input
-                  id="operatingHoursStart"
-                  type="time"
-                  value={formData.operatingHoursStart}
-                  onChange={(e) => handleChange('operatingHoursStart', e.target.value)}
-                  className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                />
+          {/* 운영시간 + 예약 단위 (같은 라인) */}
+          <div className="flex flex-wrap items-end gap-6">
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">
+                <ClockIcon className="w-4 h-4 inline mr-1" />
+                운영시간 <span className="text-xs text-[var(--color-text-secondary)] font-normal">(선택, 30분 단위)</span>
+              </label>
+              <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-[var(--color-text-secondary)] shrink-0">시작</span>
+                  <select
+                    id="operatingHoursStart"
+                    value={formData.operatingHoursStart.split(':')[0]}
+                    onChange={(e) => {
+                      const m = (formData.operatingHoursStart.split(':')[1] === '30') ? '30' : '00';
+                      handleChange('operatingHoursStart', `${e.target.value}:${m}`);
+                    }}
+                    className="w-20 px-2 py-1.5 text-sm border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                  >
+                    {HOUR_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  <span className="text-[var(--color-text-primary)] font-medium">:</span>
+                  <select
+                    value={(formData.operatingHoursStart.split(':')[1] === '30') ? '30' : '00'}
+                    onChange={(e) => {
+                      const h = formData.operatingHoursStart.split(':')[0];
+                      handleChange('operatingHoursStart', `${h}:${e.target.value}`);
+                    }}
+                    className="w-14 px-2 py-1.5 text-sm border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                  >
+                    {MINUTE_OPTIONS_30.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <span className="text-[var(--color-text-secondary)]">~</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-[var(--color-text-secondary)] shrink-0">종료</span>
+                  <select
+                    value={formData.operatingHoursEnd.split(':')[0]}
+                    onChange={(e) => {
+                      const m = (formData.operatingHoursEnd.split(':')[1] === '30') ? '30' : '00';
+                      handleChange('operatingHoursEnd', `${e.target.value}:${m}`);
+                    }}
+                    className="w-20 px-2 py-1.5 text-sm border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                  >
+                    {HOUR_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  <span className="text-[var(--color-text-primary)] font-medium">:</span>
+                  <select
+                    value={(formData.operatingHoursEnd.split(':')[1] === '30') ? '30' : '00'}
+                    onChange={(e) => {
+                      const h = formData.operatingHoursEnd.split(':')[0];
+                      handleChange('operatingHoursEnd', `${h}:${e.target.value}`);
+                    }}
+                    className="w-14 px-2 py-1.5 text-sm border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                  >
+                    {MINUTE_OPTIONS_30.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <span className="text-[var(--color-text-secondary)] mt-6">~</span>
-              <div className="flex-1">
-                <label htmlFor="operatingHoursEnd" className="block text-xs text-[var(--color-text-secondary)] mb-1">
-                  종료 시간
-                </label>
-                <input
-                  id="operatingHoursEnd"
-                  type="time"
-                  value={formData.operatingHoursEnd}
-                  onChange={(e) => handleChange('operatingHoursEnd', e.target.value)}
-                  className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                />
-              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">
+                예약 단위 <span className="text-xs text-[var(--color-text-secondary)] font-normal">(선택)</span>
+              </label>
+              <p className="text-xs text-[var(--color-text-secondary)] mb-1">기본 2시간 단위</p>
+              <select
+                value={formData.reservationSlotHours}
+                onChange={(e) => setFormData((prev) => ({ ...prev, reservationSlotHours: Number(e.target.value) }))}
+                className="w-[120px] px-2 py-1.5 text-sm border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+              >
+                {[1, 2, 3, 4].map((h) => (
+                  <option key={h} value={h}>{h}시간</option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -640,6 +805,33 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
               className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] resize-none"
               placeholder="시설에 대한 설명을 작성해주세요..."
             />
+          </div>
+
+          {/* 가능한 운동 종목 (체육센터·체육관 등 다목적 시설용) */}
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+              가능한 운동 종목 <span className="text-xs text-[var(--color-text-secondary)] font-normal">(선택사항)</span>
+            </label>
+            <p className="text-xs text-[var(--color-text-secondary)] mb-3">
+              이 시설에서 가능한 운동을 선택해주세요. (체육센터·체육관 등 다목적 시설에 유용)
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {AVAILABLE_SPORTS.map((sport) => (
+                <button
+                  key={sport}
+                  type="button"
+                  onClick={() => handleAvailableSportToggle(sport)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    formData.availableSports.includes(sport)
+                      ? 'bg-[var(--color-blue-primary)] text-white'
+                      : 'bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-card)]'
+                  }`}
+                >
+                  {sport}
+                  {formData.availableSports.includes(sport) && <span className="ml-1">✓</span>}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* 편의시설 */}

@@ -97,6 +97,20 @@ export class FollowService {
   }
 
   /**
+   * 팔로워 수 조회
+   */
+  async getFollowersCount(userId: number): Promise<number> {
+    return this.followRepository.count({ where: { followingId: userId } });
+  }
+
+  /**
+   * 팔로잉 수 조회
+   */
+  async getFollowingCount(userId: number): Promise<number> {
+    return this.followRepository.count({ where: { followerId: userId } });
+  }
+
+  /**
    * 팔로우 여부 확인
    */
   async isFollowing(followerId: number, followingId: number): Promise<boolean> {
@@ -108,6 +122,26 @@ export class FollowService {
     });
 
     return !!follow;
+  }
+
+  /**
+   * 팔로우 한 단계: 내가 팔로우하는 사람들이 팔로우하는 유저 (친구의 친구)
+   * 자기 자신과 이미 팔로우 중인 유저 제외
+   */
+  async getFriendsOfFriends(userId: number): Promise<Map<number, number>> {
+    const myFollowing = await this.getFollowing(userId);
+    const myFollowingIds = new Set(myFollowing.map((u) => u.id));
+    if (myFollowingIds.size === 0) return new Map();
+
+    const candidateCounts = new Map<number, number>();
+    for (const friend of myFollowing) {
+      const theirFollowing = await this.getFollowing(friend.id);
+      for (const candidate of theirFollowing) {
+        if (candidate.id === userId || myFollowingIds.has(candidate.id)) continue;
+        candidateCounts.set(candidate.id, (candidateCounts.get(candidate.id) ?? 0) + 1);
+      }
+    }
+    return candidateCounts;
   }
 
   /**

@@ -15,8 +15,13 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('should return API status object', () => {
+      const result = appController.getHello();
+      expect(result).toEqual({
+        message: 'Ohun API Server',
+        status: 'running',
+        api: '/api',
+      });
     });
   });
 });

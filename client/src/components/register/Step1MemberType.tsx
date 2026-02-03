@@ -108,7 +108,7 @@ const Step1MemberType: React.FC<Step1MemberTypeProps> = ({ memberType, onMemberT
       {memberType === 'business' && (
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
           <p className="text-sm text-blue-700 dark:text-blue-300">
-            사업자 회원은 가입 후 내 정보 페이지에서 사업자등록번호를 인증하실 수 있습니다.
+            사업자 회원은 가입 과정에서 사업자등록번호를 API로 인증받고 가입합니다.
           </p>
         </div>
       )}

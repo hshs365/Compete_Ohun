@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { SelectedGroup } from '../types/selected-group';
 import { getCityCoordinates, type KoreanCity } from '../utils/locationUtils';
 import { api } from '../utils/api';
+import { MATCH_TYPE_THEME } from './HomeMatchTypeChoice';
+
+type MatchType = 'general' | 'rank' | 'event';
 
 interface NaverMapPanelProps {
   selectedGroup?: SelectedGroup | null;
@@ -15,6 +18,8 @@ interface NaverMapPanelProps {
     events?: boolean;
     popularSpots?: boolean;
   };
+  /** 매치 종류에 따른 FAB 버튼 문구 (일반 매치 생성 / 랭크매치 생성 / 이벤트매치 생성) */
+  matchType?: MatchType;
 }
 
 declare global {
@@ -26,6 +31,12 @@ declare global {
 // ⭐ 전역 플래그: 지도가 이미 생성되었는지 확인 (중복 생성 방지)
 const mapInstanceCreated = new WeakMap<HTMLDivElement, boolean>();
 
+const CREATE_BUTTON_LABEL: Record<MatchType, string> = {
+  general: '일반 매치 생성',
+  rank: '랭크매치 생성',
+  event: '이벤트매치 생성',
+};
+
 const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
   selectedGroup = null,
   allGroups = [],
@@ -34,6 +45,7 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
   selectedCity = null,
   selectedCategory = null,
   mapLayers = {},
+  matchType = 'general',
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -43,6 +55,8 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
   const isInitializingRef = useRef(false); // 초기화 중 플래그
   const prevCategoryRef = useRef<string | null>(null); // 이전 카테고리 추적용
   const lastSelectedGroupRef = useRef<SelectedGroup | null>(null); // 마지막으로 선택된 매치 저장용
+  const selectedGroupRef = useRef<SelectedGroup | null>(selectedGroup); // 지도 초기화 시 최신 선택 매치 반영용
+  const resizeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null); // ResizeObserver 디바운스
   const [defaultPosition, setDefaultPosition] = useState<[number, number]>([37.5665, 126.9780]);
   const [userResidenceSido, setUserResidenceSido] = useState<string | null>(null);
 
@@ -81,7 +95,41 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
     // 카카오 1-14 → 네이버 0-21
     return Math.round((kakaoLevel - 1) * 1.5);
   };
-  
+
+  /** 우측 지도 패널 시각적 중앙에 마커가 오도록 setCenter 후 panBy 보정.
+   *  네이버 panBy(dx,dy)는 '콘텐츠를 (dx,dy)만큼 이동'으로 해석됨 → 마커가 오른쪽이면 왼쪽으로 보내려면 dx < 0
+   *  레이아웃 확정 후 한 번만 panBy 호출해 깜빡임 방지 */
+  const centerMapOnMarker = (
+    map: any,
+    container: HTMLDivElement | null,
+    lat: number,
+    lng: number,
+    zoom?: number,
+    options?: { skipRefreshSize?: boolean }
+  ) => {
+    if (!map || !container || !window.naver?.maps) return;
+    const latLng = new window.naver.maps.LatLng(lat, lng);
+    map.setCenter(latLng);
+    if (typeof zoom === 'number') map.setZoom(zoom);
+    if (!options?.skipRefreshSize && typeof map.refreshSize === 'function') map.refreshSize();
+    const runPanBy = () => {
+      const proj = map.getProjection?.();
+      if (!proj || typeof proj.pointFromCoord !== 'function') return;
+      const markerPoint = proj.pointFromCoord(latLng);
+      const rect = container.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const desiredX = rect.left + rect.width / 2;
+      const desiredY = rect.top + rect.height / 2;
+      const dx = desiredX - markerPoint.x;
+      const dy = desiredY - markerPoint.y;
+      const maxPan = Math.max(rect.width, rect.height) * 1.5;
+      if (Math.abs(dx) > maxPan || Math.abs(dy) > maxPan) return;
+      map.panBy(new window.naver.maps.Point(dx, dy));
+    };
+    // setCenter/setZoom과 같은 틱에 panBy 실행 → 지도 갱신 1회로 묶여 idle 이벤트 1회만 발생
+    setTimeout(runPanBy, 0);
+  };
+
   // 사용자 위치 가져오기 (회원가입 시 입력한 주소 기반)
   const getUserLocation = (): [number, number] => {
     // userResidenceSido가 있으면 해당 도시의 시청 좌표 사용
@@ -95,6 +143,11 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
     // 기본값: 서울 시청
     return [37.5665, 126.9780];
   };
+
+  // selectedGroup 변경 시 ref 동기화 (지도 초기화가 늦을 때 선택 매치 좌표 사용)
+  useEffect(() => {
+    selectedGroupRef.current = selectedGroup;
+  }, [selectedGroup]);
 
   // 사용자 정보에서 residenceSido 가져오기
   useEffect(() => {
@@ -294,7 +347,7 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
       // 공식 문서: https://navermaps.github.io/maps.js.ncp/docs/tutorial-2-Getting-Started.html
       // 스크립트 URL 형식: https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=...
       // ⭐ 중요: 파라미터 이름이 ncpClientId에서 ncpKeyId로 변경되었습니다!
-      const scriptUrl = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_CLIENT_ID}`;
+      const scriptUrl = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_CLIENT_ID}&submodules=geocoder`;
       script.src = scriptUrl;
       script.async = true;
       script.type = 'text/javascript';
@@ -492,12 +545,12 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
         return;
       }
 
-      // 위치 정보 확인 및 설정 (initializeMap 내부에서 읽은 최신 값 사용)
-      // LatLng 생성자가 준비되었는지 다시 한 번 확인
+      // 위치 정보 확인 및 설정: selectedGroupRef 사용 (비동기 초기화 시점에 선택된 매치 좌표 반영)
       let mapCenter;
+      const groupForCenter = selectedGroupRef.current;
       try {
-        mapCenter = selectedGroup 
-          ? new window.naver.maps.LatLng(selectedGroup.coordinates[0], selectedGroup.coordinates[1])
+        mapCenter = groupForCenter && typeof groupForCenter.coordinates[0] === 'number' && typeof groupForCenter.coordinates[1] === 'number'
+          ? new window.naver.maps.LatLng(groupForCenter.coordinates[0], groupForCenter.coordinates[1])
           : new window.naver.maps.LatLng(currentPosition[0], currentPosition[1]);
       } catch (error) {
         console.error('LatLng 생성 실패:', error);
@@ -512,7 +565,7 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
       
       // 줌 레벨 설정: 카카오 레벨(1-14)을 네이버 레벨(0-21)로 변환
       let kakaoLevel: number;
-      if (selectedGroup) {
+      if (groupForCenter) {
         kakaoLevel = 14;
       } else if (selectedCity === '전체') {
         // 50km 스케일에 맞는 네이버 레벨 8 사용
@@ -603,8 +656,13 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
             console.log('✅ 네이버 지도 init 이벤트 발생 - 지도 초기화 완료');
           });
           
+          // idle은 setCenter/setZoom/panBy 등 지도 갱신마다 1회씩 발생 → 한 번만 로그 (중복 제거)
+          let idleLogOnce = true;
           window.naver.maps.Event.addListener(map, 'idle', () => {
-            console.log('✅ 네이버 지도 idle 이벤트 발생 - 지도 타일 로드 완료');
+            if (idleLogOnce) {
+              idleLogOnce = false;
+              console.log('✅ 네이버 지도 idle - 지도 타일 로드 완료');
+            }
           });
         }
         
@@ -656,10 +714,16 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
       }
             }
             
-            // 2. selectedGroup이 있으면 줌 레벨 설정 (단, '전체' 선택 시 무시)
-            if (selectedGroup && selectedCity !== '전체') {
-              mapRef.current.setZoom(convertKakaoLevelToNaver(14));
-              mapRef.current.setCenter(mapCenter);
+            // 2. 선택된 매치가 있으면 해당 좌표로 중심·줌 (지역 '전체'여도 매치로 이동)
+            const groupNow = selectedGroupRef.current;
+            if (groupNow && typeof groupNow.coordinates[0] === 'number' && typeof groupNow.coordinates[1] === 'number') {
+              centerMapOnMarker(
+                mapRef.current,
+                mapContainerRef.current,
+                groupNow.coordinates[0],
+                groupNow.coordinates[1],
+                convertKakaoLevelToNaver(14)
+              );
             } else if (selectedCity === '전체') {
               // '전체' 선택 시에만 대한민국 중심 유지 (50km 스케일)
               const koreaCenter = new window.naver.maps.LatLng(36.3504, 127.3845);
@@ -687,23 +751,10 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
               }
             }
             
-            // 3. 한 번 더 refreshSize
+            // 3. 한 번 더 refreshSize (줌 재설정 제거: selectedGroup effect가 1115번째 줄 줌을 적용하므로 여기서 14로 덮어쓰지 않음)
             setTimeout(() => {
               if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-                if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-        mapRef.current.refreshSize();
-      }
-                const finalZoom = mapRef.current.getZoom();
-                
-                // 줌 레벨이 제대로 적용되지 않았으면 재설정
-                if (selectedGroup && finalZoom !== convertKakaoLevelToNaver(14)) {
-                  mapRef.current.setZoom(convertKakaoLevelToNaver(14));
-                  if (typeof mapRef.current.refreshSize === 'function') {
-                    if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-        mapRef.current.refreshSize();
-      }
-                  }
-                }
+                mapRef.current.refreshSize();
               }
             }, 200);
           }
@@ -786,17 +837,16 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
 
         // 마커 클릭 시 인포윈도우 표시 및 지도 이동
         window.naver.maps.Event.addListener(marker, 'click', () => {
-          // 지도 중심을 해당 모임 위치로 이동 및 확대
-          if (mapRef.current) {
-            mapRef.current.setZoom(convertKakaoLevelToNaver(14)); // 확대
-            mapRef.current.setCenter(markerPosition); // 중심 이동
+          if (mapRef.current && mapContainerRef.current) {
+            centerMapOnMarker(
+              mapRef.current,
+              mapContainerRef.current,
+              group.coordinates[0],
+              group.coordinates[1],
+              convertKakaoLevelToNaver(14)
+            );
           }
-          
-          // 부모 컴포넌트에 모임 선택 알림
-          if (onGroupClick) {
-            onGroupClick(group);
-          }
-          
+          if (onGroupClick) onGroupClick(group);
         });
         
         // ⭐ selectedGroup이 변경되어 이 마커가 선택되었을 때 인포윈도우를 자동으로 열지 않음
@@ -856,33 +906,31 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
         mapRef.current.refreshSize();
       }
                 }
-                // '전체' 선택 시에만 대한민국 중심으로 재설정 (50km 스케일)
-                if (selectedCity === '전체') {
+                // '전체' 선택 시에만 대한민국 중심으로 재설정 (매치 상세보기 중이면 건너뜀)
+                if (selectedCity === '전체' && !selectedGroupRef.current) {
                   const koreaCenter = new window.naver.maps.LatLng(36.3504, 127.3845);
                   mapRef.current.setCenter(koreaCenter);
                   const naverLevel = 8; // 네이버 레벨 8 = 약 50km 스케일
                   mapRef.current.setZoom(naverLevel);
-                  // 지도 레벨을 localStorage에 저장
                   try {
                     localStorage.setItem('mapLevel', '8');
                   } catch (e) {
-                    // 무시
+                    /* ignore */
                   }
-                } else if (!selectedCity) {
-                  // selectedCity가 null일 때 사용자 위치 사용
+                } else if (!selectedCity && !selectedGroupRef.current) {
+                  // selectedCity가 null일 때 사용자 위치 사용 (매치 상세 중이면 건너뜀)
                   const userLocation = getUserLocation();
                   const userCenter = new window.naver.maps.LatLng(userLocation[0], userLocation[1]);
                   mapRef.current.setCenter(userCenter);
-                  const userLevel = 3; // 사용자 위치는 확대된 레벨
+                  const userLevel = 3;
                   mapRef.current.setZoom(convertKakaoLevelToNaver(userLevel));
-                  // 지도 레벨을 localStorage에 저장
                   try {
                     localStorage.setItem('mapLevel', userLevel.toString());
                   } catch (e) {
-                    // 무시
+                    /* ignore */
                   }
-                } else if (selectedCity && selectedCity !== '전체') {
-              // 특정 도시 선택 시 해당 도시 중심으로 설정
+                } else if (selectedCity && selectedCity !== '전체' && !selectedGroupRef.current) {
+              // 특정 도시 선택 시 해당 도시 중심으로 설정 (매치 상세 중이면 건너뜀)
               const cityCoordinates = getCityCoordinates(selectedCity as KoreanCity);
               if (cityCoordinates) {
                 const cityCenter = new window.naver.maps.LatLng(cityCoordinates[0], cityCoordinates[1]);
@@ -921,24 +969,22 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
       if (mapRef.current) {
         setTimeout(() => {
           if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-            if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-        mapRef.current.refreshSize();
-      }
+            mapRef.current.refreshSize();
           }
-          // selectedGroup이 있으면 마커를 중심에 다시 맞춤
-          if (selectedGroup && mapRef.current) {
-            const groupPosition = new window.naver.maps.LatLng(
-              selectedGroup.coordinates[0],
-              selectedGroup.coordinates[1]
+          const group = selectedGroupRef.current;
+          if (group && mapRef.current && mapContainerRef.current) {
+            centerMapOnMarker(
+              mapRef.current,
+              mapContainerRef.current,
+              group.coordinates[0],
+              group.coordinates[1],
+              15
             );
-            mapRef.current.setCenter(groupPosition);
-          } else if (!selectedGroup && selectedCity === '전체' && mapRef.current) {
-            // '전체' 선택 시에는 대한민국 중심 유지 (50km 스케일)
+          } else if (!group && selectedCity === '전체' && mapRef.current) {
             const koreaCenter = new window.naver.maps.LatLng(36.3504, 127.3845);
             mapRef.current.setCenter(koreaCenter);
-            mapRef.current.setZoom(8); // 네이버 레벨 8 = 약 50km 스케일
-          } else if (!selectedGroup && !selectedCity && mapRef.current) {
-            // selectedCity가 null일 때 사용자 위치 사용
+            mapRef.current.setZoom(8);
+          } else if (!group && !selectedCity && mapRef.current) {
             const userLocation = getUserLocation();
             const userCenter = new window.naver.maps.LatLng(userLocation[0], userLocation[1]);
             mapRef.current.setCenter(userCenter);
@@ -955,72 +1001,36 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
     let resizeObserver: ResizeObserver | null = null;
     if (mapContainerRef.current && typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => {
-        if (mapRef.current) {
-          // ⭐ 핵심: 지도 크기가 변경되면 (상세 패널이 나타나서 지도가 좁아지면)
-          // debounce를 위해 약간의 지연 후 실행
-          setTimeout(() => {
-            if (mapRef.current) {
-              // 지도 크기 재계산
-              if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-        mapRef.current.refreshSize();
-      }
-              
-              if (selectedGroup) {
-                // selectedGroup이 있으면 마커를 보이는 영역의 중앙에 배치
-                const groupPosition = new window.naver.maps.LatLng(
-                  selectedGroup.coordinates[0],
-                  selectedGroup.coordinates[1]
-                );
-                
-                // 마커를 먼저 중심에 배치
-                mapRef.current.setCenter(groupPosition);
-                
-                // 상세보기 패널이 열려있으면 그 너비를 고려하여 보이는 영역의 중앙에 배치
-                const detailPanelWidth = window.innerWidth >= 768 ? 420 : 0;
-                if (detailPanelWidth > 0) {
-                  const offsetPx = 30;
-                  mapRef.current.panBy(new window.naver.maps.Point(offsetPx, 0));
-                }
-                
-                // 한 번 더 확실하게 적용
-                setTimeout(() => {
-                  if (mapRef.current) {
-                    if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-                      mapRef.current.refreshSize();
-                    }
-                    mapRef.current.setCenter(groupPosition);
-                    if (detailPanelWidth > 0) {
-                      const offsetPx = 30;
-                      mapRef.current.panBy(new window.naver.maps.Point(offsetPx, 0));
-                    }
-                    console.log('✅ ResizeObserver - 좁아진 지도에서 마커 중심 재조정 완료');
-                  }
-                }, 200);
-              } else if (selectedCity === '전체') {
-                // '전체' 선택 시에는 대한민국 중심 유지 (50km 스케일)
-                const koreaCenter = new window.naver.maps.LatLng(36.3504, 127.3845);
-                mapRef.current.setCenter(koreaCenter);
-                mapRef.current.setZoom(8); // 네이버 레벨 8 = 약 50km 스케일
-                console.log('✅ ResizeObserver - 전체 선택, 대한민국 중심 유지 (50km 스케일)');
-              } else if (!selectedCity) {
-                // selectedCity가 null일 때 사용자 위치 사용
-                const userLocation = getUserLocation();
-                const userCenter = new window.naver.maps.LatLng(userLocation[0], userLocation[1]);
-                mapRef.current.setCenter(userCenter);
-                mapRef.current.setZoom(convertKakaoLevelToNaver(3));
-                console.log('✅ ResizeObserver - 사용자 위치로 재조정');
-              }
-            }
-          }, 200); // 상세 패널 애니메이션을 고려한 지연
-        }
+        if (!mapRef.current) return;
+        if (resizeDebounceRef.current) clearTimeout(resizeDebounceRef.current);
+        resizeDebounceRef.current = setTimeout(() => {
+          resizeDebounceRef.current = null;
+          if (!mapRef.current) return;
+          if (typeof mapRef.current.refreshSize === 'function') mapRef.current.refreshSize();
+          // 매치 상세보기 중이면 ref로 확인 (클로저가 마운트 시점 값이라서 ref 사용)
+          const hasSelectedGroup = selectedGroupRef.current;
+          if (hasSelectedGroup && mapContainerRef.current) {
+            // 매치 선택 중엔 setCenter 호출 안 함 → 서해(한국 전역) 뷰로 덮어쓰지 않음
+            return;
+          }
+          if (selectedCity === '전체') {
+            const koreaCenter = new window.naver.maps.LatLng(36.3504, 127.3845);
+            mapRef.current.setCenter(koreaCenter);
+            mapRef.current.setZoom(8);
+          } else if (!selectedCity) {
+            const userLocation = getUserLocation();
+            const userCenter = new window.naver.maps.LatLng(userLocation[0], userLocation[1]);
+            mapRef.current.setCenter(userCenter);
+            mapRef.current.setZoom(convertKakaoLevelToNaver(3));
+          }
+        }, 400);
       });
       resizeObserver.observe(mapContainerRef.current);
     }
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      
-      // ⭐ ResizeObserver 정리
+      if (resizeDebounceRef.current) clearTimeout(resizeDebounceRef.current);
       if (resizeObserver && mapContainerRef.current) {
         resizeObserver.unobserve(mapContainerRef.current);
         resizeObserver.disconnect();
@@ -1055,127 +1065,59 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
 
   // ⭐ selectedGroup 변경 시 지도 중심 이동 (지도 중심 변경 전용)
   useEffect(() => {
-    // 지도가 아직 초기화되지 않았으면 스킵
     if (!mapRef.current || !window.naver || !window.naver.maps || !scriptLoadedRef.current) {
       return;
     }
-    
-    // '전체' 선택 시에는 selectedGroup이 있어도 지도 중심을 변경하지 않음
-    if (selectedCity === '전체') {
-      return;
-    }
-    
-    // selectedGroup이 있을 때: 마지막 선택 모임 저장 및 지도 이동
+
     if (selectedGroup) {
-      // 마지막 선택 모임 저장
       lastSelectedGroupRef.current = selectedGroup;
       const groupLat = selectedGroup.coordinates[0];
       const groupLng = selectedGroup.coordinates[1];
-      
-      // 좌표 유효성 검사
-      if (typeof groupLat === 'number' && typeof groupLng === 'number' && 
-          !isNaN(groupLat) && !isNaN(groupLng) &&
-          groupLat >= -90 && groupLat <= 90 &&
-          groupLng >= -180 && groupLng <= 180) {
-        
-        try {
-          // 이전 타이머 취소 (debounce)
-          const updateTimer = setTimeout(() => {
-            if (!mapRef.current || !mapContainerRef.current) return;
-          
-            // DOM 크기 확정
-            const container = mapContainerRef.current;
-            const containerHeight = container.offsetHeight || container.clientHeight || window.innerHeight * 0.8;
-            const containerWidth = container.offsetWidth || container.clientWidth || window.innerWidth * 0.6;
-            container.style.height = `${containerHeight}px`;
-            container.style.width = `${containerWidth}px`;
-          
-            // refreshSize 호출 (메서드 존재 확인)
-            if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-              if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-        mapRef.current.refreshSize();
+
+      if (
+        typeof groupLat !== 'number' ||
+        typeof groupLng !== 'number' ||
+        isNaN(groupLat) ||
+        isNaN(groupLng) ||
+        groupLat < -90 ||
+        groupLat > 90 ||
+        groupLng < -180 ||
+        groupLng > 180
+      ) {
+        return;
       }
-            }
-            
-            // 50m 스케일 기준으로 확대 (네이버 지도 레벨 15)
-            mapRef.current.setCenter(new window.naver.maps.LatLng(groupLat, groupLng));
-            mapRef.current.setZoom(15);
-                  
-            // 네이버지도처럼: 보이는 지도 영역의 중앙에 마커가 오도록 중심 계산
-            setTimeout(() => {
-              if (mapRef.current && selectedCity !== '전체' && mapContainerRef.current) {
-                // 상세보기 패널이 열려있으면 그 너비를 고려하여 조정
-                const detailPanelWidth = window.innerWidth >= 768 ? 420 : 0;
-                
-                // 보이는 지도 영역의 중앙에 마커가 오도록 픽셀 단위로 이동
-                // 30px 오른쪽으로 이동 (마커를 중심으로)
-                if (detailPanelWidth > 0) {
-                  const offsetPx = 30;
-                  mapRef.current.panBy(new window.naver.maps.Point(offsetPx, 0));
-                }
-                
-                if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-                  mapRef.current.refreshSize();
-                }
-              }
-            }, 200);
-          }, 100); // debounce로 빠른 연속 클릭 방지
-          
-          return () => clearTimeout(updateTimer);
-        } catch (error) {
-          console.error('❌ 지도 중심 이동 실패:', error);
-        }
-      }
-    } else {
-      // selectedGroup이 null일 때: 마지막 선택 모임의 위치와 줌 레벨 유지
-      if (lastSelectedGroupRef.current && mapRef.current) {
-        const lastGroup = lastSelectedGroupRef.current;
-        const groupLat = lastGroup.coordinates[0];
-        const groupLng = lastGroup.coordinates[1];
-        
-        // 좌표 유효성 검사
-        if (typeof groupLat === 'number' && typeof groupLng === 'number' && 
-            !isNaN(groupLat) && !isNaN(groupLng) &&
-            groupLat >= -90 && groupLat <= 90 &&
-            groupLng >= -180 && groupLng <= 180) {
-          
-          try {
-            // 상세보기를 열었을 때와 같은 줌 레벨(14) 유지
-            const updateTimer = setTimeout(() => {
-              if (!mapRef.current || !mapContainerRef.current) return;
-            
-              // DOM 크기 확정
-              const container = mapContainerRef.current;
-              const containerHeight = container.offsetHeight || container.clientHeight || window.innerHeight * 0.8;
-              const containerWidth = container.offsetWidth || container.clientWidth || window.innerWidth * 0.6;
-              container.style.height = `${containerHeight}px`;
-              container.style.width = `${containerWidth}px`;
-            
-              // refreshSize 호출
-              if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-        mapRef.current.refreshSize();
-      }
-              
-              // 상세보기와 같은 줌 레벨(14) 유지
-              // 상세보기 패널이 닫혔으므로 사이드바만 고려
-              mapRef.current.setZoom(convertKakaoLevelToNaver(14));
-              const sidebarOffsetPx = window.innerWidth >= 1024 ? -220 : window.innerWidth >= 768 ? -160 : 0;
-              mapRef.current.panBy(new window.naver.maps.Point(sidebarOffsetPx, 0));
-              if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-                mapRef.current.refreshSize();
-              }
-              
-              console.log('📍 모임 나가기 후 - 마지막 선택 모임 위치와 줌 레벨 유지 (사이드바만 보정)');
-            }, 100);
-            
-            return () => clearTimeout(updateTimer);
-          } catch (error) {
-            console.error('❌ 지도 중심 유지 실패:', error);
-          }
-        }
-      }
+
+      const container = mapContainerRef.current;
+      if (!container) return;
+
+      container.style.width = '100%';
+      container.style.height = '100%';
+
+      // 상세 패널·grid 2열 적용 후 한 번만 실행 (깜빡임·절반 표시 방지)
+      const updateTimer = setTimeout(() => {
+        if (!mapRef.current || !mapContainerRef.current) return;
+        const map = mapRef.current;
+        const cont = mapContainerRef.current;
+        if (typeof map.refreshSize === 'function') map.refreshSize();
+        centerMapOnMarker(map, cont, groupLat, groupLng, 10, { skipRefreshSize: true });
+      }, 180);
+
+      return () => clearTimeout(updateTimer);
     }
-  }, [selectedGroup, selectedCity]); // selectedCity 추가하여 '전체' 선택 시 무시
+
+    // selectedGroup null: 상세 닫힘 → 지도 100% 복구 후 refreshSize 한 번
+    if (mapRef.current && mapContainerRef.current) {
+      const container = mapContainerRef.current;
+      container.style.width = '100%';
+      container.style.height = '100%';
+      const runRefresh = () => {
+        if (!mapRef.current || typeof mapRef.current.refreshSize !== 'function') return;
+        mapRef.current.refreshSize();
+      };
+      const t = setTimeout(runRefresh, 200);
+      return () => clearTimeout(t);
+    }
+  }, [selectedGroup, selectedCity]);
 
   // ⭐ 마커 업데이트 전용 (지도 중심 변경 없음)
   useEffect(() => {
@@ -1192,22 +1134,20 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
       return;
     }
 
-    // 지도 크기 조정 (컨테이너 크기가 변경되었을 때 필요)
+    // 지도 크기 조정 (상세 열림 시 selectedGroup effect에서 180ms 후 한 번만 하므로 중복 방지)
     const refreshMapSize = () => {
-      if (mapRef.current) {
+      if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
         try {
-          if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-        mapRef.current.refreshSize();
-      }
+          mapRef.current.refreshSize();
         } catch (error) {
           console.error('지도 refreshSize 실패:', error);
         }
       }
     };
-    
-    // refreshSize 실행
-    setTimeout(refreshMapSize, 50);
-    setTimeout(refreshMapSize, 200);
+    if (!selectedGroup) {
+      setTimeout(refreshMapSize, 50);
+      setTimeout(refreshMapSize, 200);
+    }
 
     // 기존 마커 및 오버레이 제거
     markersRef.current.forEach(marker => marker.setMap(null));
@@ -1250,41 +1190,16 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
       }
 
       window.naver.maps.Event.addListener(marker, 'click', () => {
-        // 지도 중심을 해당 모임 위치로 이동 및 확대
-        if (mapRef.current) {
-          // 마커를 약간 왼쪽에 보이도록 지도 중심 조정 (우측 패널 고려)
-          // 50m 스케일 기준으로 확대 (네이버 지도 레벨 15)
-          mapRef.current.setCenter(new window.naver.maps.LatLng(
+        if (mapRef.current && mapContainerRef.current) {
+          centerMapOnMarker(
+            mapRef.current,
+            mapContainerRef.current,
             group.coordinates[0],
-            group.coordinates[1]
-          ));
-          mapRef.current.setZoom(15);
-          
-          // 네이버지도처럼: 보이는 지도 영역의 중앙에 마커가 오도록 중심 계산
-          setTimeout(() => {
-            if (mapRef.current && mapContainerRef.current) {
-              // 상세보기 패널이 곧 열릴 것을 예상하여 그 너비를 고려하여 조정
-              const detailPanelWidth = window.innerWidth >= 768 ? 420 : 0;
-              
-              // 보이는 지도 영역의 중앙에 마커가 오도록 픽셀 단위로 이동
-              // 30px 오른쪽으로 이동 (마커를 중심으로)
-              if (detailPanelWidth > 0) {
-                const offsetPx = 30;
-                mapRef.current.panBy(new window.naver.maps.Point(offsetPx, 0));
-              }
-              
-              if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-                mapRef.current.refreshSize();
-              }
-              console.log('📍 마커 클릭 - 지도 중심 이동 (상세보기 패널 고려):', group.name);
-            }
-          }, 200);
+            group.coordinates[1],
+            15
+          );
         }
-        
-        // 부모 컴포넌트에 모임 선택 알림
-        if (onGroupClick) {
-          onGroupClick(group);
-        }
+        if (onGroupClick) onGroupClick(group);
       });
     });
 
@@ -1313,8 +1228,9 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
       return;
     }
     
-    // '전체' 선택 시 대한민국 중심으로 이동 (최우선 처리, selectedGroup 무시)
+    // '전체' 선택 시 대한민국 중심으로 이동 (단, 매치 상세보기 중이면 그대로 두고 selectedGroup 효과에 맡김)
     if (selectedCity === '전체') {
+      if (selectedGroup) return;
       const koreaCenter = new window.naver.maps.LatLng(36.3504, 127.3845); // 대한민국 중심 좌표
       
       // 컨테이너 크기 확정
@@ -1345,39 +1261,16 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
         // 무시
       }
       
-      // 여러 번 확실하게 설정 (다른 useEffect와의 충돌 방지)
-      setTimeout(() => {
-        if (mapRef.current && selectedCity === '전체') {
-          mapRef.current.setCenter(koreaCenter);
-          mapRef.current.setZoom(naverLevel);
-          if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-        mapRef.current.refreshSize();
-      }
-          console.log('📍 전체 선택 - 재확인 완료 (50km 스케일)');
-        }
-      }, 50);
-      
-      setTimeout(() => {
-        if (mapRef.current && selectedCity === '전체') {
-          mapRef.current.setCenter(koreaCenter);
-          mapRef.current.setZoom(naverLevel);
-          if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-        mapRef.current.refreshSize();
-      }
-          console.log('📍 전체 선택 - 재확인 완료 (50km 스케일)');
-        }
-      }, 200);
-      
-      setTimeout(() => {
-        if (mapRef.current && selectedCity === '전체') {
-          mapRef.current.setCenter(koreaCenter);
-          mapRef.current.setZoom(naverLevel);
-          if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-        mapRef.current.refreshSize();
-      }
-          console.log('📍 전체 선택 - 최종 확인 완료 (50km 스케일)');
-        }
-      }, 500);
+      // 여러 번 확실하게 설정 (매치 상세보기 중이면 덮어쓰지 않음)
+      const applyKoreaView = () => {
+        if (!mapRef.current || selectedGroupRef.current) return;
+        mapRef.current.setCenter(koreaCenter);
+        mapRef.current.setZoom(naverLevel);
+        if (typeof mapRef.current.refreshSize === 'function') mapRef.current.refreshSize();
+      };
+      setTimeout(applyKoreaView, 50);
+      setTimeout(applyKoreaView, 200);
+      setTimeout(applyKoreaView, 500);
       
       return;
     }
@@ -1401,39 +1294,31 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
     if (!selectedCity) {
       const userLocation = getUserLocation();
       const userPosition = new window.naver.maps.LatLng(userLocation[0], userLocation[1]);
-      
-      // DOM 크기 확정
+
       const container = mapContainerRef.current;
       if (container) {
-        const containerHeight = container.offsetHeight || container.clientHeight || window.innerHeight * 0.8;
-        const containerWidth = container.offsetWidth || container.clientWidth || window.innerWidth * 0.6;
-        container.style.height = `${containerHeight}px`;
-        container.style.width = `${containerWidth}px`;
+        container.style.height = `${container.offsetHeight || container.clientHeight || window.innerHeight * 0.8}px`;
+        container.style.width = `${container.offsetWidth || container.clientWidth || window.innerWidth * 0.6}px`;
       }
 
-      // refreshSize 후 중심 이동
       if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
         mapRef.current.refreshSize();
       }
-      
-      setTimeout(() => {
-        if (mapRef.current) {
-          mapRef.current.setCenter(userPosition);
-          const userLevel = 3; // 사용자 위치는 확대된 레벨
-          mapRef.current.setZoom(convertKakaoLevelToNaver(userLevel));
-          if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-        mapRef.current.refreshSize();
-      }
-          // 지도 레벨을 localStorage에 저장
-          try {
-            localStorage.setItem('mapLevel', userLevel.toString());
-            console.log('📍 사용자 위치로 이동, 레벨:', userLevel);
-          } catch (e) {
-            // 무시
-          }
+
+      const userTimer = setTimeout(() => {
+        if (selectedGroupRef.current) return;
+        if (!mapRef.current) return;
+        mapRef.current.setCenter(userPosition);
+        mapRef.current.setZoom(convertKakaoLevelToNaver(3));
+        if (typeof mapRef.current.refreshSize === 'function') mapRef.current.refreshSize();
+        try {
+          localStorage.setItem('mapLevel', '3');
+          console.log('📍 사용자 위치로 이동, 레벨: 3');
+        } catch (e) {
+          /* ignore */
         }
       }, 100);
-      return;
+      return () => clearTimeout(userTimer);
     }
 
     const cityCoordinates = getCityCoordinates(selectedCity as KoreanCity);
@@ -1446,7 +1331,6 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
 
     // 지도 중심을 해당 도시 시청으로 이동
     if (mapRef.current) {
-      // DOM 크기 확정
       const container = mapContainerRef.current;
       if (container) {
         const containerHeight = container.offsetHeight || container.clientHeight || window.innerHeight * 0.8;
@@ -1455,32 +1339,29 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
         container.style.width = `${containerWidth}px`;
       }
 
-      // refreshSize 후 중심 이동
       if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
         mapRef.current.refreshSize();
       }
-      
-      setTimeout(() => {
-        if (mapRef.current && selectedCity) {
-          mapRef.current.setCenter(cityPosition);
-          // 네이버 지도 레벨 직접 사용 (도시 단위: 10-11)
-          // 네이버 지도 레벨: 0(전체) ~ 21(상세), 도시 단위는 10-11이 적절
-          const naverCityLevel = 11; // 도시 단위로 보기 적절한 네이버 지도 레벨
-          mapRef.current.setZoom(naverCityLevel);
-          if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-            mapRef.current.refreshSize();
-          }
-          // 지도 레벨을 localStorage에 저장
-          try {
-            localStorage.setItem('mapLevel', naverCityLevel.toString());
-            console.log('📍 도시 선택 - 지도 중심 이동:', selectedCity, cityPosition, '네이버 레벨:', naverCityLevel);
-          } catch (e) {
-            // 무시
-          }
+
+      const cityTimer = setTimeout(() => {
+        // 매치 상세보기로 전환된 뒤 예약된 콜백이면 줌/중심 덮어쓰지 않음
+        if (selectedGroupRef.current) return;
+        if (!mapRef.current || !selectedCity) return;
+        mapRef.current.setCenter(cityPosition);
+        const naverCityLevel = 11;
+        mapRef.current.setZoom(naverCityLevel);
+        if (typeof mapRef.current.refreshSize === 'function') mapRef.current.refreshSize();
+        try {
+          localStorage.setItem('mapLevel', naverCityLevel.toString());
+          console.log('📍 도시 선택 - 지도 중심 이동:', selectedCity, cityPosition, '네이버 레벨:', naverCityLevel);
+        } catch (e) {
+          /* ignore */
         }
       }, 100);
+
+      return () => clearTimeout(cityTimer);
     }
-  }, [selectedCity, selectedGroup]); // selectedGroup 추가하여 충돌 방지
+  }, [selectedCity, selectedGroup]);
 
   // ⭐ 운동 카테고리 버튼 클릭 시(전체 포함) 지정된 도시 중심으로 지도 이동
   // 카테고리 변경 시 상세보기가 열려있어도 도시 중심으로 이동 (상세보기는 App.tsx에서 닫힘)
@@ -1564,25 +1445,10 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
       return;
     }
     
-    // '전체' 선택 시에는 지도 중심을 변경하지 않음
-    if (selectedCity === '전체') {
-      return;
-    }
-    
-    // 상세 패널 애니메이션 완료 후 한 번만 재조정
+    // 상세 패널 애니메이션 완료 후 한 번만 refreshSize (지역 '전체'여도 실행)
     const adjustTimer = setTimeout(() => {
-      if (mapRef.current && selectedGroup && selectedCity !== '전체' && mapContainerRef.current) {
-        // 상세보기 패널이 열려있으므로 그 너비를 고려하여 보이는 영역의 중앙에 마커 배치
-        const detailPanelWidth = window.innerWidth >= 768 ? 420 : 0;
-        
-        if (detailPanelWidth > 0) {
-          const offsetPx = 30;
-          mapRef.current.panBy(new window.naver.maps.Point(offsetPx, 0));
-        }
-        
-        if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-          mapRef.current.refreshSize();
-        }
+      if (mapRef.current && mapContainerRef.current && typeof mapRef.current.refreshSize === 'function') {
+        mapRef.current.refreshSize();
       }
     }, 400); // 상세 패널 애니메이션 완료 후 한 번만 실행
     
@@ -1595,26 +1461,31 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
       style={{ 
         width: '100%',
         height: '100%',
+        maxWidth: '100%',
+        overflow: 'hidden',
         position: 'relative',
         minHeight: '400px'
       }}
     >
-      {/* 지도 컨테이너 - 네이버 지도 API 요구사항에 맞는 DOM 구조 */}
+      {/* 지도 컨테이너 - 네이버 지도 API 요구사항에 맞는 DOM 구조 (보이는 영역 밖으로 렌더 방지) */}
       <div
         id="map"
         ref={mapContainerRef}
         style={{ 
           width: '100%',
-          height: '100%'
+          height: '100%',
+          maxWidth: '100%',
+          overflow: 'hidden'
         }}
       />
       
-      {/* 새 매치 만들기 플로팅 버튼 - 항상 표시 */}
+      {/* 매치 종류별 생성 버튼 — 매치 타입 테마 색상 적용 */}
       {onCreateGroupClick && (
         <button
           onClick={onCreateGroupClick}
-          className="absolute bottom-6 right-6 z-[1000] bg-[var(--color-blue-primary)] text-white px-4 py-3 rounded-full shadow-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
-          aria-label="새 매치 만들기"
+          className="absolute bottom-6 right-6 z-[1000] text-white px-4 py-3 rounded-full shadow-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+          style={{ backgroundColor: MATCH_TYPE_THEME[matchType]?.accentHex ?? MATCH_TYPE_THEME.general.accentHex }}
+          aria-label={CREATE_BUTTON_LABEL[matchType]}
         >
           <svg
             className="w-5 h-5 flex-shrink-0"
@@ -1626,7 +1497,7 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           <span className="whitespace-nowrap font-semibold text-sm md:text-base">
-            새 매치 만들기
+            {CREATE_BUTTON_LABEL[matchType]}
           </span>
         </button>
       )}

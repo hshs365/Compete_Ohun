@@ -7,6 +7,7 @@ export interface User {
   nickname?: string;
   tag?: string; // 닉네임 태그 (예: #KR1, #KR2)
   isProfileComplete: boolean;
+  profileImageUrl?: string | null;
 }
 
 // 닉네임과 태그를 조합하여 표시하는 헬퍼 함수
@@ -24,6 +25,8 @@ interface RegisterData {
   residenceSido: string;
   residenceSigungu: string;
   interestedSports?: string[];
+  /** 스포츠별 포지션 (축구·풋살 등) */
+  sportPositions?: { sport: string; positions: string[] }[];
   skillLevel?: 'beginner' | 'intermediate' | 'advanced';
   termsServiceAgreed: boolean;
   termsPrivacyAgreed: boolean;
@@ -51,9 +54,27 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// 프로덕션에서는 상대 경로 사용, 개발 환경에서는 환경변수 또는 localhost 사용
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
-  (import.meta.env.PROD ? '' : 'http://localhost:3000');
+// API 베이스 URL 결정: 환경변수 > 런타임 체크 > 기본값
+const getApiBaseUrl = (): string => {
+  // 1. 환경변수가 명시적으로 설정되어 있으면 사용
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  
+  // 2. 런타임에 현재 호스트명 체크
+  const hostname = window.location.hostname;
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.');
+  
+  // 3. localhost가 아니면 프로덕션으로 간주 (상대 경로 사용)
+  if (!isLocalhost) {
+    return ''; // 상대 경로 사용
+  }
+  
+  // 4. localhost면 개발 서버 사용
+  return 'http://localhost:3000';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);

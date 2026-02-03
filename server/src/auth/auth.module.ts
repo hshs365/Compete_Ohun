@@ -7,6 +7,8 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { OAuthService } from './services/oauth.service';
 import { PhoneVerificationService } from './services/phone-verification.service';
+import { BusinessNumberVerificationService } from './services/business-number-verification.service';
+import { BusinessRegistrationOcrService } from './services/business-registration-ocr.service';
 import { UsersModule } from '../users/users.module';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { PhoneVerification } from './entities/phone-verification.entity';
@@ -31,7 +33,14 @@ import { PhoneVerification } from './entities/phone-verification.entity';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, OAuthService, PhoneVerificationService, JwtStrategy],
+  providers: [
+    AuthService,
+    OAuthService,
+    PhoneVerificationService,
+    BusinessNumberVerificationService,
+    BusinessRegistrationOcrService,
+    JwtStrategy,
+  ],
   exports: [AuthService, PhoneVerificationService],
 })
 export class AuthModule {}

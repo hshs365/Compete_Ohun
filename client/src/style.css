@@ -34,6 +34,34 @@ body {
   color: var(--color-text-primary);
 }
 
+/* 스크롤바: 흰 배경 제거, 테마 연동 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-card) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-border-card);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-secondary);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 오운 랭크 패널 종목 전환 시 페이드 */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 /* 네이버 지도 InfoWindow 기본 말풍선/배경 제거 (매치 제목 라벨용) */
 #map div[style*="border: 1px solid rgb(51, 51, 51)"],
@@ -67,4 +95,64 @@ body {
 html.dark .date-input-dark::-webkit-calendar-picker-indicator {
   filter: invert(1);
   cursor: pointer;
+}
+
+/* 내 일정 캘린더 - 테마 연동 */
+.schedule-calendar-wrapper .fc {
+  --fc-border-color: var(--color-border-card);
+  --fc-button-bg-color: var(--color-bg-secondary);
+  --fc-button-border-color: var(--color-border-card);
+  --fc-button-hover-bg-color: var(--color-bg-card);
+  --fc-button-hover-border-color: var(--color-border-card);
+  --fc-button-active-bg-color: var(--color-blue-primary);
+  --fc-page-bg-color: var(--color-bg-card);
+  --fc-neutral-bg-color: var(--color-bg-primary);
+  --fc-list-event-hover-bg-color: var(--color-bg-secondary);
+  --fc-today-bg-color: color-mix(in srgb, var(--color-blue-primary) 10%, transparent);
+}
+.schedule-calendar-wrapper .fc-theme-standard td,
+.schedule-calendar-wrapper .fc-theme-standard th {
+  border-color: var(--color-border-card);
+}
+.schedule-calendar-wrapper .fc-scrollgrid {
+  border-color: var(--color-border-card);
+}
+.schedule-calendar-wrapper .fc-col-header-cell {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+.schedule-calendar-wrapper .fc-daygrid-day-number {
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+}
+.schedule-calendar-wrapper .fc-day-today .fc-daygrid-day-number {
+  background: var(--color-blue-primary);
+  color: white;
+  border-radius: 50%;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0.25rem;
+}
+.schedule-calendar-wrapper .fc-timegrid-slot {
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+}
+.schedule-calendar-wrapper .fc-timegrid-slot-label {
+  border-color: var(--color-border-card);
+}
+.schedule-calendar-wrapper .fc-timegrid-col.fc-day-today {
+  background: color-mix(in srgb, var(--color-blue-primary) 5%, transparent);
+}
+.schedule-calendar-wrapper .fc-event {
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+}
+.schedule-calendar-wrapper .fc-daygrid-event {
+  border-radius: 4px;
 }

@@ -124,7 +124,7 @@ const Step4PhoneVerification: React.FC<Step4PhoneVerificationProps> = ({
           </p>
         ) : (
           <p className="text-sm text-[var(--color-text-secondary)]">
-            개발 환경에서는 SMS 인증이 비활성화되어 있습니다. 전화번호만 입력하면 됩니다.
+            SMS 인증이 비활성화되어 있습니다. 전화번호는 선택 입력이며, 비워두고 실명만 입력한 뒤 다음 단계로 진행할 수 있습니다.
           </p>
         )}
       </div>
@@ -132,7 +132,7 @@ const Step4PhoneVerification: React.FC<Step4PhoneVerificationProps> = ({
       {/* 전화번호 입력 */}
       <div>
         <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-          휴대전화 번호
+          휴대전화 번호 {!isSmsVerificationEnabled && <span className="text-[var(--color-text-secondary)] font-normal">(선택)</span>}
         </label>
         <div className="flex gap-2">
           <div className="relative flex-1">

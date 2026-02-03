@@ -99,18 +99,11 @@ git remote set-url origin <새_저장소_URL>
 
 ## 문제 해결
 
-### 의존성 충돌
-`--legacy-peer-deps` 플래그를 사용하여 설치:
-```powershell
-npm install --legacy-peer-deps
-```
+- **ERR_CONNECTION_REFUSED**: 백엔드 먼저 실행 (`cd server` → `npm run start:dev`), 로그에 "Nest application successfully started" 확인
+- **의존성 충돌**: `npm install --legacy-peer-deps`
+- **포트 충돌**: `netstat -ano | findstr :3000` → `Stop-Process -Id <PID> -Force` 또는 `.env`에서 `PORT` 변경
 
-### 포트 충돌
-포트가 이미 사용 중이면 기존 프로세스 종료:
-```powershell
-netstat -ano | findstr :3000
-Stop-Process -Id <PID> -Force
-```
+자세한 내용은 **TROUBLESHOOTING.md** 참고.
 
 ## 👥 팀원 협업
 
@@ -120,37 +113,18 @@ Stop-Process -Id <PID> -Force
 
 ## 📚 문서
 
-### 주요 문서
-- **PROJECT-PROGRESS.md** - 프로젝트 전체 진행 상황 및 완료된 기능
-- **QUICK-START.md** - 빠른 시작 가이드
-- **TROUBLESHOOTING.md** - 문제 해결 가이드
-- **KAKAO-MAP-API-SETUP.md** - 카카오맵 API 설정 가이드
-
-### 서버 문서
-- **server/README.md** - 서버 설정 및 실행 가이드
-- **server/DATABASE-SETUP.md** - 데이터베이스 설정 가이드
-- **server/KAKAO-SETUP-GUIDE.md** - 카카오 OAuth 설정 가이드
-- **server/README-OAUTH-SETUP.md** - OAuth 상세 설정
-
-### 디자인 문서
-- **docs/auth-system-design.md** - 인증 시스템 설계 문서
-
-## 🗺️ 카카오맵 API 설정 (선택사항)
-
-카카오맵 API를 사용하면 더 정확한 주소 변환이 가능합니다.
-
-**빠른 설정**:
-1. `client/.env` 파일 생성
-2. 카카오 개발자 콘솔에서 REST API 키 발급
-3. `.env` 파일에 추가:
-   ```env
-   VITE_KAKAO_JAVASCRIPT_KEY=your_javascript_key_here
-   VITE_KAKAO_REST_API_KEY=your_rest_api_key_here
-   ```
-4. 클라이언트 재시작
-
-**자세한 방법**: `KAKAO-MAP-API-SETUP.md` 참고
-
-**참고**: API 키가 없어도 OpenStreetMap API로 동작합니다.
+- **TEAM-SETUP-GUIDE.md** - 팀원 협업 설정 체크리스트 (상세는 각 문서 링크)
+- **PROJECT-PROGRESS.md** - 진행 상황 및 완료 기능
+- **TROUBLESHOOTING.md** - 문제 해결 (ERR_CONNECTION_REFUSED, CORS, DB 등)
+- **docs/** - 상세 가이드:
+  - **docs/database-setup.md** - DB 설치·생성·초기화·원격 접속
+  - **docs/environment-setup-guide.md** - Dev/Prod 환경변수
+  - **docs/kakao-oauth-setup.md** - 카카오 로그인
+  - **docs/kakao-map-api-setup.md** - 카카오맵(지도·지오코딩)
+  - **docs/naver-map-api-setup-guide.md** - 네이버 지도
+  - **docs/troubleshooting-bcrypt-error.md** - bcrypt 오류
+  - **docs/database-schema-reference.md** - 스키마 참고
+  - **docs/auth-system-design.md** - 인증 설계  
+  - 배포·NFS·마이그레이션 등: **docs/** 폴더 내 해당 가이드 참고
 
 

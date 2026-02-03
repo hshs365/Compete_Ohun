@@ -4,6 +4,7 @@ import { UsersService } from './users.service';
 import { UserScoreService } from './user-score.service';
 import { UsersController } from './users.controller';
 import { AuthModule } from '../auth/auth.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { User } from './entities/user.entity';
 import { UserScoreHistory } from './entities/user-score-history.entity';
 import { UserActivityLog } from './entities/user-activity-log.entity';
@@ -15,6 +16,8 @@ import { Group } from '../groups/entities/group.entity';
 import { GroupEvaluation } from '../groups/entities/group-evaluation.entity';
 import { Follow } from './entities/follow.entity';
 import { FollowService } from './follow.service';
+import { RecommendedUsersService } from './recommended-users.service';
+import { AthleteService } from './athlete.service';
 
 @Module({
   imports: [
@@ -31,9 +34,10 @@ import { FollowService } from './follow.service';
       Follow,
     ]),
     forwardRef(() => AuthModule),
+    NotificationsModule,
   ],
   controllers: [UsersController],
-  providers: [UsersService, UserScoreService, FollowService],
+  providers: [UsersService, UserScoreService, FollowService, RecommendedUsersService, AthleteService],
   exports: [UsersService, UserScoreService, FollowService],
 })
 export class UsersModule {}

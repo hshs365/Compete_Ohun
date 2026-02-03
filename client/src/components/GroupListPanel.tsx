@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import GroupList from './GroupList';
 import SearchOptionsModal from './SearchOptionsModal';
 import { MagnifyingGlassIcon, MapPinIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
-import { KOREAN_CITIES, getUserCity, type KoreanCity } from '../utils/locationUtils';
+import { KOREAN_CITIES, getRegionDisplayName, getUserCity, type KoreanCity } from '../utils/locationUtils';
+import { MATCH_TYPE_THEME } from './HomeMatchTypeChoice';
+
+export type MatchType = 'general' | 'rank' | 'event';
 
 interface GroupListPanelProps {
   selectedCategory: string | null;
@@ -12,9 +15,14 @@ interface GroupListPanelProps {
   onCityChange?: (city: KoreanCity) => void;
   selectedDays?: number[];
   onDaysChange?: (days: number[]) => void;
+  /** 매치 종류: 일반 매치 | 랭크매치 | 이벤트매치 (홈에서 탭으로 전환) */
+  matchType?: MatchType;
+  onMatchTypeChange?: (type: MatchType) => void;
+  /** true면 매치 종류에 맞는 테마 색(패널 전체 배경·헤더) 적용 */
+  matchTypeTheme?: boolean;
 }
 
-const GroupListPanel = ({ selectedCategory, onGroupClick, refreshTrigger, selectedCity: propSelectedCity, onCityChange, selectedDays = [], onDaysChange }: GroupListPanelProps) => {
+const GroupListPanel = ({ selectedCategory, onGroupClick, refreshTrigger, selectedCity: propSelectedCity, onCityChange, selectedDays = [], onDaysChange, matchType = 'general', onMatchTypeChange, matchTypeTheme = false }: GroupListPanelProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState<KoreanCity>(propSelectedCity as KoreanCity || '전체');
   const [showCityDropdown, setShowCityDropdown] = useState(false);
@@ -44,11 +52,50 @@ const GroupListPanel = ({ selectedCategory, onGroupClick, refreshTrigger, select
     }
   }, [propSelectedCity, onCityChange]);
 
+  const theme = matchTypeTheme ? MATCH_TYPE_THEME[matchType] : null;
+  // 테마 있을 때: 패널 전체를 매치 종류별 10% 투명도 단색으로 채움
+  const borderClass = theme ? 'border-r border-[var(--color-border-card)]' : 'border-l border-r border-[var(--color-border-card)]';
+  const themeBg10 = theme ? theme.accentRgba.replace('0.15', '0.10') : null;
+  const headerBg = themeBg10 ? { background: themeBg10 } : undefined;
+  const panelBg = themeBg10 ? { background: themeBg10 } : undefined;
+
   return (
     <div 
       data-guide="group-list-panel"
-      className="w-full md:w-96 bg-[var(--color-bg-card)] p-2.5 md:p-3 border-l border-r border-[var(--color-border-card)] flex flex-col h-full max-h-[400px] md:max-h-none"
+      className={`w-full md:w-96 p-2.5 md:p-3 flex flex-col h-full max-h-[400px] md:max-h-none ${borderClass}`}
+      style={{
+        ...(panelBg || {}),
+        backgroundColor: theme ? undefined : 'var(--color-bg-card)',
+      }}
     >
+      {/* 매치 종류 탭: 일반 매치 | 랭크매치 | 이벤트매치 */}
+      {onMatchTypeChange && (
+        <div 
+          className="flex gap-1 p-1 rounded-lg bg-[var(--color-bg-primary)] mb-3"
+          style={headerBg}
+        >
+          {(['general', 'rank', 'event'] as const).map((type) => {
+            const t = matchTypeTheme ? MATCH_TYPE_THEME[type] : null;
+            const activeBg = matchType === type && t ? t.accentHex : undefined;
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => onMatchTypeChange(type)}
+                className={`flex-1 py-2 rounded-md text-xs font-medium transition-colors ${
+                  matchType === type
+                    ? 'text-white'
+                    : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-secondary)]'
+                }`}
+                style={matchType === type && activeBg ? { backgroundColor: activeBg } : undefined}
+              >
+                {type === 'general' ? '일반 매치' : type === 'rank' ? '랭크매치' : '이벤트매치'}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* 검색창과 지역 선택 */}
       <div className="space-y-2.5 mb-3">
         <div className="relative flex items-center gap-2">
@@ -78,9 +125,9 @@ const GroupListPanel = ({ selectedCategory, onGroupClick, refreshTrigger, select
             onClick={() => setShowCityDropdown(!showCityDropdown)}
             className="w-full flex items-center justify-between p-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-card)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] transition-colors"
           >
-            <div className="flex items-center gap-2">
-              <MapPinIcon className="h-4 w-4 text-[var(--color-text-secondary)]" />
-              <span className="text-sm">{selectedCity}</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <MapPinIcon className="h-4 w-4 flex-shrink-0 text-[var(--color-text-secondary)]" />
+              <span className="text-sm truncate">{getRegionDisplayName(selectedCity)}</span>
             </div>
             <svg
               className={`h-4 w-4 text-[var(--color-text-secondary)] transition-transform ${showCityDropdown ? 'rotate-180' : ''}`}
@@ -99,7 +146,7 @@ const GroupListPanel = ({ selectedCategory, onGroupClick, refreshTrigger, select
                 className="fixed inset-0 z-10"
                 onClick={() => setShowCityDropdown(false)}
               />
-              <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--color-bg-card)] border border-[var(--color-border-card)] rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--color-bg-card)] border border-[var(--color-border-card)] rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto overflow-x-hidden min-w-0">
                 {KOREAN_CITIES.map((city) => (
                   <button
                     key={city}
@@ -110,13 +157,13 @@ const GroupListPanel = ({ selectedCategory, onGroupClick, refreshTrigger, select
                         onCityChange(city);
                       }
                     }}
-                    className={`w-full text-left px-4 py-2 text-sm transition-all duration-200 ${
+                    className={`w-full min-w-0 text-left px-4 py-2 text-sm transition-all duration-200 break-words whitespace-normal ${
                       selectedCity === city
                         ? 'bg-[var(--color-blue-primary)] text-white'
                         : 'text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] hover:pl-6 hover:font-medium'
                     }`}
                   >
-                    {city}
+                    {getRegionDisplayName(city)}
                   </button>
                 ))}
               </div>
@@ -137,6 +184,7 @@ const GroupListPanel = ({ selectedCategory, onGroupClick, refreshTrigger, select
           includeCompleted={includeCompleted}
           onGroupClick={onGroupClick}
           refreshTrigger={refreshTrigger}
+          matchType={matchType}
         />
       </div>
 

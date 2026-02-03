@@ -38,6 +38,14 @@ export class GroupParticipantPosition {
   @Column({ type: 'varchar', length: 10 })
   positionCode: string;
 
+  // 구장 슬롯 라벨 (예: 'LW', 'RW', 'LB' 등). 없으면 행 내 첫 슬롯에 표시
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  slotLabel: string | null;
+
+  // 팀 구분 (레드 vs 블루). 'red' | 'blue', 기본값 'red'
+  @Column({ type: 'varchar', length: 10, default: 'red' })
+  team: string;
+
   // 선호 포지션 여부
   @Column({ type: 'boolean', default: false })
   isPreferred: boolean;

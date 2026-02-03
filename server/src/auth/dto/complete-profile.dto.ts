@@ -28,6 +28,11 @@ export class CompleteProfileDto {
   @IsString({ each: true })
   interestedSports?: string[];
 
+  /** 스포츠별 포지션 (축구·풋살 등). [{ sport: '축구', positions: ['GK', 'FW'] }] */
+  @IsOptional()
+  @IsArray()
+  sportPositions?: { sport: string; positions: string[] }[];
+
   @IsOptional()
   @IsEnum(SkillLevel)
   skillLevel?: SkillLevel;

@@ -11,7 +11,11 @@ import {
   HttpCode,
   HttpStatus,
   ParseIntPipe,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { FacilitiesService } from './facilities.service';
 import { CreateFacilityDto } from './dto/create-facility.dto';
 import { FacilityQueryDto } from './dto/facility-query.dto';
@@ -30,8 +34,36 @@ export class FacilitiesController {
     return this.facilitiesService.findAll(queryDto);
   }
 
-  @Public()
+  @UseGuards(JwtAuthGuard)
+  @Get('my')
+  findMy(@CurrentUser() user: User) {
+    return this.facilitiesService.findByOwner(user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('upload-image')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(
+    FileInterceptor('image', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
+          cb(new BadRequestException('이미지 파일만 업로드 가능합니다.'), false);
+        } else {
+          cb(null, true);
+        }
+      },
+    }),
+  )
+  uploadImage(@CurrentUser() user: User, @UploadedFile() file?: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('이미지 파일을 선택해 주세요.');
+    }
+    return this.facilitiesService.uploadFacilityImage(user.id, file);
+  }
+
   @Get(':id')
+  @Public()
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.facilitiesService.findOne(id);
   }

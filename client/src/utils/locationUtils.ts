@@ -22,6 +22,12 @@ export const KOREAN_CITIES = [
 
 export type KoreanCity = typeof KOREAN_CITIES[number];
 
+/** 지역 표시명: '전체'만 '전국'으로, 나머지는 전체 지역명 그대로 표시 (예: 전라남도, 충청북도) */
+export const getRegionDisplayName = (city: string): string => {
+  if (city === '전체') return '전국';
+  return city;
+};
+
 // 도시별 시청 좌표 (위도, 경도)
 export const CITY_COORDINATES: Record<KoreanCity, [number, number] | null> = {
   '전체': null,

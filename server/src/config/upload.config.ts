@@ -10,6 +10,12 @@ export const uploadConfig = {
   // 모임 이미지 저장 경로
   groupImageDir: join(process.cwd(), 'uploads', 'groups'),
   
+  // 상품 이미지 저장 경로
+  productImageDir: join(process.cwd(), 'uploads', 'product'),
+
+  // 시설 이미지 저장 경로
+  facilityImageDir: join(process.cwd(), 'uploads', 'facility'),
+
   // 최대 파일 크기 (5MB)
   maxFileSize: 5 * 1024 * 1024,
   

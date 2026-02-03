@@ -3,6 +3,7 @@ import type { SelectedGroup } from '../types/selected-group';
 import { api } from '../utils/api';
 import { extractCityFromAddress, type KoreanCity } from '../utils/locationUtils';
 import LoadingSpinner from './LoadingSpinner';
+import type { MatchType } from './GroupListPanel';
 
 interface GroupListProps {
   selectedCategory: string | null;
@@ -15,6 +16,8 @@ interface GroupListProps {
   includeCompleted?: boolean; // 종료된 매치 포함 여부
   onGroupClick: (group: SelectedGroup) => void;
   refreshTrigger?: number; // 목록 새로고침 트리거
+  /** 매치 종류: 일반/랭크/이벤트 (API type·onlyRanker 반영) */
+  matchType?: MatchType;
 }
 
 interface GroupResponse {
@@ -141,7 +144,7 @@ const GroupTitle = ({ title, groupId }: { title: string; groupId: number }) => {
   );
 };
 
-const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, selectedCity = '전체', selectedDays = [], hideClosed = true, onlyRanker = false, gender = null, includeCompleted = false, onGroupClick, refreshTrigger }) => {
+const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, selectedCity = '전체', selectedDays = [], hideClosed = true, onlyRanker = false, gender = null, includeCompleted = false, onGroupClick, refreshTrigger, matchType = 'general' }) => {
   const [groups, setGroups] = useState<SelectedGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -164,8 +167,13 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, se
         if (hideClosed) {
           queryParams.append('hideClosed', 'true');
         }
+        // matchType에 따라 API 파라미터: 랭크매치=type=rank, 이벤트매치=type=event
+        const effectiveType = matchType === 'rank' ? 'rank' : matchType === 'event' ? 'event' : undefined;
         if (onlyRanker) {
           queryParams.append('onlyRanker', 'true');
+        }
+        if (effectiveType) {
+          queryParams.append('type', effectiveType);
         }
         if (gender) {
           queryParams.append('gender', gender);
@@ -320,15 +328,21 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, se
         setGroups(mappedGroups);
       } catch (err) {
         console.error('매치 목록 조회 실패:', err);
-        setError(err instanceof Error ? err.message : '매치 목록을 불러오는데 실패했습니다.');
-        setGroups([]);
+        const msg = err instanceof Error ? err.message : '';
+        if (matchType === 'rank' || matchType === 'event') {
+          setError(null);
+          setGroups([]);
+        } else {
+          setError(msg.includes('Internal') || msg.includes('500') ? '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' : (msg || '매치 목록을 불러오는데 실패했습니다.'));
+          setGroups([]);
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchGroups();
-  }, [selectedCategory, searchQuery, selectedCity, selectedDays, hideClosed, onlyRanker, gender, includeCompleted, refreshTrigger]);
+  }, [selectedCategory, searchQuery, selectedCity, selectedDays, hideClosed, onlyRanker, gender, includeCompleted, refreshTrigger, matchType]);
 
   if (isLoading) {
     return (
@@ -348,13 +362,23 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, se
 
   return (
     <div className="p-1.5 md:p-3">
+      <style>{`
+        @keyframes listFadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .list-item-fade-in {
+          animation: listFadeIn 0.35s ease-out forwards;
+        }
+      `}</style>
       <div className="space-y-2 md:space-y-2.5">
         {groups.length > 0 ? (
-          groups.map((group) => (
+          groups.map((group, index) => (
             <button
               onClick={() => onGroupClick(group)}
-              className="w-full text-left block p-2 md:p-3 bg-[var(--color-bg-card)] rounded-lg md:rounded-xl border border-[var(--color-border-card)] transition-all duration-300 hover:scale-[1.02] hover:border-[var(--color-blue-primary)] cursor-pointer" 
+              className="list-item-fade-in w-full text-left block p-2 md:p-3 bg-[var(--color-bg-card)] rounded-lg md:rounded-xl border border-[var(--color-border-card)] transition-all duration-300 hover:scale-[1.02] hover:border-[var(--color-blue-primary)] cursor-pointer opacity-0"
               key={group.id}
+              style={{ animationDelay: `${index * 45}ms` }}
             >
               <div className="mb-1.5 gap-1.5">
                 {/* 제목과 배지 */}
@@ -429,7 +453,13 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, se
           ))
         ) : (
           <p className="p-3 text-[var(--color-text-secondary)] italic text-center text-sm">
-            {searchQuery ? '검색 결과가 없습니다.' : '해당 카테고리의 매치가 없습니다.'}
+            {searchQuery
+              ? '검색 결과가 없습니다.'
+              : matchType === 'rank'
+              ? '랭크 매치가 아직 등록되지 않았습니다.'
+              : matchType === 'event'
+              ? '이벤트 매치가 아직 등록되지 않았습니다.'
+              : '해당 카테고리의 매치가 없습니다.'}
           </p>
         )}
       </div>

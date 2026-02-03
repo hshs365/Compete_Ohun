@@ -96,6 +96,10 @@ export class User {
   @Column({ type: 'text', array: true, default: [] })
   interestedSports: string[]; // 관심 운동 종목 배열
 
+  /** 스포츠별 포지션 (예: 축구 GK, FW 등). [{ sport: '축구', positions: ['GK', 'FW'] }] */
+  @Column({ type: 'jsonb', default: () => "'[]'" })
+  sportPositions: { sport: string; positions: string[] }[];
+
   @Column({ type: 'enum', enum: SkillLevel, nullable: true })
   skillLevel: SkillLevel | null;
 
@@ -198,9 +202,25 @@ export class User {
   @Column({ type: 'boolean', default: false })
   businessNumberVerified: boolean; // 사업자번호 검증 완료 여부
 
+  /** 관리자 여부. true면 사업자 검증 없이 시설/상품 등록·이벤트매치 개최·공지 등 모든 기능 이용 가능 */
+  @Column({ name: 'is_admin', type: 'boolean', default: false })
+  isAdmin: boolean;
+
   // 프로필 사진
   @Column({ type: 'text', nullable: true })
   profileImageUrl: string | null; // 프로필 사진 URL (base64 또는 파일 경로)
+
+  /** 대한체육회 스포츠지원포털 선수 등록 여부 */
+  @Column({ type: 'boolean', default: false })
+  athleteVerified: boolean;
+
+  /** 선수 API에서 조회된 정보 (종목, 등록년도 등). JSON */
+  @Column({ type: 'jsonb', nullable: true })
+  athleteData: { sport?: string; subSport?: string; registeredYear?: number; [key: string]: unknown } | null;
+
+  /** 오운 랭크: 종목별 S,A,B,C,D,E,F. 저장값 없으면 선수=C/일반=F 기본 */
+  @Column({ type: 'jsonb', default: () => "'{}'" })
+  ohunRanks: Record<string, string>;
 
   // 메타 정보
   @CreateDateColumn()

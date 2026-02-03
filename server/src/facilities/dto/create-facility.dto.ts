@@ -37,6 +37,11 @@ export class CreateFacilityDto {
   @MaxLength(100)
   operatingHours?: string;
 
+  /** 예약 단위(시간). 1, 2, 3, 4 등 (기본 2) */
+  @IsOptional()
+  @IsNumber()
+  reservationSlotHours?: number;
+
   @IsString()
   @IsOptional()
   @MaxLength(100)
@@ -51,8 +56,18 @@ export class CreateFacilityDto {
   @IsOptional()
   amenities?: string[];
 
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  availableSports?: string[];
+
   @IsString()
   @IsOptional()
   image?: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  images?: string[];
 }
 

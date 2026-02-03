@@ -16,6 +16,10 @@ export class UpdateProfileDto {
   interestedSports?: string[];
 
   @IsOptional()
+  @IsArray()
+  sportPositions?: { sport: string; positions: string[] }[];
+
+  @IsOptional()
   @IsEnum(SkillLevel)
   skillLevel?: SkillLevel;
 }

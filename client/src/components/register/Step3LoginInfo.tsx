@@ -25,15 +25,14 @@ const Step3LoginInfo: React.FC<Step3LoginInfoProps> = ({
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const confirmPasswordRef = useRef<HTMLInputElement>(null);
 
-  // 비밀번호 강도 체크
+  // 비밀번호 강도 체크 (대/소문자 중 하나만 있어도 통과)
   const passwordStrength = {
     length: password.length >= 8,
-    lowercase: /(?=.*[a-z])/.test(password),
-    uppercase: /(?=.*[A-Z])/.test(password),
+    letter: /(?=.*[a-zA-Z])/.test(password), // 영문 대문자 또는 소문자 중 하나 이상
     number: /(?=.*\d)/.test(password),
   };
 
-  const isPasswordValid = Object.values(passwordStrength).every(Boolean);
+  const isPasswordValid = passwordStrength.length && passwordStrength.letter && passwordStrength.number;
   const passwordMatch = password === confirmPassword && confirmPassword.length > 0;
 
   // 이메일 중복 검사 (디바운스)
@@ -190,13 +189,9 @@ const Step3LoginInfo: React.FC<Step3LoginInfoProps> = ({
                 <span>{passwordStrength.length ? '✓' : '○'}</span>
                 <span>8자 이상</span>
               </div>
-              <div className={`flex items-center gap-2 ${passwordStrength.lowercase ? 'text-green-500' : 'text-[var(--color-text-secondary)]'}`}>
-                <span>{passwordStrength.lowercase ? '✓' : '○'}</span>
-                <span>소문자 포함</span>
-              </div>
-              <div className={`flex items-center gap-2 ${passwordStrength.uppercase ? 'text-green-500' : 'text-[var(--color-text-secondary)]'}`}>
-                <span>{passwordStrength.uppercase ? '✓' : '○'}</span>
-                <span>대문자 포함</span>
+              <div className={`flex items-center gap-2 ${passwordStrength.letter ? 'text-green-500' : 'text-[var(--color-text-secondary)]'}`}>
+                <span>{passwordStrength.letter ? '✓' : '○'}</span>
+                <span>대/소문자 포함</span>
               </div>
               <div className={`flex items-center gap-2 ${passwordStrength.number ? 'text-green-500' : 'text-[var(--color-text-secondary)]'}`}>
                 <span>{passwordStrength.number ? '✓' : '○'}</span>

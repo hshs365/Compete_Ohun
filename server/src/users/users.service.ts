@@ -4,6 +4,12 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User, UserStatus } from './entities/user.entity';
 import { SocialAccount, SocialProvider } from '../social-accounts/entities/social-account.entity';
+import { AthleteService } from './athlete.service';
+import { Group } from '../groups/entities/group.entity';
+import { GroupParticipant } from '../groups/entities/group-participant.entity';
+
+const EARNED_TITLES_LOVER = 5;
+const EARNED_TITLES_MASTER = 10;
 
 @Injectable()
 export class UsersService {
@@ -12,6 +18,11 @@ export class UsersService {
     private userRepository: Repository<User>,
     @InjectRepository(SocialAccount)
     private socialAccountRepository: Repository<SocialAccount>,
+    @InjectRepository(Group)
+    private groupRepository: Repository<Group>,
+    @InjectRepository(GroupParticipant)
+    private participantRepository: Repository<GroupParticipant>,
+    private athleteService: AthleteService,
   ) {}
 
   async findByEmail(email: string): Promise<User | null> {
@@ -59,6 +70,37 @@ export class UsersService {
     return this.userRepository.findOne({
       where: { nickname, tag },
     });
+  }
+
+  /** 사업자번호로 사용자 조회 (다른 계정에서 사용 중인지 확인용). excludeUserId 제외 가능 */
+  async findByBusinessNumber(businessNumber: string, excludeUserId?: number): Promise<User | null> {
+    const normalized = businessNumber?.trim().replace(/-/g, '');
+    if (!normalized || normalized.length !== 10) return null;
+    const formatted = `${normalized.slice(0, 3)}-${normalized.slice(3, 5)}-${normalized.slice(5, 10)}`;
+    const qb = this.userRepository
+      .createQueryBuilder('user')
+      .where('user.businessNumber = :bn', { bn: formatted })
+      .andWhere('user.status = :status', { status: UserStatus.ACTIVE });
+    if (excludeUserId != null) {
+      qb.andWhere('user.id != :excludeUserId', { excludeUserId });
+    }
+    return qb.getOne();
+  }
+
+  /** 전체 유저 검색 (닉네임, 태그 - 부분 일치). 이메일은 개인정보 보호를 위해 검색 불가 */
+  async searchUsers(query: string, excludeUserId: number, limit = 30): Promise<User[]> {
+    const q = `%${query.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`;
+    return this.userRepository
+      .createQueryBuilder('user')
+      .where('user.id != :excludeUserId', { excludeUserId })
+      .andWhere('user.status = :status', { status: UserStatus.ACTIVE })
+      .andWhere(
+        '(user.nickname ILIKE :q OR user.tag ILIKE :q)',
+        { q },
+      )
+      .orderBy('user.nickname', 'ASC')
+      .take(limit)
+      .getMany();
   }
 
   /**
@@ -300,6 +342,36 @@ export class UsersService {
   }
 
   /**
+   * 대한체육회 스포츠지원포털 선수 API로 본인 실명 조회 후 선수 인증 처리
+   */
+  async registerAthlete(userId: number): Promise<{ success: boolean; message?: string }> {
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    }
+    if (!user.realName?.trim()) {
+      return { success: false, message: '선수 등록을 위해 먼저 실명을 등록해 주세요. (내정보 또는 회원가입 시 실명 입력)' };
+    }
+
+    const result = await this.athleteService.findByRealName(
+      user.realName,
+      user.birthDate,
+    );
+    if (!result.found || !result.data) {
+      return {
+        success: false,
+        message: result.message ?? '등록된 선수 정보를 찾을 수 없습니다. 실명과 생년월일을 확인해 주세요.',
+      };
+    }
+
+    await this.updateUser(userId, {
+      athleteVerified: true,
+      athleteData: result.data,
+    });
+    return { success: true };
+  }
+
+  /**
    * 회원 탈퇴 (소프트 삭제)
    * 사용자 상태를 DELETED로 변경하고 개인정보를 익명화
    */
@@ -323,6 +395,77 @@ export class UsersService {
       longitude: null,
       // 기타 개인정보는 유지 (통계 목적)
     });
+  }
+
+  /** 프로필용: 완료된 참여/생성 매치 기준 종목별 횟수 + 최근 완료 활동 */
+  async getActivitySummaryForProfile(userId: number): Promise<{
+    countByCategory: Record<string, number>;
+    recentCompleted: Array<{ type: 'participated' | 'created'; groupId: number; name: string; category: string; date: string }>;
+  }> {
+    const now = new Date();
+    const countByCategory: Record<string, number> = {};
+    const recentItems: Array<{ type: 'participated' | 'created'; date: Date; groupId: number; name: string; category: string }> = [];
+
+    const completedCondition = '(group.isCompleted = :isCompleted OR (group.meetingDateTime IS NOT NULL AND group.meetingDateTime <= :now))';
+
+    const participations = await this.participantRepository
+      .createQueryBuilder('p')
+      .innerJoinAndSelect('p.group', 'group')
+      .where('p.userId = :userId', { userId })
+      .andWhere('group.creatorId != :userId', { userId })
+      .andWhere('group.isActive = :isActive', { isActive: true })
+      .andWhere(completedCondition, { isCompleted: true, now })
+      .orderBy('group.meetingDateTime', 'DESC', 'NULLS LAST')
+      .addOrderBy('group.createdAt', 'DESC')
+      .take(50)
+      .getMany();
+
+    for (const p of participations) {
+      const g = (p as any).group as Group;
+      if (!g || !g.category) continue;
+      countByCategory[g.category] = (countByCategory[g.category] || 0) + 1;
+      const date = g.meetingDateTime || g.createdAt;
+      if (date) recentItems.push({ type: 'participated', date: date instanceof Date ? date : new Date(date), groupId: g.id, name: g.name, category: g.category });
+    }
+
+    const creations = await this.groupRepository
+      .createQueryBuilder('group')
+      .where('group.creatorId = :userId', { userId })
+      .andWhere('group.isActive = :isActive', { isActive: true })
+      .andWhere(completedCondition, { isCompleted: true, now })
+      .orderBy('group.meetingDateTime', 'DESC', 'NULLS LAST')
+      .addOrderBy('group.createdAt', 'DESC')
+      .take(50)
+      .getMany();
+
+    for (const g of creations) {
+      if (!g.category) continue;
+      countByCategory[g.category] = (countByCategory[g.category] || 0) + 1;
+      const date = g.meetingDateTime || g.createdAt;
+      if (date) recentItems.push({ type: 'created', date: date instanceof Date ? date : new Date(date), groupId: g.id, name: g.name, category: g.category });
+    }
+
+    recentItems.sort((a, b) => b.date.getTime() - a.date.getTime());
+    const recentCompleted = recentItems.slice(0, 10).map((item) => ({
+      type: item.type,
+      groupId: item.groupId,
+      name: item.name,
+      category: item.category,
+      date: item.date.toISOString().slice(0, 10),
+    }));
+
+    return { countByCategory, recentCompleted };
+  }
+
+  /** countByCategory → 타이틀 뱃지 목록 (일반, ○○ 애호가, ○○ 마스터) */
+  getEarnedTitlesFromCount(countByCategory: Record<string, number>): string[] {
+    const titles: string[] = ['일반'];
+    for (const [category, count] of Object.entries(countByCategory)) {
+      if (category === '전체') continue;
+      if (count >= EARNED_TITLES_MASTER) titles.push(`${category} 마스터`);
+      else if (count >= EARNED_TITLES_LOVER) titles.push(`${category} 애호가`);
+    }
+    return titles;
   }
 }
 

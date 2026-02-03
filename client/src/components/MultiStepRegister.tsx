@@ -88,6 +88,53 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
     }
   };
 
+  /** 현재 단계에서 입력/검증이 끝났는지 여부. 다음 버튼 활성화에 사용 */
+  const isCurrentStepComplete = (): boolean => {
+    switch (currentStep) {
+      case 1:
+        return true;
+      case 2:
+        return formData.termsServiceAgreed && formData.termsPrivacyAgreed;
+      case 3: {
+        const emailOk = formData.email?.trim() && /\S+@\S+\.\S+/.test(formData.email);
+        const passwordOk =
+          formData.password &&
+          formData.password.length >= 8 &&
+          /(?=.*[a-zA-Z])(?=.*\d)/.test(formData.password);
+        const confirmOk = formData.password === formData.confirmPassword;
+        return !!(emailOk && passwordOk && confirmOk);
+      }
+      case 4: {
+        const isSmsEnabled = import.meta.env.VITE_SMS_VERIFICATION_ENABLED === 'true';
+        if (formData.phone?.trim()) {
+          const phoneRegex = /^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/;
+          if (!phoneRegex.test(formData.phone)) return false;
+          if (isSmsEnabled && !formData.isPhoneVerified) return false;
+        } else if (isSmsEnabled) {
+          return false;
+        }
+        return !!(formData.realName && formData.realName.length >= 2);
+      }
+      case 5:
+        if (formData.memberType === 'business') {
+          return formData.isBusinessNumberVerified;
+        }
+        return !!(
+          formData.nickname?.length >= 2 &&
+          formData.residenceSido &&
+          formData.selectedAddress
+        );
+      case 6:
+        return !!(
+          formData.nickname?.length >= 2 &&
+          formData.residenceSido &&
+          formData.selectedAddress
+        );
+      default:
+        return true;
+    }
+  };
+
   // 각 단계별 유효성 검사
   const validateStep = async (step: number): Promise<boolean> => {
     switch (step) {
@@ -122,8 +169,8 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
           showError('비밀번호는 8자 이상이어야 합니다.', '비밀번호 오류');
           return false;
         }
-        if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.password)) {
-          showError('비밀번호는 대문자, 소문자, 숫자를 포함해야 합니다.', '비밀번호 오류');
+        if (!/(?=.*[a-zA-Z])(?=.*\d)/.test(formData.password)) {
+          showError('비밀번호는 영문(대/소문자 중 하나)과 숫자를 포함해야 합니다.', '비밀번호 오류');
           return false;
         }
         if (formData.password !== formData.confirmPassword) {
@@ -132,21 +179,21 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
         }
         return true;
       case 4:
-        if (!formData.phone || formData.phone.trim() === '') {
-          showError('전화번호를 입력해주세요.', '전화번호 입력 필요');
-          return false;
-        }
-        const phoneRegex = /^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/;
-        if (!phoneRegex.test(formData.phone)) {
-          showError('올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)', '전화번호 형식 오류');
-          return false;
-        }
         // SMS 인증 활성화 여부 확인
-        const isSmsVerificationEnabled = import.meta.env.VITE_SMS_VERIFICATION_ENABLED === 'true';
-        
-        // SMS 인증이 활성화된 경우에만 인증 완료 체크
-        if (isSmsVerificationEnabled && !formData.isPhoneVerified) {
-          showError('본인인증을 완료해주세요.', '본인인증 필요');
+        const isSmsVerificationEnabledStep4 = import.meta.env.VITE_SMS_VERIFICATION_ENABLED === 'true';
+        // 전화번호: SMS 비활성화 시 선택 입력, 활성화 시 필수
+        if (formData.phone && formData.phone.trim() !== '') {
+          const phoneRegex = /^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/;
+          if (!phoneRegex.test(formData.phone)) {
+            showError('올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)', '전화번호 형식 오류');
+            return false;
+          }
+          if (isSmsVerificationEnabledStep4 && !formData.isPhoneVerified) {
+            showError('본인인증을 완료해주세요.', '본인인증 필요');
+            return false;
+          }
+        } else if (isSmsVerificationEnabledStep4) {
+          showError('전화번호를 입력해주세요.', '전화번호 입력 필요');
           return false;
         }
         if (!formData.realName || formData.realName.length < 2) {
@@ -168,7 +215,7 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
           showError('닉네임은 2자 이상이어야 합니다.', '닉네임 오류');
           return false;
         }
-        if (!formData.residenceSido || !formData.residenceSigungu) {
+        if (!formData.residenceSido || !formData.selectedAddress) {
           showError('거주 지역을 입력해주세요.', '거주 지역 입력 필요');
           return false;
         }
@@ -179,7 +226,7 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
           showError('닉네임은 2자 이상이어야 합니다.', '닉네임 오류');
           return false;
         }
-        if (!formData.residenceSido || !formData.residenceSigungu) {
+        if (!formData.residenceSido || !formData.selectedAddress) {
           showError('거주 지역을 입력해주세요.', '거주 지역 입력 필요');
           return false;
         }
@@ -209,22 +256,21 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
       return;
     }
 
-    // 전화번호 재검증
-    if (!formData.phone || formData.phone.trim() === '') {
-      await showError('전화번호를 입력해주세요.', '전화번호 입력 필요');
-      return;
-    }
-    const phoneRegex = /^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/;
-    if (!phoneRegex.test(formData.phone)) {
-      await showError('올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)', '전화번호 형식 오류');
-      return;
-    }
-    // SMS 인증 활성화 여부 확인
+    // 전화번호: SMS 비활성화 시 선택 입력, 활성화 시 필수
     const isSmsVerificationEnabled = import.meta.env.VITE_SMS_VERIFICATION_ENABLED === 'true';
-    
-    // SMS 인증이 활성화된 경우에만 인증 완료 체크
-    if (isSmsVerificationEnabled && !formData.isPhoneVerified) {
-      await showError('본인인증을 완료해주세요.', '본인인증 필요');
+    const hasPhone = formData.phone != null && formData.phone.trim() !== '';
+    if (hasPhone) {
+      const phoneRegex = /^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/;
+      if (!phoneRegex.test(formData.phone)) {
+        await showError('올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)', '전화번호 형식 오류');
+        return;
+      }
+      if (isSmsVerificationEnabled && !formData.isPhoneVerified) {
+        await showError('본인인증을 완료해주세요.', '본인인증 필요');
+        return;
+      }
+    } else if (isSmsVerificationEnabled) {
+      await showError('전화번호를 입력해주세요.', '전화번호 입력 필요');
       return;
     }
 
@@ -235,12 +281,11 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
         nickname: formData.nickname,
         gender: formData.gender,
         residenceSido: formData.residenceSido,
-        residenceSigungu: formData.residenceSigungu,
+        residenceSigungu: (formData.residenceSigungu && formData.residenceSigungu.trim()) ? formData.residenceSigungu : formData.residenceSido,
         termsServiceAgreed: formData.termsServiceAgreed,
         termsPrivacyAgreed: formData.termsPrivacyAgreed,
         marketingConsent: formData.marketingConsent,
-        phone: formData.phone,
-        // SMS 인증이 비활성화된 경우 더미 인증번호 전송 (서버에서 무시됨)
+        phone: formData.phone || '', // SMS 비활성화 시 빈 값 허용 (서버에서 optional 처리)
         verificationCode: isSmsVerificationEnabled ? formData.verificationCode : '000000',
         memberType: formData.memberType,
         businessNumber: formData.memberType === 'business' ? formData.businessNumber : undefined,
@@ -314,10 +359,10 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
         if (formData.memberType === 'business') {
           return (
             <Step5BusinessVerification
-              businessNumber={formData.businessNumber}
-              onBusinessNumberChange={(businessNumber) => setFormData({ ...formData, businessNumber })}
+              realName={formData.realName}
               isBusinessNumberVerified={formData.isBusinessNumberVerified}
-              onBusinessNumberVerified={(verified) => setFormData({ ...formData, isBusinessNumberVerified: verified })}
+              onBusinessNumberVerified={(verified) => setFormData((prev) => ({ ...prev, isBusinessNumberVerified: verified }))}
+              onBusinessNumberFromDocument={(businessNumber) => setFormData((prev) => ({ ...prev, businessNumber }))}
             />
           );
         } else {
@@ -328,9 +373,9 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
               residenceSido={formData.residenceSido}
               residenceSigungu={formData.residenceSigungu}
               selectedAddress={formData.selectedAddress}
-              onNicknameChange={(nickname) => setFormData({ ...formData, nickname })}
-              onGenderChange={(gender) => setFormData({ ...formData, gender })}
-              onResidenceChange={(residence) => setFormData({ ...formData, ...residence })}
+              onNicknameChange={(nickname) => setFormData((prev) => ({ ...prev, nickname }))}
+              onGenderChange={(gender) => setFormData((prev) => ({ ...prev, gender }))}
+              onResidenceChange={(residence) => setFormData((prev) => ({ ...prev, ...residence }))}
             />
           );
         }
@@ -343,9 +388,9 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
             residenceSido={formData.residenceSido}
             residenceSigungu={formData.residenceSigungu}
             selectedAddress={formData.selectedAddress}
-            onNicknameChange={(nickname) => setFormData({ ...formData, nickname })}
-            onGenderChange={(gender) => setFormData({ ...formData, gender })}
-            onResidenceChange={(residence) => setFormData({ ...formData, ...residence })}
+            onNicknameChange={(nickname) => setFormData((prev) => ({ ...prev, nickname }))}
+            onGenderChange={(gender) => setFormData((prev) => ({ ...prev, gender }))}
+            onResidenceChange={(residence) => setFormData((prev) => ({ ...prev, ...residence }))}
           />
         );
       default:
@@ -375,7 +420,7 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
               {currentStep === 2 && '약관 및 개인정보 수집, 이용 안내에 동의해주세요.'}
               {currentStep === 3 && '로그인 정보를 입력해주세요.'}
               {currentStep === 4 && '본인인증을 진행해주세요.'}
-              {currentStep === 5 && formData.memberType === 'business' && '사업자등록번호를 검증해주세요.'}
+              {currentStep === 5 && formData.memberType === 'business' && '사업자 정보'}
               {currentStep === 5 && formData.memberType === 'individual' && '추가 정보를 입력해주세요.'}
               {currentStep === 6 && '추가 정보를 입력해주세요.'}
             </h1>
@@ -417,7 +462,7 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
 
             <button
               onClick={handleNextClick}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !isCurrentStepComplete()}
               className="flex items-center gap-2 px-8 py-3 bg-[var(--color-blue-primary)] text-white rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? (

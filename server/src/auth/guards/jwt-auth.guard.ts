@@ -1,4 +1,4 @@
-import { Injectable, ExecutionContext } from '@nestjs/common';
+import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Reflector } from '@nestjs/core';
 
@@ -38,9 +38,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       return null; // 사용자 정보가 없어도 계속 진행
     }
 
-    // 일반 엔드포인트는 기존 동작 유지
+    // 일반 엔드포인트: 401 Unauthorized 반환 (Nest 예외 필터로 처리)
     if (err || !user) {
-      throw err || new Error('Unauthorized');
+      throw err instanceof UnauthorizedException ? err : new UnauthorizedException('인증이 필요합니다.');
     }
     return user;
   }

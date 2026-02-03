@@ -120,7 +120,7 @@ const Step5AdditionalInfo: React.FC<Step5AdditionalInfoProps> = ({
 
         onResidenceChange({
           residenceSido: data.sido,
-          residenceSigungu: data.sigungu,
+          residenceSigungu: (data.sigungu && data.sigungu.trim()) ? data.sigungu : data.sido,
           selectedAddress: addr + extraAddr,
         });
       },

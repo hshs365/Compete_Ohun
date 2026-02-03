@@ -1,9 +1,12 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException, ConflictException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThanOrEqual } from 'typeorm';
+import { Repository, MoreThanOrEqual, In } from 'typeorm';
 import { Group } from './entities/group.entity';
 import { GroupParticipant } from './entities/group-participant.entity';
 import { GroupGameSettings } from './entities/group-game-settings.entity';
+import { GroupParticipantPosition } from './entities/group-participant-position.entity';
+import { GroupReferee } from './entities/group-referee.entity';
+import { GroupFavorite } from './entities/group-favorite.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupQueryDto } from './dto/group-query.dto';
@@ -11,9 +14,12 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
 import { UsersService } from '../users/users.service';
 import { UserScoreService } from '../users/user-score.service';
+import { FacilitiesService } from '../facilities/facilities.service';
 
 @Injectable()
 export class GroupsService {
+  private readonly logger = new Logger(GroupsService.name);
+
   constructor(
     @InjectRepository(Group)
     private groupRepository: Repository<Group>,
@@ -21,12 +27,25 @@ export class GroupsService {
     private participantRepository: Repository<GroupParticipant>,
     @InjectRepository(GroupGameSettings)
     private gameSettingsRepository: Repository<GroupGameSettings>,
+    @InjectRepository(GroupParticipantPosition)
+    private participantPositionRepository: Repository<GroupParticipantPosition>,
+    @InjectRepository(GroupReferee)
+    private refereeRepository: Repository<GroupReferee>,
+    @InjectRepository(GroupFavorite)
+    private favoriteRepository: Repository<GroupFavorite>,
     private notificationsService: NotificationsService,
     private usersService: UsersService,
     private userScoreService: UserScoreService,
+    private facilitiesService: FacilitiesService,
   ) {}
 
   async create(createGroupDto: CreateGroupDto, creatorId: number): Promise<Group> {
+    // 현재 지원 종목: 축구만 (추후 종목 추가 예정)
+    const allowedCategories = ['축구'];
+    if (!createGroupDto.category || !allowedCategories.includes(createGroupDto.category)) {
+      throw new BadRequestException('현재 지원하는 종목은 축구입니다.');
+    }
+
     // 이벤트매치인 경우 사장님 권한 체크
     const groupType = createGroupDto.type || 'normal';
     if (groupType === 'event') {
@@ -34,7 +53,7 @@ export class GroupsService {
       if (!creator) {
         throw new NotFoundException('사용자를 찾을 수 없습니다.');
       }
-      if (!creator.businessNumberVerified) {
+      if (!creator.isAdmin && !creator.businessNumberVerified) {
         throw new ForbiddenException('이벤트매치는 체육관 사장님이나 스포츠샵 사장님으로 등록된 사용자만 개최할 수 있습니다.');
       }
     }
@@ -63,15 +82,46 @@ export class GroupsService {
 
     // 게임 설정이 있으면 저장
     if (createGroupDto.gameSettings) {
+      const gs = createGroupDto.gameSettings;
       const gameSettings = this.gameSettingsRepository.create({
         groupId: savedGroup.id,
-        gameType: createGroupDto.gameSettings.gameType || 'individual',
-        positions: createGroupDto.gameSettings.positions || [],
-        minPlayersPerTeam: createGroupDto.gameSettings.minPlayersPerTeam || null,
-        balanceByExperience: createGroupDto.gameSettings.balanceByExperience || false,
-        balanceByRank: createGroupDto.gameSettings.balanceByRank || false,
+        gameType: gs.gameType || 'individual',
+        positions: gs.positions || [],
+        minPlayersPerTeam: gs.minPlayersPerTeam || null,
+        balanceByExperience: gs.balanceByExperience || false,
+        balanceByRank: gs.balanceByRank || false,
       });
       await this.gameSettingsRepository.save(gameSettings);
+
+      // 포지션 지정 매치 + 모임장 포지션/팀 선택 시: 모임장을 참가자·포지션에 등록
+      // positions가 비어 있으면 '모든 포지션 모집'으로 간주하여 모임장만이라도 등록
+      const creatorPosAllowed =
+        !gs.positions?.length ||
+        (gs.creatorPositionCode != null && (gs.positions as string[]).includes(gs.creatorPositionCode));
+      if (
+        gs.gameType === 'team' &&
+        gs.creatorPositionCode &&
+        gs.creatorTeam &&
+        creatorPosAllowed
+      ) {
+        await this.participantRepository.save(
+          this.participantRepository.create({
+            groupId: savedGroup.id,
+            userId: creatorId,
+            status: 'joined',
+          }),
+        );
+        await this.participantPositionRepository.save(
+          this.participantPositionRepository.create({
+            groupId: savedGroup.id,
+            userId: creatorId,
+            positionCode: gs.creatorPositionCode,
+            slotLabel: (gs as any).creatorSlotLabel ?? null,
+            team: gs.creatorTeam,
+            isPreferred: false,
+          }),
+        );
+      }
     }
 
     // 게임 설정을 포함하여 다시 조회
@@ -106,6 +156,15 @@ export class GroupsService {
   }
 
   async findAll(queryDto: GroupQueryDto): Promise<{ groups: Group[]; total: number }> {
+    try {
+      return await this.findAllInternal(queryDto);
+    } catch (error) {
+      this.logger.warn('findAll 실패 (랭크/이벤트 테이블 미준비 시 발생 가능):', error);
+      return { groups: [], total: 0 };
+    }
+  }
+
+  private async findAllInternal(queryDto: GroupQueryDto): Promise<{ groups: Group[]; total: number }> {
     const { category, search, page = 1, limit = 20, hideClosed, onlyRanker, gender, includeCompleted, type } = queryDto;
     const skip = (page - 1) * limit;
 
@@ -147,10 +206,9 @@ export class GroupsService {
         // 종료된 이벤트매치는 기본적으로 제외
         queryBuilder.andWhere('group.isCompleted = :isCompleted', { isCompleted: false });
       }
-    } else if (queryDto.type === 'normal' || !queryDto.type) {
-      // 일반 모임인 경우 (또는 타입 필터가 없는 경우)
+    } else {
+      // 일반/랭크 모임 또는 타입 미지정 시
       if (!queryDto.includeCompleted) {
-        // 종료된 일반 모임도 기본적으로 제외 (선택적으로 포함 가능)
         queryBuilder.andWhere('group.isCompleted = :isCompleted', { isCompleted: false });
       }
     }
@@ -235,9 +293,18 @@ export class GroupsService {
           where: { groupId: id },
           relations: ['user'],
         });
+        // 포지션 지정 매치: 참가자별 포지션 코드 부여
+        const participantPositions = await this.participantPositionRepository.find({
+          where: { groupId: id },
+        });
+        for (const p of group.participants) {
+          const pos = participantPositions.find((pp) => pp.userId === p.userId);
+          (p as any).positionCode = pos?.positionCode ?? null;
+          (p as any).slotLabel = pos?.slotLabel ?? null;
+          (p as any).team = pos?.team ?? 'red';
+        }
       } catch (participantError) {
         console.error('참가자 목록 로드 실패:', participantError);
-        // 참가자 목록 로드 실패 시 빈 배열로 설정
         group.participants = [];
       }
 
@@ -269,6 +336,59 @@ export class GroupsService {
           (p) => p.userId === userId,
         );
         (group as any).isUserParticipant = isParticipant;
+        // 찜 여부
+        const favorite = await this.favoriteRepository.findOne({
+          where: { userId, groupId: id },
+        });
+        (group as any).isFavorited = !!favorite;
+      }
+
+      // 심판 목록 조회
+      try {
+        const referees = await this.refereeRepository.find({
+          where: { groupId: id },
+          relations: ['user'],
+        });
+        (group as any).referees = referees.map((r) => ({
+          id: r.id,
+          userId: r.userId,
+          appliedAt: r.appliedAt,
+          user: r.user,
+        }));
+        if (userId) {
+          const isReferee = referees.some((r) => r.userId === userId);
+          (group as any).isUserReferee = isReferee;
+        }
+      } catch (refereeError) {
+        console.error('심판 목록 로드 실패:', refereeError);
+        (group as any).referees = [];
+      }
+
+      // 매치장(creator) 정보를 명시적으로 평문 객체로 넣어 클라이언트에서 항상 표시되도록 함
+      (group as any).creator = group.creator
+        ? {
+            id: group.creator.id,
+            nickname: group.creator.nickname,
+            tag: group.creator.tag ?? null,
+            profileImageUrl: group.creator.profileImageUrl ?? null,
+          }
+        : null;
+
+      // 매치장(시설) 정보: facilityId가 있으면 시설 조회 후 응답에 포함
+      if (group.facilityId) {
+        try {
+          const facility = await this.facilitiesService.findOne(group.facilityId);
+          (group as any).facility = {
+            id: facility.id,
+            name: facility.name,
+            address: facility.address,
+            type: facility.type,
+          };
+        } catch {
+          (group as any).facility = null;
+        }
+      } else {
+        (group as any).facility = null;
       }
 
       return group;
@@ -282,6 +402,22 @@ export class GroupsService {
       console.error('findOne 에러:', error);
       throw error;
     }
+  }
+
+  /** 찜 토글. 반환: { favorited: boolean } */
+  async toggleFavorite(groupId: number, userId: number): Promise<{ favorited: boolean }> {
+    await this.findOne(groupId, userId);
+    const existing = await this.favoriteRepository.findOne({
+      where: { userId, groupId },
+    });
+    if (existing) {
+      await this.favoriteRepository.remove(existing);
+      return { favorited: false };
+    }
+    await this.favoriteRepository.save(
+      this.favoriteRepository.create({ userId, groupId }),
+    );
+    return { favorited: true };
   }
 
   async update(id: number, updateGroupDto: UpdateGroupDto, userId: number): Promise<Group> {
@@ -324,7 +460,7 @@ export class GroupsService {
       .execute();
   }
 
-  async joinGroup(groupId: number, userId: number): Promise<Group> {
+  async joinGroup(groupId: number, userId: number, positionCode?: string, team?: string): Promise<Group> {
     console.log('🚀 joinGroup 시작:', {
       원본_groupId: groupId,
       원본_userId: userId,
@@ -503,6 +639,21 @@ export class GroupsService {
         if (insertResult && (insertResult.raw?.length > 0 || insertResult.identifiers?.length > 0)) {
           insertSuccess = true;
           console.log('✅ 참가자 레코드 저장 완료 (createQueryBuilder)');
+          // 포지션 지정 매치일 때 포지션 저장
+          if (positionCode) {
+            const settings = await this.gameSettingsRepository.findOne({ where: { groupId: numericGroupId } });
+            if (settings?.gameType === 'team' && (!settings.positions?.length || settings.positions.includes(positionCode))) {
+              await this.participantPositionRepository.save(
+                this.participantPositionRepository.create({
+                  groupId: numericGroupId,
+                  userId: numericUserId,
+                  positionCode,
+                  team: team ?? 'red',
+                  isPreferred: false,
+                }),
+              );
+            }
+          }
         }
       } catch (saveError: any) {
         console.error('❌ createQueryBuilder INSERT 실패:', {
@@ -548,6 +699,20 @@ export class GroupsService {
           if (insertResult && Array.isArray(insertResult) && insertResult.length > 0) {
             insertSuccess = true;
             console.log('✅ 참가자 레코드 저장 완료 (Raw SQL)');
+            if (positionCode) {
+              const settings = await this.gameSettingsRepository.findOne({ where: { groupId: numericGroupId } });
+              if (settings?.gameType === 'team' && (!settings.positions?.length || settings.positions.includes(positionCode))) {
+                await this.participantPositionRepository.save(
+                  this.participantPositionRepository.create({
+                    groupId: numericGroupId,
+                    userId: numericUserId,
+                    positionCode,
+                    team: team ?? 'red',
+                    isPreferred: false,
+                  }),
+                );
+              }
+            }
           }
         } catch (rawSqlError: any) {
           console.error('❌ Raw SQL INSERT도 실패:', {
@@ -849,6 +1014,12 @@ export class GroupsService {
         currentStatus: participant.status,
       });
 
+      // 포지션 지정 매치: 참가자 포지션 레코드 삭제
+      await this.participantPositionRepository.delete({
+        groupId: numericGroupId,
+        userId: numericUserId,
+      });
+
       // 참가자 레코드를 완전히 삭제
       // 방법 1: delete() 메서드 사용 (가장 간단)
       const deleteResult = await this.participantRepository.delete({ 
@@ -966,12 +1137,69 @@ export class GroupsService {
     return !!participant;
   }
 
+  /** 내가 생성한 모임 목록 (활성인 것만, 완료 여부 무관). my-groups용 */
   async findMyGroups(creatorId: number): Promise<Group[]> {
     const groups = await this.groupRepository.find({
       where: { creatorId, isActive: true },
+      relations: ['creator'],
       order: { createdAt: 'DESC' },
-      take: 10, // 최근 10개만 가져오기
+      take: 50,
     });
+    return groups;
+  }
+
+  /** 활동 기록용: 완료된 매치만 반환. 매치 종료 시각(meetingDateTime)이 지났거나 isCompleted인 경우. my-creations용 */
+  async findMyCreationsCompleted(creatorId: number): Promise<Group[]> {
+    const now = new Date();
+    const groups = await this.groupRepository
+      .createQueryBuilder('group')
+      .leftJoinAndSelect('group.creator', 'creator')
+      .where('group.creatorId = :creatorId', { creatorId })
+      .andWhere('group.isActive = :isActive', { isActive: true })
+      .andWhere(
+        '(group.isCompleted = :isCompleted OR (group.meetingDateTime IS NOT NULL AND group.meetingDateTime <= :now))',
+        { isCompleted: true, now },
+      )
+      .orderBy('group.createdAt', 'DESC')
+      .take(50)
+      .getMany();
+    return groups;
+  }
+
+  /** 내가 참가한 모임 목록 (다른 사람이 만든 모임에 참가한 것만, 생성한 모임 제외).
+   *  매치 종료 시각(meetingDateTime)이 지난 경우만 집계. 삭제된 모임 제외. 각 그룹에 myPositionCode 부여 */
+  async findMyParticipations(userId: number): Promise<Group[]> {
+    const participants = await this.participantRepository.find({
+      where: { userId },
+      relations: ['group', 'group.creator'],
+      order: { joinedAt: 'DESC' },
+      take: 100,
+    });
+    const now = new Date();
+    const seen = new Set<number>();
+    const groupIds: number[] = [];
+    const groups: Group[] = [];
+    for (const p of participants) {
+      const g = p.group;
+      if (!g || !g.isActive || g.creatorId === userId) continue;
+      const completed =
+        g.isCompleted ||
+        (g.meetingDateTime != null && new Date(g.meetingDateTime) <= now);
+      if (!completed) continue;
+      if (seen.has(g.id)) continue;
+      seen.add(g.id);
+      groupIds.push(g.id);
+      groups.push(g);
+    }
+    if (groupIds.length > 0) {
+      const positions = await this.participantPositionRepository.find({
+        where: { userId, groupId: In(groupIds) },
+      });
+      for (const g of groups) {
+        const pos = positions.find((pp) => pp.groupId === g.id);
+        (g as any).myPositionCode = pos?.positionCode ?? null;
+      }
+    }
     return groups;
   }
 
@@ -1013,6 +1241,52 @@ export class GroupsService {
     
     group.isClosed = false;
     return group;
+  }
+
+  /** 심판 신청: 랭크매치에서만 가능, 참가자는 심판 신청 불가 */
+  async applyReferee(groupId: number, userId: number): Promise<{ success: boolean; message: string }> {
+    const group = await this.groupRepository.findOne({
+      where: { id: groupId },
+      relations: [],
+    });
+    if (!group) {
+      throw new NotFoundException('모임을 찾을 수 없습니다.');
+    }
+    if (group.type !== 'rank') {
+      throw new BadRequestException('심판 시스템은 랭크매치에서만 이용 가능합니다.');
+    }
+    const isParticipant = await this.participantRepository.findOne({
+      where: { groupId, userId },
+    });
+    if (isParticipant) {
+      throw new BadRequestException('경기에 참가한 선수는 심판으로 신청할 수 없습니다.');
+    }
+    const existing = await this.refereeRepository.findOne({
+      where: { groupId, userId },
+    });
+    if (existing) {
+      throw new ConflictException('이미 심판으로 신청하셨습니다.');
+    }
+    await this.refereeRepository.save(
+      this.refereeRepository.create({ groupId, userId }),
+    );
+    return { success: true, message: '심판 신청이 완료되었습니다.' };
+  }
+
+  /** 심판 신청 취소 */
+  async cancelReferee(groupId: number, userId: number): Promise<{ success: boolean; message: string }> {
+    const group = await this.groupRepository.findOne({ where: { id: groupId }, relations: [] });
+    if (!group) {
+      throw new NotFoundException('모임을 찾을 수 없습니다.');
+    }
+    if (group.type !== 'rank') {
+      throw new BadRequestException('심판 시스템은 랭크매치에서만 이용 가능합니다.');
+    }
+    const deleted = await this.refereeRepository.delete({ groupId, userId });
+    if (deleted.affected === 0) {
+      throw new NotFoundException('심판 신청 내역이 없습니다.');
+    }
+    return { success: true, message: '심판 신청이 취소되었습니다.' };
   }
 }
 

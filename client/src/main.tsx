@@ -53,7 +53,8 @@ const preloadNaverMapScript = () => {
   // 공식 문서: https://navermaps.github.io/maps.js.ncp/docs/tutorial-2-Getting-Started.html
   // 스크립트 URL 형식: https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=...
   // ⭐ 중요: 파라미터 이름이 ncpClientId에서 ncpKeyId로 변경되었습니다!
-  const scriptUrl = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_CLIENT_ID}`;
+  // 지오코딩(주소→좌표)을 브라우저에서 CORS 없이 쓰려면 submodules=geocoder 필요
+  const scriptUrl = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_CLIENT_ID}&submodules=geocoder`;
   script.src = scriptUrl;
   script.async = true;
   script.type = 'text/javascript';

@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import type { CompleteProfileData } from '../contexts/AuthContext';
 import { api } from '../utils/api';
 import { SPORTS_LIST } from '../constants/sports';
+import { SPORTS_WITH_POSITIONS, getPositionsBySport, getPositionLabel } from '../constants/positions';
 
 const CompleteProfilePage = () => {
   const navigate = useNavigate();
@@ -32,6 +33,7 @@ const CompleteProfilePage = () => {
     residenceSido: '',
     residenceSigungu: '',
     interestedSports: [],
+    sportPositions: [],
     skillLevel: 'beginner',
     termsServiceAgreed: false,
     termsPrivacyAgreed: false,
@@ -275,14 +277,19 @@ const CompleteProfilePage = () => {
                       checked={formData.interestedSports?.includes(sport)}
                       onChange={(e) => {
                         const current = formData.interestedSports || [];
+                        let nextSports: string[];
+                        let nextPositions = formData.sportPositions || [];
                         if (e.target.checked) {
-                          setFormData({ ...formData, interestedSports: [...current, sport] });
+                          nextSports = [...current, sport];
                         } else {
-                          setFormData({
-                            ...formData,
-                            interestedSports: current.filter((s) => s !== sport),
-                          });
+                          nextSports = current.filter((s) => s !== sport);
+                          nextPositions = nextPositions.filter((p) => p.sport !== sport);
                         }
+                        setFormData({
+                          ...formData,
+                          interestedSports: nextSports,
+                          sportPositions: nextPositions,
+                        });
                       }}
                       className="mr-2"
                     />
@@ -291,6 +298,56 @@ const CompleteProfilePage = () => {
                 ))}
               </div>
             </div>
+
+            {/* 포지션 (축구·풋살 선택 시) */}
+            {(formData.interestedSports?.some((s) => SPORTS_WITH_POSITIONS.includes(s)) ?? false) && (
+              <div>
+                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                  포지션 (선택사항)
+                </label>
+                <p className="text-xs text-[var(--color-text-secondary)] mb-2">
+                  자주 뛰는 포지션을 선택하면 매치 참가 시 참고됩니다.
+                </p>
+                {formData.interestedSports
+                  ?.filter((s) => SPORTS_WITH_POSITIONS.includes(s))
+                  .map((sport) => {
+                    const positions = getPositionsBySport(sport);
+                    const current = (formData.sportPositions || []).find((p) => p.sport === sport)?.positions ?? [];
+                    return (
+                      <div key={sport} className="mb-4">
+                        <div className="text-sm font-medium text-[var(--color-text-secondary)] mb-2">{sport}</div>
+                        <div className="flex flex-wrap gap-2">
+                          {positions.map((pos) => (
+                            <label key={pos} className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={current.includes(pos)}
+                                onChange={(e) => {
+                                  const prev = formData.sportPositions || [];
+                                  const entry = prev.find((p) => p.sport === sport);
+                                  const nextPos = e.target.checked
+                                    ? [...(entry?.positions ?? []), pos]
+                                    : (entry?.positions ?? []).filter((p) => p !== pos);
+                                  const rest = prev.filter((p) => p.sport !== sport);
+                                  setFormData({
+                                    ...formData,
+                                    sportPositions:
+                                      nextPos.length > 0 ? [...rest, { sport, positions: nextPos }] : rest,
+                                  });
+                                }}
+                                className="mr-1"
+                              />
+                              <span className="text-sm text-[var(--color-text-primary)]">
+                                {getPositionLabel(sport, pos)}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
 
             {/* 운동 수준 */}
             <div>

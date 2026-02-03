@@ -1,17 +1,18 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import GroupListPanel from './components/GroupListPanel';
-import CategoryFilter from './components/CategoryFilter';
+import HomeMatchTypeChoice from './components/HomeMatchTypeChoice';
+import HomeCategoryChoice from './components/HomeCategoryChoice';
 import NaverMapPanel from './components/NaverMapPanel';
 import type { SelectedGroup } from './types/selected-group';
 import GroupDetail from './components/GroupDetail';
 import MultiStepCreateGroup from './components/MultiStepCreateGroup';
 import NotificationPanel from './components/NotificationPanel';
-import MapControlPanel from './components/MapControlPanel';
 import { api } from './utils/api';
 import { getUserCity, extractCityFromAddress, type KoreanCity } from './utils/locationUtils';
 import MyInfoPage from './components/MyInfoPage'; // MyInfoPage 컴포넌트 import
+import MyActivityPage from './components/MyActivityPage';
 import MySchedulePage from './components/MySchedulePage'; // MySchedulePage 컴포넌트 import
 import ContactPage from './components/ContactPage'; // ContactPage 컴포넌트 import
 import SettingsPage from './components/SettingsPage'; // SettingsPage 컴포넌트 import
@@ -20,18 +21,20 @@ import MultiStepRegister from './components/MultiStepRegister'; // MultiStepRegi
 import CompleteProfilePage from './components/CompleteProfilePage'; // CompleteProfilePage 컴포넌트 import
 import OAuthCallbackPage from './components/OAuthCallbackPage'; // OAuthCallbackPage 컴포넌트 import
 import NoticePage from './components/NoticePage'; // NoticePage 컴포넌트 import
-import FacilityReservationPage from './components/FacilityReservationPage'; // FacilityReservationPage 컴포넌트 import
+import FacilityReservationPage from './components/FacilityReservationPage';
+import FacilityRegisterPage from './components/FacilityRegisterPage';
 import HallOfFamePage from './components/HallOfFamePage'; // HallOfFamePage 컴포넌트 import
-import FavoritesPage from './components/FavoritesPage'; // FavoritesPage 컴포넌트 import
-import SportsEquipmentPage from './components/SportsEquipmentPage'; // SportsEquipmentPage 컴포넌트 import
-import EventMatchPage from './components/EventMatchPage'; // EventMatchPage 컴포넌트 import
+import SportsEquipmentPage from './components/SportsEquipmentPage';
+import SportsEquipmentDetailPage from './components/SportsEquipmentDetailPage';
+import ProductRegisterPage from './components/ProductRegisterPage';
 import FollowersPage from './components/FollowersPage'; // FollowersPage 컴포넌트 import
+import GuidePage from './components/GuidePage';
 import TeamsPage from './components/TeamsPage'; // TeamsPage 컴포넌트 import
 import TeamDetailPage from './components/TeamDetailPage'; // TeamDetailPage 컴포넌트 import
+import CreateTeamPage from './components/CreateTeamPage'; // CreateTeamPage 컴포넌트 import
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import WelcomeGuide from './components/WelcomeGuide';
 import LoadingSpinner from './components/LoadingSpinner';
-import { QuestionMarkCircleIcon } from '@heroicons/react/24/outline';
+import { QuestionMarkCircleIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import './style.css';
 
 // 테마 컨텍스트 생성
@@ -53,7 +56,13 @@ export const useTheme = () => {
 // 기존 대시보드 레이아웃
 const DashboardLayout = () => {
   const { user, isLoading } = useAuth();
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const location = useLocation();
+  const [userProfile, setUserProfile] = useState<{ businessNumberVerified?: boolean; isAdmin?: boolean } | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const saved = localStorage.getItem('home_category');
+    return saved === '' || saved === null ? null : saved;
+  });
   const [selectedGroup, setSelectedGroup] = useState<SelectedGroup | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -62,7 +71,22 @@ const DashboardLayout = () => {
   // localStorage에서 저장된 도시 선택 복원 (초기에는 null로 시작)
   const [selectedCity, setSelectedCity] = useState<KoreanCity | null>(null);
   const [selectedDays, setSelectedDays] = useState<number[]>([]); // 검색 옵션: 선택된 요일
-  const [showWelcomeGuide, setShowWelcomeGuide] = useState(false);
+  /** 매치 종류: 일반 매치 | 랭크매치 | 이벤트매치 (홈에서 탭으로 전환) */
+  const [matchType, setMatchType] = useState<'general' | 'rank' | 'event'>(() => {
+    if (typeof window === 'undefined') return 'general';
+    const saved = localStorage.getItem('home_match_type') as 'general' | 'rank' | 'event' | null;
+    return saved === 'rank' || saved === 'event' ? saved : 'general';
+  });
+  /** 홈 진입 시 종목을 선택했는지. false면 종목 선택 화면, true면 세 분할 또는 목록·지도 */
+  const [hasSelectedCategory, setHasSelectedCategory] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('home_entered_match_view') === '1' || !!localStorage.getItem('home_category');
+  });
+  /** 홈 진입 시 매치 종류를 선택했는지. false면 세 분할 선택 화면, true면 목록·지도 표시 */
+  const [hasEnteredMatchView, setHasEnteredMatchView] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('home_entered_match_view') === '1';
+  });
   const [mapLayers, setMapLayers] = useState({
     rankers: false,
     events: false,
@@ -123,17 +147,41 @@ const DashboardLayout = () => {
     }
   }, [selectedCity]);
 
-  // 신규 사용자 체크 및 가이드 표시
+  // 사업자 여부(이벤트매치 생성 권한) 조회
   useEffect(() => {
-    if (!isLoading && user) {
-      // 가이드가 이미 완료되었는지 확인
-      const guideCompleted = localStorage.getItem('welcome_guide_completed');
-      if (!guideCompleted) {
-        // 회원가입 후 첫 방문인 경우 가이드 표시
-        setShowWelcomeGuide(true);
-      }
+    if (!user) {
+      setUserProfile(null);
+      return;
     }
-  }, [user, isLoading]);
+    api.get<{ businessNumberVerified?: boolean; isAdmin?: boolean }>('/api/auth/me').then(setUserProfile).catch(() => setUserProfile(null));
+  }, [user]);
+
+  // 이벤트매치 페이지에서 "이벤트매치 개최" 클릭 시 홈으로 이동 후 생성 모달 열기
+  const navigate = useNavigate();
+  useEffect(() => {
+    const state = location.state as { openCreate?: boolean; matchType?: string } | null;
+    if (state?.openCreate && state?.matchType === 'event') {
+      setMatchType('event');
+      setHasEnteredMatchView(true);
+      setHasSelectedCategory(true);
+      setIsCreateModalOpen(true);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, navigate]);
+
+  // 사이드바 홈 버튼 클릭 시 초기화면(종목 선택)으로 리셋
+  useEffect(() => {
+    const handleHomeReset = () => {
+      setSelectedCategory(null);
+      setHasSelectedCategory(false);
+      setHasEnteredMatchView(false);
+      setMatchType('general');
+    };
+    window.addEventListener('homeReset', handleHomeReset);
+    return () => window.removeEventListener('homeReset', handleHomeReset);
+  }, []);
+
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const handleGroupClick = (group: SelectedGroup) => {
     setSelectedGroup(group);
@@ -142,6 +190,40 @@ const DashboardLayout = () => {
   const handleCloseDetail = () => {
     setSelectedGroup(null);
   };
+
+  // URL 쿼리 ?group=id 로 들어온 경우 해당 모임 자동 선택 (내정보 → 매치 목록 보기)
+  useEffect(() => {
+    const groupId = searchParams.get('group');
+    if (!groupId || isLoadingGroups) return;
+    const id = parseInt(groupId, 10);
+    if (Number.isNaN(id)) return;
+    const inList = allGroups.find((g) => g.id === id);
+    if (inList) {
+      setSelectedGroup(inList);
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    api.get<{ id: number; name: string; location: string; latitude: number; longitude: number; participantCount: number; category: string; description?: string; meetingTime?: string; contact?: string; equipment?: string[] }>(`/api/groups/${id}`)
+      .then((g) => {
+        const selected: SelectedGroup = {
+          id: g.id,
+          name: g.name,
+          location: g.location,
+          coordinates: [Number(g.latitude), Number(g.longitude)],
+          memberCount: g.participantCount,
+          category: g.category,
+          description: g.description,
+          meetingTime: g.meetingTime,
+          contact: g.contact,
+          equipment: g.equipment || [],
+        };
+        setSelectedGroup(selected);
+        setSearchParams({}, { replace: true });
+      })
+      .catch(() => {
+        setSearchParams({}, { replace: true });
+      });
+  }, [searchParams, isLoadingGroups, allGroups]);
 
   const handleCreateGroup = (groupData: Omit<SelectedGroup, 'id'>) => {
     // API 호출은 CreateGroupModal에서 처리
@@ -166,8 +248,13 @@ const DashboardLayout = () => {
     }
   };
 
-  // 모든 그룹 목록 가져오기 (지도 마커용)
+  // 모든 그룹 목록 가져오기 (지도 마커용) — 매치 종류 선택 후에만 실행
   useEffect(() => {
+    if (!hasEnteredMatchView) {
+      setIsLoadingGroups(false);
+      setAllGroups([]);
+      return;
+    }
     const fetchAllGroups = async () => {
       try {
         setIsLoadingGroups(true);
@@ -176,6 +263,12 @@ const DashboardLayout = () => {
         
         if (category) {
           queryParams.append('category', category);
+        }
+        if (matchType === 'rank') {
+          queryParams.append('onlyRanker', 'true');
+          queryParams.append('type', 'normal');
+        } else if (matchType === 'event') {
+          queryParams.append('type', 'event');
         }
         queryParams.append('limit', '1000'); // 충분히 많은 데이터 가져오기 (지역 필터링을 위해)
 
@@ -255,53 +348,78 @@ const DashboardLayout = () => {
     };
 
     fetchAllGroups();
-  }, [selectedCategory, selectedCity, refreshTrigger]);
+  }, [hasEnteredMatchView, selectedCategory, selectedCity, refreshTrigger, matchType]);
+
+  // 홈 진입 시 1단계: 종목 선택 화면
+  if (!hasSelectedCategory) {
+    return (
+      <div className="flex flex-col h-full w-full overflow-hidden" style={{ height: '100%', display: 'flex', backgroundColor: '#0f172a' }}>
+        <main className="flex-1 relative overflow-hidden flex flex-col" style={{ minHeight: 0 }}>
+          <HomeCategoryChoice
+            onSelect={(cat) => {
+              setSelectedCategory(cat);
+              setHasSelectedCategory(true);
+              try {
+                localStorage.setItem('home_category', cat ?? '');
+              } catch (e) {
+                /* ignore */
+              }
+            }}
+          />
+        </main>
+      </div>
+    );
+  }
+
+  // 홈 진입 시 2단계: 세 분할 선택 화면 (일반/랭크/이벤트)
+  if (!hasEnteredMatchView) {
+    return (
+      <div className="flex flex-col h-full w-full overflow-hidden" style={{ height: '100%', display: 'flex', backgroundColor: '#0f172a' }}>
+        <main className="flex-1 relative overflow-hidden flex flex-col" style={{ minHeight: 0 }}>
+          <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-[#0f172a]">
+            <button
+              type="button"
+              onClick={() => setHasSelectedCategory(false)}
+              className="text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+            >
+              ← 종목 변경
+            </button>
+            <span className="text-sm text-[var(--color-text-secondary)]">
+              종목: {selectedCategory ?? '전체'}
+            </span>
+          </div>
+          <HomeMatchTypeChoice
+            onSelect={(type) => {
+              setMatchType(type);
+              setIsLoadingGroups(true);
+              setHasEnteredMatchView(true);
+              try {
+                localStorage.setItem('home_entered_match_view', '1');
+                localStorage.setItem('home_match_type', type);
+              } catch (e) {
+                /* ignore */
+              }
+            }}
+          />
+        </main>
+      </div>
+    );
+  }
+
+  // 매치 종류별 테마 색 (지도 상단 라벨 등에 사용, 목록 패널은 GroupListPanel에서 단색 채움)
+  const matchTheme = { general: '#60a5fa', rank: '#d97706', event: '#7c3aed' } as const;
+  const themeAccent = matchTheme[matchType];
 
   return (
-    <div className="flex flex-col md:flex-row h-full w-full overflow-hidden" style={{ height: '100%', display: 'flex' }}>
-      {/* 모바일: 카테고리 필터를 상단에 */}
-      <div className="md:hidden w-full border-b border-[var(--color-border-card)] flex-shrink-0">
-        <CategoryFilter
-          selectedCategory={selectedCategory}
-          setSelectedCategory={handleCategoryChange}
-          selectedCity={selectedCity}
-        />
-      </div>
-      
-      {/* 데스크톱: GroupListPanel과 CategoryFilter */}
-      <div className="hidden md:flex flex-shrink-0">
-        <GroupListPanel 
-          selectedCategory={selectedCategory} 
-          onGroupClick={handleGroupClick}
-          refreshTrigger={refreshTrigger}
-          selectedCity={selectedCity}
-          onCityChange={setSelectedCity}
-          selectedDays={selectedDays}
-          onDaysChange={setSelectedDays}
-        />
-        <CategoryFilter
-          selectedCategory={selectedCategory}
-          setSelectedCategory={handleCategoryChange}
-          selectedCity={selectedCity}
-        />
-      </div>
-      
-      {/* 모바일: GroupListPanel을 상단에 (상세보기 열릴 때는 숨김) */}
-      {!selectedGroup && (
-        <div className="md:hidden w-full border-b border-[var(--color-border-card)] flex-shrink-0">
-          <GroupListPanel 
-            selectedCategory={selectedCategory} 
-            onGroupClick={handleGroupClick}
-            refreshTrigger={refreshTrigger}
-          />
-        </div>
-      )}
-      
-      {/* 상세보기 패널 (데스크톱: 우측, 모바일: 전체) */}
-      {selectedGroup && (
-        <>
-          {/* 모바일: 뒤로가기 버튼 */}
-          <div className="md:hidden w-full border-b border-[var(--color-border-card)] bg-[var(--color-bg-card)] p-2 flex-shrink-0">
+    <div
+      className={`flex flex-col h-full w-full overflow-hidden ${selectedGroup ? 'md:grid md:grid-cols-2' : 'md:flex md:flex-row'}`}
+      style={{ height: '100%' }}
+    >
+      {/* 좌측: 목록(항상). 상세 선택 시에만 50% 영역으로 목록+상세, 미선택 시 목록 너비만 차지하고 나머지는 지도 */}
+      <div className="flex flex-col min-w-0 min-h-0 flex-1 md:flex-none md:flex md:flex-row md:min-h-0 order-1 md:flex-shrink-0">
+        {/* 모바일: 상세보기일 때만 뒤로가기 버튼 */}
+        {selectedGroup && (
+          <div className="md:hidden flex-shrink-0 w-full border-b border-[var(--color-border-card)] bg-[var(--color-bg-card)] p-2">
             <button
               onClick={handleCloseDetail}
               className="flex items-center space-x-2 text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] px-3 py-2 rounded-lg transition-colors"
@@ -312,42 +430,98 @@ const DashboardLayout = () => {
               <span>목록으로</span>
             </button>
           </div>
-          <GroupDetail 
-            group={selectedGroup} 
-            onClose={handleCloseDetail}
-            onParticipantChange={handleParticipantChange}
+        )}
+        {/* 목록 패널: 항상 표시 (데스크톱 고정, 모바일은 미선택 시에만) */}
+        <div className={selectedGroup ? 'hidden md:block flex-shrink-0' : 'flex-shrink-0 w-full md:w-auto'}>
+          <GroupListPanel 
+            selectedCategory={selectedCategory} 
+            onGroupClick={handleGroupClick}
+            refreshTrigger={refreshTrigger}
+            selectedCity={selectedCity}
+            onCityChange={setSelectedCity}
+            selectedDays={selectedDays}
+            onDaysChange={setSelectedDays}
+            matchType={matchType}
+            onMatchTypeChange={(type) => {
+              setMatchType(type);
+              setSelectedGroup(null); // 매치 타입 전환 시 열린 상세 패널 닫기 (선택 지역은 유지)
+              setIsLoadingGroups(true);
+              try {
+                localStorage.setItem('home_match_type', type);
+              } catch (e) {
+                /* ignore */
+              }
+            }}
+            matchTypeTheme
           />
-        </>
-      )}
-      
-      {/* 지도 영역 */}
-      <main className="flex-1 relative overflow-hidden" style={{ height: '100%', minHeight: 0, flex: '1 1 0%' }}>
+        </div>
+        {/* 상세 패널: 목록에서 매치 클릭 시에만 생성·펼쳐짐, 좌측 50% 안에서 나머지 공간 차지 */}
+        {selectedGroup && (
+          <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+            <GroupDetail 
+              group={selectedGroup} 
+              onClose={handleCloseDetail}
+              onParticipantChange={handleParticipantChange}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* 지도: 상세 미선택 시 나머지 공간 전체, 상세 선택 시 우측 50% */}
+      <main className="flex-1 min-w-0 relative overflow-hidden order-2" style={{ height: '100%', minHeight: 0 }}>
         {isLoadingGroups ? (
           <LoadingSpinner overlay message="매치 목록을 불러오는 중..." />
         ) : (
           <>
+            {/* 지도 상단: 왼쪽 초기 화면으로 돌아가기, 오른쪽 현재 종목·매치 유형 (테마 색상) */}
+            <div
+              className="absolute top-0 left-0 right-0 z-[100] py-2.5 flex items-center justify-between gap-2 text-sm font-semibold text-white shadow-lg"
+              style={{ background: themeAccent }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setHasEnteredMatchView(false);
+                  setHasSelectedCategory(false);
+                  try {
+                    localStorage.removeItem('home_entered_match_view');
+                  } catch (e) {
+                    /* ignore */
+                  }
+                }}
+                className="flex-shrink-0 px-4 py-1.5 flex items-center gap-1.5 hover:bg-white/20 active:bg-white/30 rounded-lg transition-colors"
+                aria-label="초기 화면으로"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                <span>초기 화면</span>
+              </button>
+              <span className="flex-1 text-center truncate px-2">
+                {selectedCategory ?? '전체'} · {matchType === 'general' ? '일반 매치' : matchType === 'rank' ? '랭크매치' : '이벤트매치'}
+              </span>
+              <span className="w-[4.5rem] flex-shrink-0" aria-hidden />
+            </div>
             <NaverMapPanel 
               selectedGroup={selectedGroup}
               allGroups={allGroups}
-              onCreateGroupClick={() => setIsCreateModalOpen(true)}
+              onCreateGroupClick={
+                matchType === 'event' && !userProfile?.businessNumberVerified && !userProfile?.isAdmin
+                  ? undefined
+                  : () => setIsCreateModalOpen(true)
+              }
               onGroupClick={handleGroupClick}
               selectedCity={selectedCity}
               selectedCategory={selectedCategory}
               mapLayers={mapLayers}
+              matchType={matchType}
             />
-            {/* 지도 제어 패널 - 네이버지도 스타일 */}
-            <MapControlPanel
-              selectedCity={selectedCity}
-              onToggleRankerMeetings={(enabled) => setMapLayers((prev) => ({ ...prev, rankers: enabled }))}
-              onToggleEventMatches={(enabled) => setMapLayers((prev) => ({ ...prev, events: enabled }))}
-              onTogglePopularSpots={(enabled) => setMapLayers((prev) => ({ ...prev, popularSpots: enabled }))}
-            />
-            {/* 가이드 다시보기 버튼 - 지도 영역 왼쪽 하단 */}
+            {/* 가이드 버튼 - 지도 영역 왼쪽 하단, 가이드 페이지로 이동 */}
             <button
-              onClick={() => setShowWelcomeGuide(true)}
-              className="absolute bottom-6 left-6 z-[9998] w-10 h-10 bg-[var(--color-bg-card)] border border-[var(--color-border-card)] rounded-lg shadow-lg flex items-center justify-center hover:bg-[var(--color-bg-secondary)] transition-colors group"
-              title="가이드 다시보기"
-              aria-label="가이드 다시보기"
+              onClick={() => navigate('/guide')}
+              className="absolute bottom-6 left-6 z-50 w-10 h-10 bg-[var(--color-bg-card)] border border-[var(--color-border-card)] rounded-lg shadow-lg flex items-center justify-center hover:bg-[var(--color-bg-secondary)] transition-colors group"
+              title="가이드"
+              aria-label="가이드"
             >
               <QuestionMarkCircleIcon className="w-5 h-5 text-[var(--color-text-primary)] group-hover:text-[var(--color-blue-primary)] transition-colors" />
             </button>
@@ -361,22 +535,34 @@ const DashboardLayout = () => {
         onClose={() => setIsCreateModalOpen(false)}
         onSubmit={handleCreateGroup}
         onSuccess={handleGroupCreated}
+        initialCategory={selectedCategory ?? undefined}
+        initialMatchType={matchType}
       />
+    </div>
+  );
+};
 
-      {/* 환영 가이드 모달 */}
-      {showWelcomeGuide && (
-        <WelcomeGuide 
-          onClose={() => {
-            setShowWelcomeGuide(false);
-            // 가이드가 완료되었는지 확인 (닫기만 한 경우와 완료한 경우 구분)
-            const guideCompleted = localStorage.getItem('welcome_guide_completed');
-            if (!guideCompleted) {
-              // 완료하지 않고 닫은 경우, 다음에 다시 표시하지 않도록 설정
-              localStorage.setItem('welcome_guide_completed', 'true');
-            }
-          }} 
-        />
-      )}
+// 로그인 필요 시 페이지 내 안내 화면 (캡쳐처럼 현재 페이지에서 안내 후 로그인으로 이어짐)
+const LoginRequiredView = () => {
+  const navigate = useNavigate();
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[var(--color-bg-primary)]">
+      <div className="flex flex-col items-center max-w-sm w-full rounded-2xl border border-[var(--color-border-card)] bg-[var(--color-bg-card)] p-8 shadow-lg text-center">
+        <UserCircleIcon className="w-16 h-16 text-[var(--color-text-secondary)] mb-4" aria-hidden />
+        <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1">
+          로그인이 필요합니다
+        </h2>
+        <p className="text-sm text-[var(--color-text-secondary)] mb-6">
+          이 서비스를 이용하려면 로그인해 주세요.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate('/login', { replace: true })}
+          className="w-full py-3 px-4 rounded-xl font-medium text-white bg-[var(--color-blue-primary)] hover:opacity-90 transition-opacity"
+        >
+          로그인하기
+        </button>
+      </div>
     </div>
   );
 };
@@ -390,7 +576,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <LoginRequiredView />;
   }
 
   if (!user.isProfileComplete) {
@@ -431,9 +617,19 @@ const MainLayout = () => {
                 <MyInfoPage />
               </ProtectedRoute>
             } />
+            <Route path="my-activity" element={
+              <ProtectedRoute>
+                <MyActivityPage />
+              </ProtectedRoute>
+            } />
             <Route path="my-schedule" element={
               <ProtectedRoute>
                 <MySchedulePage />
+              </ProtectedRoute>
+            } />
+            <Route path="facility-reservation/register" element={
+              <ProtectedRoute>
+                <FacilityRegisterPage />
               </ProtectedRoute>
             } />
             <Route path="facility-reservation" element={
@@ -441,9 +637,14 @@ const MainLayout = () => {
                 <FacilityReservationPage />
               </ProtectedRoute>
             } />
-            <Route path="favorites" element={
+            <Route path="sports-equipment/register" element={
               <ProtectedRoute>
-                <FavoritesPage />
+                <ProductRegisterPage />
+              </ProtectedRoute>
+            } />
+            <Route path="sports-equipment/:id" element={
+              <ProtectedRoute>
+                <SportsEquipmentDetailPage />
               </ProtectedRoute>
             } />
             <Route path="sports-equipment" element={
@@ -451,14 +652,15 @@ const MainLayout = () => {
                 <SportsEquipmentPage />
               </ProtectedRoute>
             } />
-            <Route path="event-match" element={
-              <ProtectedRoute>
-                <EventMatchPage />
-              </ProtectedRoute>
-            } />
+            <Route path="event-match" element={<Navigate to="/" replace />} />
             <Route path="teams" element={
               <ProtectedRoute>
                 <TeamsPage />
+              </ProtectedRoute>
+            } />
+            <Route path="teams/create" element={
+              <ProtectedRoute>
+                <CreateTeamPage />
               </ProtectedRoute>
             } />
             <Route path="teams/:teamId" element={
@@ -471,6 +673,7 @@ const MainLayout = () => {
                 <FollowersPage />
               </ProtectedRoute>
             } />
+            <Route path="guide" element={<GuidePage />} />
             <Route path="settings" element={
               <ProtectedRoute>
                 <SettingsPage />
@@ -485,15 +688,17 @@ const MainLayout = () => {
   );
 };
 
+function getInitialTheme(): string {
+  if (typeof window === 'undefined') return 'light';
+  const saved = localStorage.getItem('theme');
+  if (saved === 'dark' || saved === 'light') return saved;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
 function App() {
-  const [theme, setTheme] = useState<string>(() => {
-    // 초기 테마를 localStorage에서 읽어오기
-    return localStorage.getItem('theme') || 'light';
-  });
+  const [theme, setTheme] = useState<string>(getInitialTheme);
 
   useEffect(() => {
-    
-    // 테마 변경 시 document에 dark 클래스 추가/제거 및 localStorage 저장
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
       localStorage.setItem('theme', 'dark');
@@ -502,6 +707,17 @@ function App() {
       localStorage.setItem('theme', 'light');
     }
   }, [theme]);
+
+  // 시스템 테마 변경 시 반영 (저장된 테마가 없을 때만)
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = () => {
+      if (localStorage.getItem('theme')) return;
+      setTheme(media.matches ? 'dark' : 'light');
+    };
+    media.addEventListener('change', handler);
+    return () => media.removeEventListener('change', handler);
+  }, []);
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme }}>

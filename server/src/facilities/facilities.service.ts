@@ -1,11 +1,15 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Brackets } from 'typeorm';
+import { Repository } from 'typeorm';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import * as crypto from 'crypto';
 import { Facility } from './entities/facility.entity';
 import { CreateFacilityDto } from './dto/create-facility.dto';
 import { FacilityQueryDto } from './dto/facility-query.dto';
 import { UsersService } from '../users/users.service';
 import { SPORT_FACILITY_TYPES_MAP } from '../constants/sports';
+import { uploadConfig } from '../config/upload.config';
 
 @Injectable()
 export class FacilitiesService {
@@ -15,22 +19,58 @@ export class FacilitiesService {
     private usersService: UsersService,
   ) {}
 
-  async create(createFacilityDto: CreateFacilityDto, ownerId: number): Promise<Facility> {
-    // 사업자 회원인지 확인
+  async uploadFacilityImage(ownerId: number, file: Express.Multer.File): Promise<string> {
     const owner = await this.usersService.findOne(ownerId);
-    if (owner.memberType !== 'business') {
-      throw new ForbiddenException('사업자 회원만 시설을 등록할 수 있습니다.');
+    if (!owner.isAdmin) {
+      if (owner.memberType !== 'business') {
+        throw new ForbiddenException('사업자 회원만 시설 이미지를 업로드할 수 있습니다.');
+      }
+      if (!owner.businessNumberVerified) {
+        throw new ForbiddenException('사업자번호 검증이 완료된 사용자만 업로드할 수 있습니다.');
+      }
     }
-    
-    // 사업자번호 검증 완료 여부 확인
-    if (!owner.businessNumberVerified) {
-      throw new ForbiddenException('사업자번호 검증이 완료된 사용자만 시설을 등록할 수 있습니다.');
+    const uploadDir = uploadConfig.facilityImageDir ?? path.join(process.cwd(), 'uploads', 'facility');
+    try {
+      await fs.access(uploadDir);
+    } catch {
+      await fs.mkdir(uploadDir, { recursive: true });
+    }
+    const ext = path.extname(file.originalname) || '.jpg';
+    const filename = `${ownerId}_${Date.now()}_${crypto.randomBytes(8).toString('hex')}${ext}`;
+    const filepath = path.join(uploadDir, filename);
+    await fs.writeFile(filepath, file.buffer);
+    return `/uploads/facility/${filename}`;
+  }
+
+  async create(createFacilityDto: CreateFacilityDto, ownerId: number): Promise<Facility> {
+    const owner = await this.usersService.findOne(ownerId);
+    if (!owner.isAdmin) {
+      if (owner.memberType !== 'business') {
+        throw new ForbiddenException('사업자 회원만 시설을 등록할 수 있습니다.');
+      }
+      if (!owner.businessNumberVerified) {
+        throw new ForbiddenException('사업자번호 검증이 완료된 사용자만 시설을 등록할 수 있습니다.');
+      }
     }
 
+    const images = createFacilityDto.images?.length
+      ? createFacilityDto.images
+      : createFacilityDto.image
+        ? [createFacilityDto.image]
+        : null;
+    const image = images?.length ? images[0] : createFacilityDto.image ?? null;
+
+    const slotHours = createFacilityDto.reservationSlotHours != null
+      ? Math.min(8, Math.max(1, Math.floor(Number(createFacilityDto.reservationSlotHours))))
+      : 2;
     const facility = this.facilityRepository.create({
       ...createFacilityDto,
+      images,
+      image,
       ownerId,
       amenities: createFacilityDto.amenities || [],
+      availableSports: createFacilityDto.availableSports || [],
+      reservationSlotHours: slotHours,
     });
 
     return this.facilityRepository.save(facility);
@@ -47,14 +87,17 @@ export class FacilitiesService {
       .andWhere('facility.latitude IS NOT NULL')
       .andWhere('facility.longitude IS NOT NULL');
 
-    // 카테고리에 따른 시설 타입 필터링 (우선순위 높음)
+    // 카테고리(종목)에 따른 시설 필터링: 타입 매핑 또는 availableSports 포함
     if (category && SPORT_FACILITY_TYPES_MAP[category]) {
       const allowedTypes = SPORT_FACILITY_TYPES_MAP[category];
       if (allowedTypes.length > 0) {
-        queryBuilder.andWhere('facility.type IN (:...allowedTypes)', { allowedTypes });
+        queryBuilder.andWhere(
+          "(facility.type IN (:...allowedTypes) OR :category = ANY(COALESCE(facility.availableSports, '{}')))",
+          { allowedTypes, category },
+        );
       }
-    } else if (type && type !== '전체') {
-      // 일반 시설 종류 필터
+    }
+    if (type && type !== '전체') {
       queryBuilder.andWhere('facility.type = :type', { type });
     }
 
@@ -66,9 +109,17 @@ export class FacilitiesService {
       );
     }
 
-    // 지역 필터
+    // 지역 필터: API는 '대전광역시' 등 전체명을 받고, 주소는 '대전 대덕구...' 형태이므로 검색어로 변환
     if (area && area !== '전체') {
-      queryBuilder.andWhere('facility.address ILIKE :area', { area: `%${area}%` });
+      const areaSearchTerm = area
+        .replace(/특별자치도$/, '')
+        .replace(/특별시$/, '')
+        .replace(/광역시$/, '')
+        .replace(/특별자치시$/, '')
+        .replace(/도$/, '');
+      if (areaSearchTerm) {
+        queryBuilder.andWhere('facility.address ILIKE :area', { area: `%${areaSearchTerm}%` });
+      }
     }
 
     // 거리 계산 및 정렬
@@ -101,6 +152,18 @@ export class FacilitiesService {
     return { facilities, total };
   }
 
+  async findByOwner(ownerId: number): Promise<Facility[]> {
+    const facilities = await this.facilityRepository.find({
+      where: { ownerId, isActive: true },
+      relations: ['owner'],
+      order: { createdAt: 'DESC' },
+    });
+    for (const f of facilities) {
+      if (!f.images?.length && f.image) f.images = [f.image];
+    }
+    return facilities;
+  }
+
   async findOne(id: number): Promise<Facility> {
     const facility = await this.facilityRepository.findOne({
       where: { id },
@@ -111,6 +174,9 @@ export class FacilitiesService {
       throw new NotFoundException('시설을 찾을 수 없습니다.');
     }
 
+    if (!facility.images?.length && facility.image) {
+      facility.images = [facility.image];
+    }
     return facility;
   }
 

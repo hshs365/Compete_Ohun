@@ -12,6 +12,7 @@ import { SPORTS_CATEGORIES } from '../constants/sports';
 import { showSuccess, showError } from '../utils/swal';
 import { api } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import LoadingSpinner from './LoadingSpinner';
 
 interface EventMatch {
@@ -36,17 +37,18 @@ interface EventMatch {
 
 const EventMatchPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [selectedStatus, setSelectedStatus] = useState<'all' | 'upcoming' | 'ongoing' | 'completed'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('전체');
   const [events, setEvents] = useState<EventMatch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [userProfile, setUserProfile] = useState<{ businessNumberVerified?: boolean } | null>(null);
+  const [userProfile, setUserProfile] = useState<{ businessNumberVerified?: boolean; isAdmin?: boolean } | null>(null);
 
   // 사용자 프로필 정보 가져오기 (사장님 여부 확인)
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        const profile = await api.get<{ businessNumberVerified?: boolean }>('/api/auth/me');
+        const profile = await api.get<{ businessNumberVerified?: boolean; isAdmin?: boolean }>('/api/auth/me');
         setUserProfile(profile);
       } catch (error) {
         // 인증되지 않은 사용자는 무시
@@ -160,12 +162,9 @@ const EventMatchPage = () => {
             다양한 스포츠 이벤트와 매치에 참여하세요
           </p>
         </div>
-        {userProfile?.businessNumberVerified && (
+        {(userProfile?.businessNumberVerified || userProfile?.isAdmin) && (
           <button
-            onClick={() => {
-              // TODO: 이벤트매치 생성 모달 열기
-              showInfo('이벤트매치 생성 기능은 준비 중입니다.', '알림');
-            }}
+            onClick={() => navigate('/', { state: { openCreate: true, matchType: 'event' } })}
             className="flex items-center gap-2 px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90 transition-opacity"
           >
             <PlusIcon className="w-5 h-5" />

@@ -62,17 +62,17 @@ const Step5Review: React.FC<Step5ReviewProps> = ({
         <div className="p-4 bg-[var(--color-bg-secondary)] rounded-lg border border-[var(--color-border-card)]">
           <h4 className="font-semibold text-[var(--color-text-primary)] mb-3">기본 정보</h4>
           <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-[var(--color-text-secondary)]">운동 종류:</span>
               <span className="text-[var(--color-text-primary)] font-medium">{category}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--color-text-secondary)]">매치 이름:</span>
-              <span className="text-[var(--color-text-primary)] font-medium">{name || '(미입력)'}</span>
+            <div className="flex justify-between items-start gap-3 py-2 pl-3 border-l-2 border-[var(--color-blue-primary)] bg-[var(--color-bg-card)]/50 rounded-r">
+              <span className="text-[var(--color-text-secondary)] shrink-0">매치 이름:</span>
+              <span className="text-[var(--color-text-primary)] font-bold text-base text-right">{name || '(미입력)'}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--color-text-secondary)]">위치:</span>
-              <span className="text-[var(--color-text-primary)] font-medium">{location || '(미입력)'}</span>
+            <div className="flex justify-between items-start gap-3 py-2 pl-3 border-l-2 border-[var(--color-blue-primary)] bg-[var(--color-bg-card)]/50 rounded-r">
+              <span className="text-[var(--color-text-secondary)] shrink-0">위치:</span>
+              <span className="text-[var(--color-text-primary)] font-semibold text-right">{location || '(미입력)'}</span>
             </div>
           </div>
         </div>
@@ -126,9 +126,9 @@ const Step5Review: React.FC<Step5ReviewProps> = ({
         <div className="p-4 bg-[var(--color-bg-secondary)] rounded-lg border border-[var(--color-border-card)]">
           <h4 className="font-semibold text-[var(--color-text-primary)] mb-3">일정 및 인원</h4>
           <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center py-2 pl-3 border-l-2 border-[var(--color-blue-primary)] bg-[var(--color-bg-card)]/50 rounded-r">
               <span className="text-[var(--color-text-secondary)]">매치 일정:</span>
-              <span className="text-[var(--color-text-primary)] font-medium">
+              <span className="text-[var(--color-text-primary)] font-bold text-base">
                 {meetingDate && meetingTime 
                   ? `${meetingDate} ${meetingTime}`
                   : '(미설정)'}
@@ -174,9 +174,9 @@ const Step5Review: React.FC<Step5ReviewProps> = ({
                 </div>
               )}
               {hasFee && (
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center py-2 pl-3 border-l-2 border-[var(--color-blue-primary)] bg-[var(--color-bg-card)]/50 rounded-r">
                   <span className="text-[var(--color-text-secondary)]">참가비:</span>
-                  <span className="text-[var(--color-text-primary)] font-medium">
+                  <span className="text-[var(--color-text-primary)] font-bold text-base">
                     {feeAmount ? `${parseInt(feeAmount, 10).toLocaleString()}원` : '(금액 미입력)'}
                   </span>
                 </div>

@@ -350,3 +350,35 @@ sudo umount /mnt/shared/uploads
 mount | grep nfs
 df -h | grep nfs
 ```
+
+---
+
+## 📋 NFS 설정 검증 체크리스트
+
+### 완료된 단계
+- [x] DB 서버에 NFS 서버 설치
+- [x] /etc/exports 설정
+- [x] 웹서버1에 NFS 마운트
+- [x] /etc/fstab 자동 마운트 설정
+- [x] .env 파일에 UPLOAD_DIR 설정
+- [x] 백엔드 재시작
+
+### 검증 단계
+
+**1. 마운트 확인 (웹서버):** `df -h | grep nfs`, `mount | grep nfs`
+
+**2. 쓰기 테스트:**  
+`echo "NFS test" > /mnt/shared/uploads/test_nfs.txt` → 양쪽에서 `cat` 확인
+
+**3. 디렉토리 구조:** `ls -la /mnt/shared/uploads/`, `ls -la /mnt/shared/uploads/profile/`
+
+**4. 환경변수:** `cat .../server/.env | grep UPLOAD_DIR`, `pm2 env 0 | grep UPLOAD_DIR`
+
+**5. 정적 파일:** `curl http://localhost:3000/uploads/test_nfs.txt`
+
+**6. 실제 업로드:** 브라우저에서 프로필 이미지 업로드 후 `ls -la /mnt/shared/uploads/profile/` 확인
+
+### 문제 해결
+- **마운트 안 보임:** `sudo mount -t nfs 192.168.132.81:/mnt/shared/uploads /mnt/shared/uploads`, `dmesg | tail -20`
+- **권한 거부:** DB 서버에서 `sudo ls -la /mnt/shared/uploads`, 필요 시 권한 조정
+- **업로드 실패:** `pm2 logs backend`, `pm2 env 0`, 디렉토리 권한 확인
