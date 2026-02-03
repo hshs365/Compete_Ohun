@@ -9,13 +9,6 @@ interface Step1MemberTypeProps {
 const Step1MemberType: React.FC<Step1MemberTypeProps> = ({ memberType, onMemberTypeChange }) => {
   return (
     <div className="space-y-6">
-      {/* 안내 문구 */}
-      <div className="mb-6">
-        <p className="text-sm text-[var(--color-text-secondary)]">
-          회원 유형에 따라 제공되는 서비스가 달라질 수 있습니다. 가입 후에는 변경이 불가합니다.
-        </p>
-      </div>
-
       {/* 회원 유형 선택 */}
       <div className="space-y-4">
         <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-3">
@@ -43,7 +36,7 @@ const Step1MemberType: React.FC<Step1MemberTypeProps> = ({ memberType, onMemberT
                 }`} />
               </div>
               <div className="flex-1 text-left">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2">
                   <span className={`font-semibold text-lg ${
                     memberType === 'individual'
                       ? 'text-[var(--color-blue-primary)]'
@@ -55,9 +48,6 @@ const Step1MemberType: React.FC<Step1MemberTypeProps> = ({ memberType, onMemberT
                     <CheckCircleIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
                   )}
                 </div>
-                <p className="text-sm text-[var(--color-text-secondary)]">
-                  일반 사용자를 위한 회원 유형입니다.
-                </p>
               </div>
             </div>
           </button>
@@ -83,7 +73,7 @@ const Step1MemberType: React.FC<Step1MemberTypeProps> = ({ memberType, onMemberT
                 }`} />
               </div>
               <div className="flex-1 text-left">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2">
                   <span className={`font-semibold text-lg ${
                     memberType === 'business'
                       ? 'text-[var(--color-blue-primary)]'
@@ -95,23 +85,11 @@ const Step1MemberType: React.FC<Step1MemberTypeProps> = ({ memberType, onMemberT
                     <CheckCircleIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
                   )}
                 </div>
-                <p className="text-sm text-[var(--color-text-secondary)]">
-                  체육센터 운영자 및 사업자를 위한 회원 유형입니다.
-                </p>
               </div>
             </div>
           </button>
         </div>
       </div>
-
-      {/* 추가 안내 */}
-      {memberType === 'business' && (
-        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-          <p className="text-sm text-blue-700 dark:text-blue-300">
-            사업자 회원은 가입 과정에서 사업자등록번호를 API로 인증받고 가입합니다.
-          </p>
-        </div>
-      )}
     </div>
   );
 };

@@ -105,13 +105,6 @@ const Step6AdditionalInfo: React.FC<Step6AdditionalInfoProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 안내 문구 */}
-      <div className="mb-6">
-        <p className="text-sm text-[var(--color-text-secondary)]">
-          서비스 이용을 위해 추가 정보를 입력해주세요.
-        </p>
-      </div>
-
       {/* 닉네임 */}
       <div>
         <label className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-primary)] mb-2">

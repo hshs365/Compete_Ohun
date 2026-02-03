@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, IsEnum, IsOptional, IsArray, IsBoolean, Matches, ValidateIf } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsEnum, IsIn, IsOptional, IsArray, IsBoolean, Matches, ValidateIf } from 'class-validator';
 import { Gender, SkillLevel } from '../../users/entities/user.entity';
 
 export class RegisterDto {
@@ -83,7 +83,7 @@ export class RegisterDto {
   @IsBoolean()
   marketingSmsConsent?: boolean;
 
-  @IsEnum(['individual', 'business'])
+  @IsIn(['individual', 'business'])
   memberType: 'individual' | 'business'; // 회원 유형
 
   @IsOptional()

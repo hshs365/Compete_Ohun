@@ -34,13 +34,6 @@ const Step2TermsAgreement: React.FC<Step2TermsAgreementProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 안내 문구 */}
-      <div className="mb-6">
-        <p className="text-sm text-[var(--color-text-secondary)]">
-          오운 이용을 위해 약관 및 개인정보 수집 및 이용 안내 동의가 필요합니다.
-        </p>
-      </div>
-
       {/* 전체 동의 버튼 */}
       <button
         type="button"

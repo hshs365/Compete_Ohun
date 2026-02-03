@@ -416,13 +416,13 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
           {/* 헤더 - 단계 표시 */}
           <div className="flex items-center justify-between p-6 border-b border-[var(--color-border-card)]">
             <h1 className="text-2xl font-bold text-[var(--color-text-primary)]">
-              {currentStep === 1 && '회원 가입 유형을 선택하세요.'}
-              {currentStep === 2 && '약관 및 개인정보 수집, 이용 안내에 동의해주세요.'}
-              {currentStep === 3 && '로그인 정보를 입력해주세요.'}
-              {currentStep === 4 && '본인인증을 진행해주세요.'}
+              {currentStep === 1 && '회원 유형'}
+              {currentStep === 2 && '약관 동의'}
+              {currentStep === 3 && '로그인 정보'}
+              {currentStep === 4 && '본인인증'}
               {currentStep === 5 && formData.memberType === 'business' && '사업자 정보'}
-              {currentStep === 5 && formData.memberType === 'individual' && '추가 정보를 입력해주세요.'}
-              {currentStep === 6 && '추가 정보를 입력해주세요.'}
+              {currentStep === 5 && formData.memberType === 'individual' && '추가 정보'}
+              {currentStep === 6 && '추가 정보'}
             </h1>
             <div className="text-sm font-medium text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] px-3 py-1 rounded-full">
               {currentStep} / {totalSteps}

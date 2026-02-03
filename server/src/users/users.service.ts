@@ -1,7 +1,7 @@
 import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { User, UserStatus } from './entities/user.entity';
 import { SocialAccount, SocialProvider } from '../social-accounts/entities/social-account.entity';
 import { AthleteService } from './athlete.service';

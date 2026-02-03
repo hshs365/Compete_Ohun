@@ -116,19 +116,6 @@ const Step4PhoneVerification: React.FC<Step4PhoneVerificationProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 안내 문구 */}
-      <div className="mb-6">
-        {isSmsVerificationEnabled ? (
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            본인인증을 위해 전화번호 인증을 진행해주세요.
-          </p>
-        ) : (
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            SMS 인증이 비활성화되어 있습니다. 전화번호는 선택 입력이며, 비워두고 실명만 입력한 뒤 다음 단계로 진행할 수 있습니다.
-          </p>
-        )}
-      </div>
-
       {/* 전화번호 입력 */}
       <div>
         <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
@@ -258,9 +245,6 @@ const Step4PhoneVerification: React.FC<Step4PhoneVerificationProps> = ({
             placeholder="이름을 입력해주세요 (한글 또는 영문만 가능)"
             maxLength={50}
           />
-          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-            본인인증 완료 후 실명을 입력해주세요. 한글 또는 영문만 입력 가능합니다.
-          </p>
         </div>
       )}
     </div>

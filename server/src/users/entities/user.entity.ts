@@ -79,11 +79,11 @@ export class User {
   @Column({ type: 'date', nullable: true })
   birthDate: Date | null;
 
-  @Column({ type: 'varchar', length: 50 })
+  @Column({ type: 'varchar', length: 100 })
   residenceSido: string; // 시/도
 
-  @Column({ type: 'varchar', length: 50 })
-  residenceSigungu: string; // 시/군/구
+  @Column({ type: 'varchar', length: 255 })
+  residenceSigungu: string; // 시/군/구 (상세 주소 포함 시 길어질 수 있음)
 
   // 위치 정보 (위도, 경도)
   @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })

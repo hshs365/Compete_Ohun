@@ -93,16 +93,19 @@ async function bootstrap() {
           return callback(null, true);
         }
       } else {
-        // 운영 환경에서는 특정 도메인만 허용
+        // 운영 환경: https + http 도메인 허용 (리다이렉트·프록시 환경 대응)
         const productionOrigins = [
           'https://ohun.kr',
           'https://www.ohun.kr',
+          'http://ohun.kr',
+          'http://www.ohun.kr',
         ];
         if (productionOrigins.some(allowed => origin.startsWith(allowed))) {
           return callback(null, true);
         }
       }
-      
+
+      console.warn('[CORS] 차단된 origin:', origin);
       callback(new Error('CORS 정책에 의해 차단되었습니다.'));
     },
     credentials: true,

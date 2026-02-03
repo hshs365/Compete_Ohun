@@ -87,13 +87,6 @@ const Step3LoginInfo: React.FC<Step3LoginInfoProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 안내 문구 */}
-      <div className="mb-6">
-        <p className="text-sm text-[var(--color-text-secondary)]">
-          입력하신 정보로 회원님의 계정이 생성됩니다.
-        </p>
-      </div>
-
       {/* 이메일 입력 */}
       <div>
         <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">

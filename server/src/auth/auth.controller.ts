@@ -81,7 +81,12 @@ export class AuthController {
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   async register(@Body(ValidationPipe) registerDto: RegisterDto) {
-    return this.authService.register(registerDto);
+    try {
+      return await this.authService.register(registerDto);
+    } catch (err) {
+      console.error('[POST /api/auth/register] 회원가입 실패:', err);
+      throw err;
+    }
   }
 
   /** 회원가입 단계에서 사업자등록번호 검증 (비로그인). 대표자명·개업일자 있으면 국세청 진위확인 API 호출 */
