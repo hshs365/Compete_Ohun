@@ -90,6 +90,8 @@ pipeline {
               cd "\$BACKEND_DIR"
               echo "[INFO] Installing backend dependencies..."
               npm install --no-audit --no-fund
+              echo "[INFO] Building backend..."
+              npm run build
               echo "[INFO] Updating environment variables..."
               # .env 파일에 환경변수 추가/업데이트
               if [ -f .env ]; then
@@ -101,7 +103,7 @@ pipeline {
               echo "SMS_VERIFICATION_ENABLED=\$SMS_VERIFICATION_ENABLED" >> .env
               echo "[INFO] Environment: \$NODE_ENV, SMS Verification: \$SMS_VERIFICATION_ENABLED"
               echo "[INFO] Restarting backend..."
-              "\$PM2_BIN" describe backend >/dev/null 2>&1 || "\$PM2_BIN" start npm --name backend --cwd "\$BACKEND_DIR" -- run start:dev
+              "\$PM2_BIN" describe backend >/dev/null 2>&1 || "\$PM2_BIN" start npm --name backend --cwd "\$BACKEND_DIR" -- run start:prod
               "\$PM2_BIN" restart backend --update-env
               if [ "\$DEPLOY_CLIENT" = "true" ]; then
                 echo "[INFO] Deploying client..."

@@ -1,6 +1,6 @@
 import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, QueryFailedError } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { User, UserStatus } from './entities/user.entity';
 import { SocialAccount, SocialProvider } from '../social-accounts/entities/social-account.entity';
@@ -222,7 +222,24 @@ export class UsersService {
       isProfileComplete: userData.isProfileComplete ?? false,
     });
 
-    return this.userRepository.save(user);
+    try {
+      return await this.userRepository.save(user);
+    } catch (err) {
+      if (err instanceof QueryFailedError) {
+        const code = (err as any).code;
+        if (code === '23505') {
+          throw new ConflictException('이미 사용 중인 닉네임입니다. 다른 닉네임을 시도해 주세요.');
+        }
+        if (code === '23502') {
+          throw new BadRequestException('필수 정보가 누락되었습니다.');
+        }
+        if (code === '23503') {
+          throw new BadRequestException('참조 데이터 오류가 있습니다. 입력을 확인해 주세요.');
+        }
+      }
+      console.error('[createUser] save error:', err);
+      throw err;
+    }
   }
 
   async createSocialAccount(

@@ -48,6 +48,9 @@ const Step1MemberType: React.FC<Step1MemberTypeProps> = ({ memberType, onMemberT
                     <CheckCircleIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
                   )}
                 </div>
+                <p className="mt-2 text-sm text-[var(--color-text-secondary)] leading-relaxed">
+                  운동 모임 참가, 개인 활동용입니다.
+                </p>
               </div>
             </div>
           </button>
@@ -85,6 +88,9 @@ const Step1MemberType: React.FC<Step1MemberTypeProps> = ({ memberType, onMemberT
                     <CheckCircleIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
                   )}
                 </div>
+                <p className="mt-2 text-sm text-[var(--color-text-secondary)] leading-relaxed">
+                  시설·상품 등록, 사업자 서비스 이용용입니다.
+                </p>
               </div>
             </div>
           </button>
