@@ -15,6 +15,8 @@ import {
   XMarkIcon,
   ChartBarIcon,
   ChevronRightIcon,
+  BanknotesIcon,
+  IdentificationIcon,
 } from '@heroicons/react/24/outline';
 import { showError, showSuccess, showWarning, showInfo, showConfirm } from '../utils/swal';
 import ToggleSwitch from './ToggleSwitch';
@@ -61,6 +63,17 @@ interface UserProfileData {
   athleteData?: { sport?: string; subSport?: string; registeredYear?: number; [key: string]: unknown } | null;
   /** 종목별 오운 랭크 (S~F). 랭크매치 참여 후 심판이 승패 기록한 종목만 포함 */
   effectiveRanks?: Record<string, string>;
+  /** 보유 포인트 */
+  points?: number;
+}
+
+export interface PointHistoryItem {
+  id: number;
+  amount: number;
+  type: 'earn' | 'use' | 'adjust';
+  description: string | null;
+  balanceAfter: number;
+  createdAt: string;
 }
 
 const MyInfoPage = () => {
@@ -84,6 +97,10 @@ const MyInfoPage = () => {
   const [changeBusinessNumberNew, setChangeBusinessNumberNew] = useState('');
   const [isChangingBusinessNumber, setIsChangingBusinessNumber] = useState(false);
   const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
+  const [showPointHistoryModal, setShowPointHistoryModal] = useState(false);
+  const [pointHistory, setPointHistory] = useState<PointHistoryItem[]>([]);
+  const [pointHistoryLoading, setPointHistoryLoading] = useState(false);
+  const lastFetchTimeRef = useRef<number>(0);
 
   const closeChangeBusinessNumberModal = () => {
     setShowChangeBusinessNumberModal(false);
@@ -176,26 +193,28 @@ const MyInfoPage = () => {
       setNickname(data.nickname || '');
       setPhone(data.phone || '');
       
-      // localStorage에 저장된 주소가 있으면 그대로 사용
-        const savedLocation = localStorage.getItem('userLocation');
-        if (savedLocation) {
-          try {
-            const location = JSON.parse(savedLocation);
+      // 사용자별 주소 (계정 전환 시 이전 사용자 주소가 보이지 않도록)
+      const locationKey = `userLocation_${data.id}`;
+      const savedLocation = localStorage.getItem(locationKey);
+      if (savedLocation) {
+        try {
+          const location = JSON.parse(savedLocation);
           if (location.address && !location.address.startsWith('위도:')) {
             setUserLocation({ address: location.address });
-            } else {
-              setUserLocation(null);
-            }
-          } catch (e) {
+          } else {
             setUserLocation(null);
           }
-        } else {
+        } catch (e) {
+          setUserLocation(null);
+        }
+      } else {
         setUserLocation(null);
       }
     } catch (error) {
       console.error('사용자 정보 로드 실패:', error);
     } finally {
       setIsLoading(false);
+      lastFetchTimeRef.current = Date.now();
     }
   }, []);
 
@@ -208,14 +227,16 @@ const MyInfoPage = () => {
   }, [authUser]); // fetchUserData는 useCallback으로 안정적이므로 dependency에서 제외
 
   // 페이지 포커스 시 데이터 새로고침 (가이드 완료 후 내정보 페이지로 이동했을 때)
+  // 15초 이상 경과한 경우에만 재요청 (불필요한 새로고침 방지)
+  const FOCUS_REFRESH_INTERVAL_MS = 15000;
   useEffect(() => {
     const handleFocus = () => {
-      if (authUser && !isLoading) {
-        // 약간의 지연을 두어 서버 업데이트가 완료된 후 데이터 가져오기
-        setTimeout(() => {
-          fetchUserData();
-        }, 500);
-      }
+      if (!authUser || isLoading) return;
+      const elapsed = Date.now() - lastFetchTimeRef.current;
+      if (elapsed < FOCUS_REFRESH_INTERVAL_MS) return;
+      setTimeout(() => {
+        fetchUserData();
+      }, 500);
     };
 
     window.addEventListener('focus', handleFocus);
@@ -223,16 +244,17 @@ const MyInfoPage = () => {
       window.removeEventListener('focus', handleFocus);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authUser, isLoading]); // fetchUserData는 useCallback으로 안정적이므로 dependency에서 제외
+  }, [authUser, isLoading]);
 
-  // userLocationUpdated 이벤트 리스너 (주소 저장 시 즉시 반영) - 별도 useEffect로 분리
+  // userLocationUpdated 이벤트 리스너 (주소 저장 시 즉시 반영)
   useEffect(() => {
     const handleLocationUpdate = (event: CustomEvent) => {
       const { address } = event.detail || {};
       if (address && !address.startsWith('위도:')) {
         setUserLocation({ address });
-      } else {
-        const savedLocation = localStorage.getItem('userLocation');
+      } else if (profileData?.id) {
+        const locationKey = `userLocation_${profileData.id}`;
+        const savedLocation = localStorage.getItem(locationKey);
         if (savedLocation) {
           try {
             const location = JSON.parse(savedLocation);
@@ -245,6 +267,8 @@ const MyInfoPage = () => {
           }
         }
         setUserLocation(null);
+      } else {
+        setUserLocation(null);
       }
     };
 
@@ -256,7 +280,7 @@ const MyInfoPage = () => {
     return () => {
       window.removeEventListener('userLocationUpdated', eventHandler);
     };
-  }, []); // 빈 dependency 배열로 한 번만 등록
+  }, [profileData?.id]);
 
   // 자동 역지오코딩 제거 - 주소는 주소 검색으로만 등록
 
@@ -320,9 +344,10 @@ const MyInfoPage = () => {
       try {
         const userId = profileData.id;
 
-        const [participations, creations] = await Promise.all([
+        const [participations, creations, favRes] = await Promise.all([
           api.get<Array<{ id: number; name: string; category: string; meetingTime: string | null; location: string; participantCount: number; creator?: { nickname: string } }>>('/api/groups/my-participations'),
           api.get<Array<{ id: number; name: string; category: string; meetingTime: string | null; location: string; participantCount: number }>>('/api/groups/my-creations'),
+          api.get<{ count: number }>('/api/groups/my-favorite-count'),
         ]);
 
         const participationsList = Array.isArray(participations) ? participations : [];
@@ -331,8 +356,7 @@ const MyInfoPage = () => {
         setMyParticipations(participationsList);
         setMyCreations(creationsList);
 
-        // 찜한 매치 수 (API 구현 후 활성화)
-        const favoritesCount = 0;
+        const favoritesCount = favRes?.count ?? 0;
         // 참여 예정 매치 수 (meetingTime 파싱 로직 구현 후)
         const upcomingCount = 0;
 
@@ -607,8 +631,9 @@ const MyInfoPage = () => {
 
               setUserLocation(locationData);
               
-              // localStorage에 저장
-              localStorage.setItem('userLocation', JSON.stringify(locationData));
+              // 사용자별 localStorage 키 (계정 전환 시 혼선 방지)
+              const locationKey = profileData?.id ? `userLocation_${profileData.id}` : 'userLocation';
+              localStorage.setItem(locationKey, JSON.stringify(locationData));
               
               // 커스텀 이벤트 발생
               window.dispatchEvent(new CustomEvent('userLocationUpdated', {
@@ -759,22 +784,77 @@ const MyInfoPage = () => {
                   </div>
                 ) : (
                   <>
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <h3 className="text-2xl font-bold text-[var(--color-text-primary)]">
-                          {profileData.nickname || '닉네임 없음'}
-                        </h3>
-                        {profileData.tag && (
-                          <span className="text-lg text-[var(--color-text-secondary)]">
-                            {profileData.tag}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <h3 className="text-2xl font-bold text-[var(--color-text-primary)] truncate">
+                            {profileData.nickname || '닉네임 없음'}
+                          </h3>
+                          {profileData.tag && (
+                            <span className="text-lg text-[var(--color-text-secondary)] shrink-0">
+                              {profileData.tag}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (profileData.nicknameChangedAt) {
+                                const threeMonthsAgo = new Date();
+                                threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+                                const lastChange = new Date(profileData.nicknameChangedAt);
+                                if (lastChange > threeMonthsAgo) {
+                                  const daysRemaining = Math.ceil(
+                                    (lastChange.getTime() + 90 * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
+                                  );
+                                  showWarning(
+                                    `닉네임은 3개월에 한 번만 변경할 수 있습니다. ${daysRemaining}일 후에 변경 가능합니다.`,
+                                    '닉네임 변경 제한'
+                                  );
+                                  return;
+                                }
+                              }
+                              setIsEditingNickname(true);
+                            }}
+                            className="p-1.5 text-[var(--color-text-secondary)] hover:text-[var(--color-blue-primary)] hover:bg-[var(--color-bg-secondary)] rounded-lg transition-colors shrink-0"
+                            title={profileData.nicknameChangedAt && (() => {
+                              const lastChange = new Date(profileData.nicknameChangedAt);
+                              const threeMonthsAgo = new Date();
+                              threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+                              if (lastChange > threeMonthsAgo) {
+                                const daysRemaining = Math.ceil(
+                                  (lastChange.getTime() + 90 * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
+                                );
+                                return `${daysRemaining}일 후 변경 가능`;
+                              }
+                              return '닉네임 변경';
+                            })()}
+                          >
+                            <PencilIcon className="w-5 h-5" />
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setShowPointHistoryModal(true);
+                            setPointHistoryLoading(true);
+                            try {
+                              const list = await api.get<PointHistoryItem[]>('/api/users/my/point-history');
+                              setPointHistory(list);
+                            } catch {
+                              setPointHistory([]);
+                            } finally {
+                              setPointHistoryLoading(false);
+                            }
+                          }}
+                          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] shrink-0 hover:border-amber-500/50 hover:bg-[var(--color-bg-secondary)]/80 transition-colors cursor-pointer text-left"
+                        >
+                          <BanknotesIcon className="w-5 h-5 text-amber-500" />
+                          <span className="text-sm text-[var(--color-text-secondary)]">보유 포인트</span>
+                          <span className="text-lg font-bold text-[var(--color-text-primary)]">
+                            {(profileData.points ?? 0).toLocaleString()} P
                           </span>
-                        )}
+                        </button>
                       </div>
-                      {profileData.realName && (
-                        <p className="text-sm text-[var(--color-text-secondary)] mt-1">
-                          실명: {profileData.realName}
-                        </p>
-                      )}
                       {profileData.nicknameChangedAt && (() => {
                       const lastChange = new Date(profileData.nicknameChangedAt);
                       const threeMonthsAgo = new Date();
@@ -790,43 +870,6 @@ const MyInfoPage = () => {
                       );
                     })()}
                   </div>
-                  <button
-                    onClick={() => {
-                      // 3개월 제한 체크
-                      if (profileData.nicknameChangedAt) {
-                        const threeMonthsAgo = new Date();
-                        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-                        const lastChange = new Date(profileData.nicknameChangedAt);
-                        
-                        if (lastChange > threeMonthsAgo) {
-                          const daysRemaining = Math.ceil(
-                            (lastChange.getTime() + 90 * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
-                          );
-                          showWarning(
-                            `닉네임은 3개월에 한 번만 변경할 수 있습니다. ${daysRemaining}일 후에 변경 가능합니다.`,
-                            '닉네임 변경 제한'
-                          );
-                          return;
-                        }
-                      }
-                      setIsEditingNickname(true);
-                    }}
-                    className="p-1 text-[var(--color-text-secondary)] hover:text-[var(--color-blue-primary)] transition-colors"
-                    title={profileData.nicknameChangedAt && (() => {
-                      const lastChange = new Date(profileData.nicknameChangedAt);
-                      const threeMonthsAgo = new Date();
-                      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-                      if (lastChange > threeMonthsAgo) {
-                        const daysRemaining = Math.ceil(
-                          (lastChange.getTime() + 90 * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
-                        );
-                        return `${daysRemaining}일 후 변경 가능`;
-                      }
-                      return '닉네임 변경';
-                    })()}
-                  >
-                    <PencilIcon className="w-5 h-5" />
-                  </button>
                 </>
               )}
             </div>
@@ -864,23 +907,7 @@ const MyInfoPage = () => {
                 </span>
               )}
             </div>
-            {!profileData.athleteVerified && (
-              <div className="mt-2">
-                <button
-                  type="button"
-                  onClick={handleAthleteRegister}
-                  disabled={isAthleteRegistering || !profileData.realName?.trim()}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl border-2 border-[var(--color-border-card)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-primary)] hover:border-[var(--color-blue-primary)]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <TrophyIcon className="w-4 h-4" />
-                  {isAthleteRegistering ? '조회 중...' : '선수 등록'}
-                </button>
-                <p className="text-xs text-[var(--color-text-secondary)] mt-1">
-                  대한체육회 스포츠지원포털에 등록된 선수라면 실명으로 조회 후 선수 뱃지를 받을 수 있습니다.
-                </p>
-              </div>
-            )}
-            
+
             {/* 가입일 및 팔로워/팔로잉 수 */}
             <div className="mt-3 space-y-2">
               {joinDate && (
@@ -923,6 +950,20 @@ const MyInfoPage = () => {
                 <div className="text-sm text-[var(--color-text-secondary)]">이메일</div>
                 <div className="text-[var(--color-text-primary)] font-medium">
                   {profileData.email || '이메일 없음'}
+                </div>
+              </div>
+            </div>
+            <span className="text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] px-2 py-1 rounded">수정 불가</span>
+          </div>
+
+          {/* 실명 (수정 불가) */}
+          <div className="flex items-center justify-between py-3 border-b border-[var(--color-border-card)]">
+            <div className="flex items-center space-x-3">
+              <IdentificationIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
+              <div>
+                <div className="text-sm text-[var(--color-text-secondary)]">실명</div>
+                <div className="text-[var(--color-text-primary)] font-medium">
+                  {profileData.realName || '등록된 실명 없음'}
                 </div>
               </div>
             </div>
@@ -997,6 +1038,24 @@ const MyInfoPage = () => {
               )}
               </div>
             )}
+
+          {/* 선수 등록 (계정 정보 하단, 덜 눈에 띄게) */}
+          {!profileData.athleteVerified && (
+            <div className="pt-4 mt-4 border-t border-[var(--color-border-card)]">
+              <p className="text-xs text-[var(--color-text-secondary)] mb-2">
+                대한체육회 스포츠지원포털에 등록된 선수라면 실명으로 조회 후 선수 뱃지를 받을 수 있습니다.
+              </p>
+              <button
+                type="button"
+                onClick={handleAthleteRegister}
+                disabled={isAthleteRegistering || !profileData.realName?.trim()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--color-border-card)] bg-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <TrophyIcon className="w-3.5 h-3.5" />
+                {isAthleteRegistering ? '조회 중...' : '선수 등록'}
+              </button>
+            </div>
+          )}
           </div>
         </div>
       </section>
@@ -1482,6 +1541,71 @@ const MyInfoPage = () => {
           isOpen={showStatisticsModal}
           onClose={() => setShowStatisticsModal(false)}
         />
+      )}
+
+      {/* 포인트 내역 모달 */}
+      {showPointHistoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowPointHistoryModal(false)}>
+          <div className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] shadow-xl max-w-md w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-[var(--color-border-card)]">
+              <h3 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
+                <BanknotesIcon className="w-5 h-5 text-amber-500" />
+                포인트 내역
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowPointHistoryModal(false)}
+                className="p-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] rounded-lg hover:bg-[var(--color-bg-secondary)] transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1 min-h-0">
+              {pointHistoryLoading ? (
+                <div className="flex justify-center py-8">
+                  <LoadingSpinner />
+                </div>
+              ) : pointHistory.length === 0 ? (
+                <p className="text-center text-[var(--color-text-secondary)] py-8">포인트 획득·사용 내역이 없습니다.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {pointHistory.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-center justify-between gap-3 py-3 px-4 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)]"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`text-sm font-semibold shrink-0 ${
+                              item.amount > 0 ? 'text-emerald-600' : 'text-red-600'
+                            }`}
+                          >
+                            {item.amount > 0 ? '+' : ''}{item.amount.toLocaleString()} P
+                          </span>
+                          <span className="text-xs text-[var(--color-text-secondary)]">
+                            {item.type === 'earn' ? '획득' : item.type === 'use' ? '사용' : '조정'}
+                          </span>
+                        </div>
+                        {item.description && (
+                          <p className="text-sm text-[var(--color-text-secondary)] mt-0.5 truncate" title={item.description}>
+                            {item.description}
+                          </p>
+                        )}
+                        <p className="text-xs text-[var(--color-text-secondary)] mt-1">
+                          {new Date(item.createdAt).toLocaleString('ko-KR')}
+                        </p>
+                      </div>
+                      <span className="text-sm font-medium text-[var(--color-text-primary)] shrink-0">
+                        잔액 {item.balanceAfter.toLocaleString()} P
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 로그아웃 및 회원 탈퇴 */}

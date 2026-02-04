@@ -79,11 +79,11 @@ export class User {
   @Column({ type: 'date', nullable: true })
   birthDate: Date | null;
 
-  @Column({ type: 'varchar', length: 100 })
-  residenceSido: string; // 시/도
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  residenceSido: string | null; // 시/도 (기존 데이터 호환용 nullable)
 
-  @Column({ type: 'varchar', length: 255 })
-  residenceSigungu: string; // 시/군/구 (상세 주소 포함 시 길어질 수 있음)
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  residenceSigungu: string | null; // 시/군/구 (상세 주소 포함 시 길어질 수 있음)
 
   // 위치 정보 (위도, 경도)
   @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
@@ -221,6 +221,10 @@ export class User {
   /** 오운 랭크: 종목별 S,A,B,C,D,E,F. 저장값 없으면 선수=C/일반=F 기본 */
   @Column({ type: 'jsonb', default: () => "'{}'" })
   ohunRanks: Record<string, string>;
+
+  /** 포인트 (서비스 내 결제/적립/사용용) */
+  @Column({ type: 'int', default: 0 })
+  points: number;
 
   // 메타 정보
   @CreateDateColumn()

@@ -53,35 +53,46 @@ const Step5AdditionalInfo: React.FC<Step5AdditionalInfoProps> = ({
 }) => {
   const [nicknameAvailable, setNicknameAvailable] = useState<boolean | null>(null);
   const [nicknameChecking, setNicknameChecking] = useState(false);
-  const [nicknameCheckError, setNicknameCheckError] = useState(false);
+  const [nicknameCheckError, setNicknameCheckError] = useState<string | null>(null);
+
+  const checkNickname = React.useCallback(async (nickToCheck: string) => {
+    if (nickToCheck.length < 2) return;
+    setNicknameChecking(true);
+    setNicknameCheckError(null);
+    try {
+      const result = await api.get<{ available: boolean }>(
+        `/api/auth/check-nickname?nickname=${encodeURIComponent(nickToCheck)}`
+      );
+      setNicknameAvailable(result.available);
+    } catch (error) {
+      setNicknameAvailable(null);
+      const isNetworkError =
+        error instanceof TypeError ||
+        (error instanceof Error && (error.message === 'Failed to fetch' || error.message.includes('NetworkError')));
+      setNicknameCheckError(
+        isNetworkError
+          ? '서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.'
+          : '확인할 수 없습니다. 잠시 후 다시 시도해주세요.'
+      );
+    } finally {
+      setNicknameChecking(false);
+    }
+  }, []);
 
   // 닉네임 중복 검사 (디바운스)
   React.useEffect(() => {
     if (nickname.length < 2) {
       setNicknameAvailable(null);
-      setNicknameCheckError(false);
+      setNicknameCheckError(null);
       return;
     }
 
-    const timer = setTimeout(async () => {
-      setNicknameChecking(true);
-      setNicknameCheckError(false);
-      try {
-        const result = await api.get<{ available: boolean }>(
-          `/api/auth/check-nickname?nickname=${encodeURIComponent(nickname)}`
-        );
-        setNicknameAvailable(result.available);
-      } catch (error) {
-        // 502 등 서버/네트워크 오류 시 '이미 사용 중'으로 오해하지 않도록 null 유지
-        setNicknameAvailable(null);
-        setNicknameCheckError(true);
-      } finally {
-        setNicknameChecking(false);
-      }
+    const timer = setTimeout(() => {
+      checkNickname(nickname);
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [nickname]);
+  }, [nickname, checkNickname]);
 
   // Daum Postcode API 스크립트 로드
   React.useEffect(() => {
@@ -165,7 +176,16 @@ const Step5AdditionalInfo: React.FC<Step5AdditionalInfoProps> = ({
           <p className="mt-1 text-sm text-red-500">이미 사용 중인 닉네임입니다.</p>
         )}
         {nicknameCheckError && nickname.length >= 2 && !nicknameChecking && (
-          <p className="mt-1 text-sm text-amber-500">확인할 수 없습니다. 잠시 후 다시 시도해주세요.</p>
+          <div className="mt-1 flex items-center gap-2">
+            <p className="text-sm text-amber-500">{nicknameCheckError}</p>
+            <button
+              type="button"
+              onClick={() => checkNickname(nickname)}
+              className="text-sm font-medium text-[var(--color-blue-primary)] hover:underline"
+            >
+              다시 확인
+            </button>
+          </div>
         )}
       </div>
 

@@ -61,6 +61,13 @@ export class GroupsController {
     return this.groupsService.findMyCreationsCompleted(user.id);
   }
 
+  /** 찜한 매치 개수 (활동 기록 페이지용) */
+  @UseGuards(JwtAuthGuard)
+  @Get('my-favorite-count')
+  async getMyFavoriteCount(@CurrentUser() user: User) {
+    return this.groupsService.getFavoriteCount(user.id);
+  }
+
   @Public()
   @Get(':id')
   async findOne(
@@ -191,6 +198,55 @@ export class GroupsController {
     @CurrentUser() user: User,
   ) {
     return this.groupsService.cancelReferee(id, user.id);
+  }
+
+  /** 매치 종료 후 리뷰 작성 가능 여부 및 항목·참가자 목록 */
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/review-eligibility')
+  async getReviewEligibility(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+  ) {
+    return this.groupsService.getReviewEligibility(id, user.id);
+  }
+
+  /** 매치 리뷰 제출 (항목별 선택된 참가자 userId). 제출 시 포인트 지급 */
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/reviews')
+  @HttpCode(HttpStatus.CREATED)
+  async submitReview(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+    @Body() body: { answers: Record<string, number> },
+  ) {
+    if (!body?.answers || typeof body.answers !== 'object') {
+      throw new BadRequestException('answers 객체를 보내주세요.');
+    }
+    return this.groupsService.submitReview(id, user.id, body.answers);
+  }
+
+  /** 시설 리뷰 제출. 선수리뷰와 별도 500P 지급 */
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/facility-review')
+  @HttpCode(HttpStatus.CREATED)
+  async submitFacilityReview(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+    @Body() body: { facilityId: number; cleanliness: number; suitableForGame: number; overall: number },
+  ) {
+    if (
+      body?.facilityId == null ||
+      typeof body.cleanliness !== 'number' ||
+      typeof body.suitableForGame !== 'number' ||
+      typeof body.overall !== 'number'
+    ) {
+      throw new BadRequestException('facilityId, cleanliness, suitableForGame, overall를 보내주세요.');
+    }
+    return this.groupsService.submitFacilityReview(id, body.facilityId, user.id, {
+      cleanliness: body.cleanliness,
+      suitableForGame: body.suitableForGame,
+      overall: body.overall,
+    });
   }
 }
 

@@ -8,6 +8,8 @@ export interface User {
   tag?: string; // 닉네임 태그 (예: #KR1, #KR2)
   isProfileComplete: boolean;
   profileImageUrl?: string | null;
+  /** 보유 포인트 (참가비 결제 등) */
+  points?: number;
 }
 
 // 닉네임과 태그를 조합하여 표시하는 헬퍼 함수

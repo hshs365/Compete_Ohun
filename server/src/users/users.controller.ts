@@ -2,7 +2,9 @@ import { Controller, Get, Post, Delete, Query, UseGuards, Request, Param, ParseI
 import { UsersService } from './users.service';
 import { UserScoreService } from './user-score.service';
 import { FollowService } from './follow.service';
+import { PointsService } from './points.service';
 import { RecommendedUsersService } from './recommended-users.service';
+import { UserReviewStatsService } from './user-review-stats.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { HallOfFameQueryDto } from './dto/hall-of-fame-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -34,7 +36,9 @@ export class UsersController {
     private usersService: UsersService,
     private userScoreService: UserScoreService,
     private followService: FollowService,
+    private pointsService: PointsService,
     private recommendedUsersService: RecommendedUsersService,
+    private userReviewStatsService: UserReviewStatsService,
     private notificationsService: NotificationsService,
     @InjectRepository(UserSeasonScore)
     private seasonScoreRepository: Repository<UserSeasonScore>,
@@ -262,6 +266,25 @@ export class UsersController {
   async getFollowStatus(@CurrentUser() user: User, @Param('userId', ParseIntPipe) followingId: number) {
     const isFollowing = await this.followService.isFollowing(user.id, followingId);
     return { isFollowing };
+  }
+
+  /**
+   * 내 포인트 획득/사용 내역 조회
+   */
+  @Get('my/point-history')
+  @UseGuards(JwtAuthGuard)
+  async getMyPointHistory(@CurrentUser() user: User, @Query('limit') limitStr?: string) {
+    const limit = limitStr ? Math.min(parseInt(limitStr, 10) || 50, 100) : 50;
+    return this.pointsService.getHistory(user.id, limit);
+  }
+
+  /**
+   * 내 축구 스텟 (매치 리뷰에서 뽑힌 횟수 기반, 레이더차트용 1~10)
+   */
+  @Get('me/football-stats')
+  @UseGuards(JwtAuthGuard)
+  async getMyFootballStats(@CurrentUser() user: User) {
+    return this.userReviewStatsService.getFootballStatsFromReviews(user.id);
   }
 
   /**

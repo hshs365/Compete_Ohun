@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Inject, forwardRef, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as fs from 'fs/promises';
@@ -8,6 +8,7 @@ import { Facility } from './entities/facility.entity';
 import { CreateFacilityDto } from './dto/create-facility.dto';
 import { FacilityQueryDto } from './dto/facility-query.dto';
 import { UsersService } from '../users/users.service';
+import { ReservationsService } from './reservations.service';
 import { SPORT_FACILITY_TYPES_MAP } from '../constants/sports';
 import { uploadConfig } from '../config/upload.config';
 
@@ -17,6 +18,8 @@ export class FacilitiesService {
     @InjectRepository(Facility)
     private facilityRepository: Repository<Facility>,
     private usersService: UsersService,
+    @Inject(forwardRef(() => ReservationsService))
+    private reservationsService: ReservationsService,
   ) {}
 
   async uploadFacilityImage(ownerId: number, file: Express.Multer.File): Promise<string> {
@@ -76,9 +79,48 @@ export class FacilitiesService {
     return this.facilityRepository.save(facility);
   }
 
+  /**
+   * 운영시간 문자열이 요청한 시간대를 수용 가능한지 확인
+   * @param operatingHours "HH:mm - HH:mm" 형식 (예: 21:00 - 00:00). 00:00은 자정(24:00)으로 처리
+   */
+  private facilityCoversTimeRange(
+    operatingHours: string | null,
+    matchStartMinutes: number,
+    matchEndMinutes: number,
+  ): boolean {
+    if (!operatingHours?.trim()) return true;
+    const match = operatingHours.match(/(\d{1,2}):(\d{2})\s*[-~]\s*(\d{1,2}):(\d{2})/);
+    if (!match) return true;
+    const openM = parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+    let closeM = parseInt(match[3], 10) * 60 + parseInt(match[4], 10);
+    if (closeM <= openM) closeM += 24 * 60; // 00:00 = 자정
+    return openM <= matchStartMinutes && closeM >= matchEndMinutes;
+  }
+
   async findAll(queryDto: FacilityQueryDto): Promise<{ facilities: Facility[]; total: number }> {
-    const { type, search, area, page = 1, limit = 20, latitude, longitude, category } = queryDto;
+    const { type, search, area, page = 1, limit = 20, latitude, longitude, category, availableDate, availableTime, availableEndTime, availableEndDate } = queryDto;
     const skip = (page - 1) * limit;
+
+    // 해당 시간대에 예약 가능한 시설만 보기: 그 구간에 이미 예약된 시설 ID 제외
+    let occupiedFacilityIds: number[] = [];
+    if (availableDate && availableTime) {
+      let endTime: string;
+      if (availableEndTime && availableEndTime.length >= 5) {
+        endTime = availableEndTime.slice(0, 5);
+      } else {
+        const [sh, sm] = availableTime.split(':').map(Number);
+        const endMinutes = (sh * 60 + (sm || 0)) + 120;
+        const eh = Math.floor(endMinutes / 60);
+        const em = endMinutes % 60;
+        endTime = `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`;
+      }
+      const startTime = availableTime.length >= 5 ? availableTime.slice(0, 5) : availableTime;
+      occupiedFacilityIds = await this.reservationsService.getFacilityIdsWithOccupiedSlot(
+        availableDate,
+        startTime,
+        endTime,
+      );
+    }
 
     const queryBuilder = this.facilityRepository
       .createQueryBuilder('facility')
@@ -86,6 +128,10 @@ export class FacilitiesService {
       .where('facility.isActive = :isActive', { isActive: true })
       .andWhere('facility.latitude IS NOT NULL')
       .andWhere('facility.longitude IS NOT NULL');
+
+    if (occupiedFacilityIds.length > 0) {
+      queryBuilder.andWhere('facility.id NOT IN (:...occupiedIds)', { occupiedIds: occupiedFacilityIds });
+    }
 
     // 카테고리(종목)에 따른 시설 필터링: 타입 매핑 또는 availableSports 포함
     if (category && SPORT_FACILITY_TYPES_MAP[category]) {
@@ -147,7 +193,26 @@ export class FacilitiesService {
     }
 
     // 페이지네이션
-    const [facilities, total] = await queryBuilder.skip(skip).take(limit).getManyAndCount();
+    let [facilities, total] = await queryBuilder.skip(skip).take(limit).getManyAndCount();
+
+    // 운영시간 필터: 예약 불가능한 시설(운영시간 미달) 제외
+    if (availableDate && availableTime && facilities.length > 0) {
+      const [sh, sm] = availableTime.slice(0, 5).split(':').map(Number);
+      const matchStartM = (sh ?? 0) * 60 + (sm ?? 0);
+      let matchEndM: number;
+      if (availableEndTime && availableEndTime.length >= 5) {
+        const [eh, em] = availableEndTime.slice(0, 5).split(':').map(Number);
+        matchEndM = (eh ?? 0) * 60 + (em ?? 0);
+        if (availableEndDate && availableEndDate !== availableDate) {
+          matchEndM += 24 * 60; // 야간(익일): 00:00을 24:00으로
+        }
+      } else {
+        matchEndM = matchStartM + 120;
+      }
+      facilities = facilities.filter((f) =>
+        this.facilityCoversTimeRange(f.operatingHours, matchStartM, matchEndM),
+      );
+    }
 
     return { facilities, total };
   }

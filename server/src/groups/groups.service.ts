@@ -7,6 +7,8 @@ import { GroupGameSettings } from './entities/group-game-settings.entity';
 import { GroupParticipantPosition } from './entities/group-participant-position.entity';
 import { GroupReferee } from './entities/group-referee.entity';
 import { GroupFavorite } from './entities/group-favorite.entity';
+import { MatchReview } from './entities/match-review.entity';
+import { GroupProvisionalFacility } from './entities/group-provisional-facility.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupQueryDto } from './dto/group-query.dto';
@@ -15,6 +17,12 @@ import { NotificationType } from '../notifications/entities/notification.entity'
 import { UsersService } from '../users/users.service';
 import { UserScoreService } from '../users/user-score.service';
 import { FacilitiesService } from '../facilities/facilities.service';
+import { ReservationsService } from '../facilities/reservations.service';
+import { ReservationStatus } from '../facilities/entities/facility-reservation.entity';
+import { PointsService } from '../users/points.service';
+import { PointTransactionType } from '../users/entities/point-transaction.entity';
+import { MATCH_REVIEW_CATEGORIES, REVIEW_COMPLETE_POINTS } from '../constants/match-review';
+import { FacilityReviewsService } from '../facilities/facility-reviews.service';
 
 @Injectable()
 export class GroupsService {
@@ -33,10 +41,17 @@ export class GroupsService {
     private refereeRepository: Repository<GroupReferee>,
     @InjectRepository(GroupFavorite)
     private favoriteRepository: Repository<GroupFavorite>,
+    @InjectRepository(MatchReview)
+    private matchReviewRepository: Repository<MatchReview>,
+    @InjectRepository(GroupProvisionalFacility)
+    private provisionalFacilityRepository: Repository<GroupProvisionalFacility>,
     private notificationsService: NotificationsService,
     private usersService: UsersService,
     private userScoreService: UserScoreService,
     private facilitiesService: FacilitiesService,
+    private reservationsService: ReservationsService,
+    private pointsService: PointsService,
+    private facilityReviewsService: FacilityReviewsService,
   ) {}
 
   async create(createGroupDto: CreateGroupDto, creatorId: number): Promise<Group> {
@@ -68,6 +83,12 @@ export class GroupsService {
       }
     }
 
+    // 가계약 사용 시 확정 전까지 시설 미정이므로 facilityId는 마감 시 설정
+    const facilityIds = createGroupDto.provisionalFacilityIds?.length
+      ? createGroupDto.provisionalFacilityIds.slice(0, 3)
+      : createGroupDto.facilityId != null
+        ? [createGroupDto.facilityId]
+        : [];
     const group = this.groupRepository.create({
       ...createGroupDto,
       type: groupType,
@@ -76,9 +97,63 @@ export class GroupsService {
       equipment: createGroupDto.equipment || [],
       participants: [], // 명시적으로 빈 배열 설정 (cascade 문제 방지)
       meetingDateTime,
+      facilityId: null, // 인원 마감 시 1→2→3순위로 확정 후 설정
     });
 
     const savedGroup = await this.groupRepository.save(group);
+
+    // 가계약: 1·2·3순위 시설 저장 (실제 예약은 인원 마감 시)
+    for (let i = 0; i < facilityIds.length; i++) {
+      await this.provisionalFacilityRepository.save(
+        this.provisionalFacilityRepository.create({
+          groupId: savedGroup.id,
+          facilityId: facilityIds[i],
+          priority: i + 1,
+        }),
+      );
+    }
+
+    // 가예약: 매치 생성 시점에 가예약 생성 및 groupId 연결 (시설주 캘린더에 "가예약중 - 매치장 닉네임" 표시)
+    if (meetingDateTime && facilityIds.length > 0) {
+      const meeting = meetingDateTime instanceof Date ? meetingDateTime : new Date(meetingDateTime);
+      const reservationDate = meeting.toISOString().slice(0, 10);
+      const startTime = `${String(meeting.getHours()).padStart(2, '0')}:${String(meeting.getMinutes()).padStart(2, '0')}`;
+      const rawEnd = createGroupDto.meetingEndTime;
+      let endTime = typeof rawEnd === 'string' && rawEnd.trim().length >= 5 ? rawEnd.trim().slice(0, 5) : undefined;
+      if (!endTime) {
+        const [sh, sm] = startTime.split(':').map(Number);
+        const endM = (sh * 60 + (sm || 0)) + 120;
+        const eh = Math.floor(endM / 60) % 24;
+        const em = endM % 60;
+        endTime = `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`;
+      }
+      let linked = await this.reservationsService.linkProvisionalToGroup(
+        savedGroup.id,
+        creatorId,
+        facilityIds,
+        reservationDate,
+        startTime,
+      );
+      if (linked === 0) {
+        const creator = await this.usersService.findById(creatorId);
+        const hostNickname = creator?.nickname ?? '매치장';
+        await this.reservationsService.createProvisionalBulk(
+          facilityIds,
+          reservationDate,
+          startTime,
+          endTime,
+          creatorId,
+          hostNickname,
+        );
+        await this.reservationsService.linkProvisionalToGroup(
+          savedGroup.id,
+          creatorId,
+          facilityIds,
+          reservationDate,
+          startTime,
+        );
+      }
+    }
 
     // 게임 설정이 있으면 저장
     if (createGroupDto.gameSettings) {
@@ -383,12 +458,38 @@ export class GroupsService {
             name: facility.name,
             address: facility.address,
             type: facility.type,
+            image: facility.image ?? (Array.isArray(facility.images) && facility.images.length > 0 ? facility.images[0] : null),
           };
         } catch {
           (group as any).facility = null;
         }
       } else {
         (group as any).facility = null;
+      }
+
+      // 가계약: 1·2·3순위 시설 목록 (인원 마감 전 표시, 마감 시 1순위 가능 시설로 확정)
+      try {
+        const provisionals = await this.provisionalFacilityRepository.find({
+          where: { groupId: id },
+          order: { priority: 'ASC' },
+          relations: ['facility'],
+        });
+        (group as any).provisionalFacilities = provisionals.map((p) => ({
+          priority: p.priority,
+          facilityId: p.facilityId,
+          facility: (p as any).facility
+            ? {
+                id: (p as any).facility.id,
+                name: (p as any).facility.name,
+                address: (p as any).facility.address,
+                type: (p as any).facility.type,
+                image: (p as any).facility.image ?? (Array.isArray((p as any).facility.images) && (p as any).facility.images.length > 0 ? (p as any).facility.images[0] : null),
+              }
+            : null,
+        }));
+      } catch (provisionalError) {
+        console.error('가계약 시설 목록 로드 실패:', provisionalError);
+        (group as any).provisionalFacilities = [];
       }
 
       return group;
@@ -402,6 +503,12 @@ export class GroupsService {
       console.error('findOne 에러:', error);
       throw error;
     }
+  }
+
+  /** 찜한 매치 개수 */
+  async getFavoriteCount(userId: number): Promise<{ count: number }> {
+    const count = await this.favoriteRepository.count({ where: { userId } });
+    return { count };
   }
 
   /** 찜 토글. 반환: { favorited: boolean } */
@@ -509,6 +616,15 @@ export class GroupsService {
         throw new ConflictException('모임 인원이 가득 찼습니다.');
       }
 
+      // 매치 10분 전까지 참가 신청 가능
+      if (group.meetingDateTime) {
+        const meetingTime = new Date(group.meetingDateTime);
+        const cutoffTime = new Date(meetingTime.getTime() - 10 * 60 * 1000);
+        if (new Date() > cutoffTime) {
+          throw new BadRequestException('매치 시작 10분 전까지만 참가 신청이 가능합니다.');
+        }
+      }
+
       // 이미 참가했는지 확인 (레코드 존재 = 참가)
       console.log('🔍 기존 참가자 확인:', { numericGroupId, numericUserId });
       const existingParticipant = await this.participantRepository.findOne({
@@ -585,9 +701,41 @@ export class GroupsService {
       const duplicateCheck = await this.participantRepository.findOne({
         where: { groupId: numericGroupId, userId: numericUserId },
       });
-      
+
       if (duplicateCheck) {
         throw new ConflictException('이미 참가한 모임입니다.');
+      }
+
+      // 참가비(포인트) 차감: 축구는 항상 결제, 그 외는 hasFee/feeAmount 있을 때
+      const FOOTBALL_FEE_NORMAL = 10000;
+      const FOOTBALL_FEE_EARLY = 8000;
+      let feePaid = 0;
+      const needsFee =
+        group.category === '축구' ||
+        (group.hasFee && group.feeAmount != null && group.feeAmount > 0);
+      if (needsFee) {
+        let required =
+          group.category === '축구' ? FOOTBALL_FEE_NORMAL : (group.feeAmount ?? 0);
+        if (group.category === '축구') {
+          const meeting = group.meetingDateTime ? new Date(group.meetingDateTime) : null;
+          if (meeting) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const meetingDate = new Date(meeting);
+            meetingDate.setHours(0, 0, 0, 0);
+            const diffDays = Math.floor((meetingDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+            required = diffDays >= 1 ? FOOTBALL_FEE_EARLY : FOOTBALL_FEE_NORMAL;
+          } else {
+            required = FOOTBALL_FEE_NORMAL;
+          }
+        }
+        feePaid = required;
+        await this.pointsService.addTransaction(
+          numericUserId,
+          -feePaid,
+          PointTransactionType.USE,
+          `매치 참가비: ${group.name}`,
+        );
       }
 
       // 참가자 추가 - Raw SQL을 사용하여 직접 INSERT 실행
@@ -797,8 +945,20 @@ export class GroupsService {
         }
       }
 
-      // INSERT가 성공하지 않았으면 에러 발생
+      // INSERT가 성공하지 않았으면 포인트 환불 후 에러 발생
       if (!insertSuccess) {
+        if (feePaid > 0) {
+          try {
+            await this.pointsService.addTransaction(
+              numericUserId,
+              feePaid,
+              PointTransactionType.ADJUST,
+              '매치 참가 실패 환불',
+            );
+          } catch (refundError) {
+            this.logger.error('참가 실패 시 포인트 환불 오류:', refundError);
+          }
+        }
         throw new InternalServerErrorException('참가자 레코드 저장에 실패했습니다.');
       }
 
@@ -1211,6 +1371,85 @@ export class GroupsService {
       throw new ForbiddenException('모임을 마감할 권한이 없습니다.');
     }
 
+    // 가계약 확정: 1→2→3순위 시설. 이미 가예약(PROVISIONAL)이 있으면 확정으로 전환, 없으면 새 예약 생성. 후순위 가예약은 취소.
+    const provisionals = await this.provisionalFacilityRepository.find({
+      where: { groupId },
+      order: { priority: 'ASC' },
+      relations: ['facility'],
+    });
+
+    if (provisionals.length > 0 && group.meetingDateTime) {
+      const meeting = new Date(group.meetingDateTime);
+      const reservationDate = meeting.toISOString().slice(0, 10); // YYYY-MM-DD
+      const startTime = `${String(meeting.getHours()).padStart(2, '0')}:${String(meeting.getMinutes()).padStart(2, '0')}`;
+      let slotHours = 2;
+      let confirmedFacilityId: number | null = null;
+
+      // 이미 걸어둔 가예약(PROVISIONAL) 조회
+      const provisionalReservations = await this.reservationsService.findProvisionalByGroupId(groupId);
+      const reservationByFacilityId = new Map(provisionalReservations.map((r) => [r.facilityId, r]));
+
+      for (const p of provisionals) {
+        const facility = (p as any).facility;
+        if (!facility) continue;
+        const hours = facility.reservationSlotHours != null ? Math.min(8, Math.max(1, Number(facility.reservationSlotHours))) : 2;
+        slotHours = hours;
+        const startMinutes = meeting.getHours() * 60 + meeting.getMinutes();
+        const endMinutes = startMinutes + hours * 60;
+        const endH = Math.floor(endMinutes / 60) % 24;
+        const endM = endMinutes % 60;
+        const endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+
+        const existingProvisional = reservationByFacilityId.get(p.facilityId);
+        if (existingProvisional) {
+          // 가예약이 있으면 슬롯 검사 없이 확정으로 전환 (이미 우리가 건 가예약)
+          await this.reservationsService.updateStatus(existingProvisional.id, userId, ReservationStatus.CONFIRMED);
+          confirmedFacilityId = p.facilityId;
+          // 나머지 순위의 가예약은 취소 (시설주 캘린더에서 사라짐)
+          for (const other of provisionalReservations) {
+            if (other.facilityId !== p.facilityId) {
+              await this.reservationsService.updateStatus(other.id, userId, ReservationStatus.CANCELLED);
+            }
+          }
+          break;
+        }
+
+        const available = await this.reservationsService.isSlotAvailable(
+          p.facilityId,
+          reservationDate,
+          startTime,
+          endTime,
+        );
+        if (!available) continue;
+
+        // 가예약 없이 마감한 경우: 기존처럼 새 확정 예약 생성
+        const participantCount = group.participantCount ?? 0;
+        await this.reservationsService.createReservationForGroup(
+          groupId,
+          p.facilityId,
+          userId,
+          reservationDate,
+          startTime,
+          endTime,
+          Math.max(1, participantCount),
+        );
+        confirmedFacilityId = p.facilityId;
+        // 다른 순위에 걸린 가예약이 있으면 취소
+        for (const other of provisionalReservations) {
+          if (other.facilityId !== p.facilityId) {
+            await this.reservationsService.updateStatus(other.id, userId, ReservationStatus.CANCELLED);
+          }
+        }
+        break;
+      }
+
+      if (confirmedFacilityId != null) {
+        await this.groupRepository.update(groupId, { facilityId: confirmedFacilityId });
+        group.facilityId = confirmedFacilityId;
+      }
+      // 모두 불가 시 facilityId는 null 유지 (매치장이 수동으로 시설 변경 가능)
+    }
+
     // participants 관계를 제외하고 isClosed만 업데이트
     await this.groupRepository
       .createQueryBuilder()
@@ -1218,7 +1457,7 @@ export class GroupsService {
       .set({ isClosed: true })
       .where('id = :id', { id: groupId })
       .execute();
-    
+
     group.isClosed = true;
     return group;
   }
@@ -1231,6 +1470,16 @@ export class GroupsService {
       throw new ForbiddenException('모임을 재개할 권한이 없습니다.');
     }
 
+    // 가계약으로 확정된 시설 예약이 있으면 취소 후 facilityId 해제
+    if (group.facilityId) {
+      const reservation = await this.reservationsService.findByGroupId(groupId);
+      if (reservation) {
+        await this.reservationsService.updateStatus(reservation.id, userId, ReservationStatus.CANCELLED);
+      }
+      await this.groupRepository.update(groupId, { facilityId: null });
+      group.facilityId = null;
+    }
+
     // participants 관계를 제외하고 isClosed만 업데이트
     await this.groupRepository
       .createQueryBuilder()
@@ -1238,7 +1487,7 @@ export class GroupsService {
       .set({ isClosed: false })
       .where('id = :id', { id: groupId })
       .execute();
-    
+
     group.isClosed = false;
     return group;
   }
@@ -1287,6 +1536,192 @@ export class GroupsService {
       throw new NotFoundException('심판 신청 내역이 없습니다.');
     }
     return { success: true, message: '심판 신청이 취소되었습니다.' };
+  }
+
+  /**
+   * 매치 종료 후 리뷰 작성 가능 여부 및 필요한 정보 반환
+   */
+  async getReviewEligibility(groupId: number, userId: number): Promise<{
+    canReview: boolean;
+    reason?: string;
+    categories: { key: string; label: string }[];
+    participants: { id: number; nickname: string; tag: string | null; profileImageUrl: string | null }[];
+    alreadySubmitted: boolean;
+    facilityId: number | null;
+    facilityName: string | null;
+    facilityReviewSubmitted: boolean;
+  }> {
+    const group = await this.groupRepository.findOne({
+      where: { id: groupId },
+      relations: [],
+    });
+    if (!group) {
+      throw new NotFoundException('모임을 찾을 수 없습니다.');
+    }
+
+    const now = new Date();
+    const meetingEnded =
+      group.isCompleted || (group.meetingDateTime != null && new Date(group.meetingDateTime) <= now);
+    if (!meetingEnded) {
+      return {
+        canReview: false,
+        reason: '매치가 종료된 후에 리뷰를 작성할 수 있습니다.',
+        categories: [],
+        participants: [],
+        alreadySubmitted: false,
+        facilityId: null,
+        facilityName: null,
+        facilityReviewSubmitted: false,
+      };
+    }
+
+    const participantIds = await this.participantRepository
+      .find({ where: { groupId }, select: ['userId'] })
+      .then((rows) => rows.map((r) => r.userId));
+    const isCreator = group.creatorId === userId;
+    if (!participantIds.includes(userId) && !isCreator) {
+      return {
+        canReview: false,
+        reason: '참가자만 리뷰를 작성할 수 있습니다.',
+        categories: [],
+        participants: [],
+        alreadySubmitted: false,
+        facilityId: null,
+        facilityName: null,
+        facilityReviewSubmitted: false,
+      };
+    }
+
+    const categories = MATCH_REVIEW_CATEGORIES[group.category] ?? [];
+    if (categories.length === 0) {
+      return {
+        canReview: false,
+        reason: '해당 종목은 리뷰 항목이 설정되어 있지 않습니다.',
+        categories: [],
+        participants: [],
+        alreadySubmitted: false,
+        facilityId: null,
+        facilityName: null,
+        facilityReviewSubmitted: false,
+      };
+    }
+
+    const existingCount = await this.matchReviewRepository.count({
+      where: { groupId, reviewerId: userId },
+    });
+    const alreadySubmitted = existingCount >= categories.length;
+
+    const participants = await this.participantRepository.find({
+      where: { groupId },
+      relations: ['user'],
+    });
+    let participantList = participants.map((p) => ({
+      id: (p as any).user?.id ?? p.userId,
+      nickname: (p as any).user?.nickname ?? '',
+      tag: (p as any).user?.tag ?? null,
+      profileImageUrl: (p as any).user?.profileImageUrl ?? null,
+    }));
+    // 모임장이 참가자 목록에 없으면 추가 (일부 매치에서는 creator가 group_participants에 없을 수 있음)
+    const participantIdsSet = new Set(participantList.map((p) => p.id));
+    if (group.creatorId && !participantIdsSet.has(group.creatorId)) {
+      const creator = await this.usersService.findById(group.creatorId);
+      if (creator) {
+        participantList = [
+          { id: creator.id, nickname: creator.nickname, tag: creator.tag ?? null, profileImageUrl: creator.profileImageUrl ?? null },
+          ...participantList,
+        ];
+      }
+    }
+
+    let facilityId: number | null = null;
+    let facilityName: string | null = null;
+    let facilityReviewSubmitted = false;
+    let fid = group.facilityId;
+    if (fid == null) {
+      const prov = await this.provisionalFacilityRepository.findOne({ where: { groupId }, order: { priority: 'ASC' } });
+      fid = prov?.facilityId ?? null;
+    }
+    if (fid) {
+      try {
+        const facility = await this.facilitiesService.findOne(fid);
+        facilityId = facility.id;
+        facilityName = facility.name;
+        facilityReviewSubmitted = await this.facilityReviewsService.hasReviewed(groupId, userId);
+      } catch {
+        // facility not found, ignore
+      }
+    }
+
+    return {
+      canReview: !alreadySubmitted,
+      reason: alreadySubmitted ? '이미 리뷰를 작성하셨습니다.' : undefined,
+      categories,
+      participants: participantList,
+      alreadySubmitted,
+      facilityId,
+      facilityName,
+      facilityReviewSubmitted,
+    };
+  }
+
+  /**
+   * 매치 리뷰 제출. 모든 항목에 대해 참가자 중 1명씩 선택. 제출 시 포인트 지급
+   */
+  async submitReview(
+    groupId: number,
+    userId: number,
+    answers: Record<string, number>,
+  ): Promise<{ success: boolean; message: string; pointsEarned: number }> {
+    const eligibility = await this.getReviewEligibility(groupId, userId);
+    if (!eligibility.canReview || eligibility.alreadySubmitted) {
+      throw new BadRequestException(eligibility.reason ?? '리뷰를 작성할 수 없습니다.');
+    }
+
+    const categories = eligibility.categories;
+    const participantIds = eligibility.participants.map((p) => p.id);
+
+    for (const cat of categories) {
+      const selectedId = answers[cat.key];
+      if (selectedId == null || !Number.isInteger(selectedId)) {
+        throw new BadRequestException(`"${cat.label}" 항목을 선택해 주세요.`);
+      }
+      if (!participantIds.includes(selectedId)) {
+        throw new BadRequestException(`"${cat.label}"에는 참가자 중 한 명만 선택할 수 있습니다.`);
+      }
+    }
+
+    for (const cat of categories) {
+      await this.matchReviewRepository.save(
+        this.matchReviewRepository.create({
+          groupId,
+          reviewerId: userId,
+          categoryKey: cat.key,
+          selectedUserId: answers[cat.key],
+        }),
+      );
+    }
+
+    await this.pointsService.addTransaction(
+      userId,
+      REVIEW_COMPLETE_POINTS,
+      PointTransactionType.REVIEW,
+      `매치 #${groupId} 리뷰 작성`,
+    );
+
+    return {
+      success: true,
+      message: '리뷰가 저장되었습니다.',
+      pointsEarned: REVIEW_COMPLETE_POINTS,
+    };
+  }
+
+  async submitFacilityReview(
+    groupId: number,
+    facilityId: number,
+    userId: number,
+    dto: { cleanliness: number; suitableForGame: number; overall: number },
+  ) {
+    return this.facilityReviewsService.submitForGroup(groupId, facilityId, userId, dto);
   }
 }
 

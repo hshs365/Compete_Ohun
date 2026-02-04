@@ -40,8 +40,20 @@ const MyActivityPage = () => {
   >([]);
   const [showStatisticsModal, setShowStatisticsModal] = useState(false);
   const [showStatsRadarModal, setShowStatsRadarModal] = useState(false);
+  /** 내 축구 스텟 (매치 리뷰 집계, API에서 로드) */
+  const [footballStats, setFootballStats] = useState<Record<string, number>>({
+    멘탈: 0,
+    수비: 0,
+    공격: 0,
+    피지컬: 0,
+    스피드: 0,
+    테크닉: 0,
+  });
+  const [footballStatsLoading, setFootballStatsLoading] = useState(false);
   /** 전체 | 축구 | 풋살 | ... (종목별 필터). 축구만 실제 데이터, 나머지는 없음 */
   const [categoryFilter, setCategoryFilter] = useState<string>('전체');
+
+  const [favoriteCount, setFavoriteCount] = useState(0);
 
   useEffect(() => {
     const fetchActivity = async () => {
@@ -51,14 +63,16 @@ const MyActivityPage = () => {
       }
       try {
         setIsLoading(true);
-        const [participations, creations] = await Promise.all([
+        const [participations, creations, favRes] = await Promise.all([
           api.get<ActivityItem[]>('/api/groups/my-participations'),
           api.get<Array<Omit<ActivityItem, 'creator'>>>(
             '/api/groups/my-creations'
           ),
+          api.get<{ count: number }>('/api/groups/my-favorite-count'),
         ]);
         setMyParticipations(Array.isArray(participations) ? participations : []);
         setMyCreations(Array.isArray(creations) ? creations : []);
+        setFavoriteCount(favRes?.count ?? 0);
       } catch (error) {
         console.error('활동 기록 조회 실패:', error);
       } finally {
@@ -92,18 +106,16 @@ const MyActivityPage = () => {
     return myCreations.filter((g) => g.category === categoryFilter);
   }, [myCreations, categoryFilter]);
 
-  // 축구 육각형 스텟 (멘탈/수비/공격/피지컬/스피드/테크닉, 각 1~10) — 추후 API 연동
-  const footballStats = useMemo(() => {
-    // TODO: 백엔드에서 사용자별 축구 스텟 API 연동 시 교체
-    return {
-      멘탈: 0,
-      수비: 0,
-      공격: 0,
-      피지컬: 0,
-      스피드: 0,
-      테크닉: 0,
-    };
-  }, [filteredParticipations]);
+  // 내 스텟 보기 클릭 시 API에서 축구 스텟 로드
+  useEffect(() => {
+    if (!showStatsRadarModal || !authUser) return;
+    setFootballStatsLoading(true);
+    api
+      .get<Record<string, number>>('/api/users/me/football-stats')
+      .then((data) => setFootballStats((prev) => ({ ...prev, ...data })))
+      .catch(() => setFootballStats({ 멘탈: 0, 수비: 0, 공격: 0, 피지컬: 0, 스피드: 0, 테크닉: 0 }))
+      .finally(() => setFootballStatsLoading(false));
+  }, [showStatsRadarModal, authUser]);
 
   const statsForCurrentFilter = useMemo(() => {
     if (!hasDataForCategory(categoryFilter)) {
@@ -117,13 +129,14 @@ const MyActivityPage = () => {
     return {
       joinedGroups: filteredParticipations.length,
       createdGroups: filteredCreations.length,
-      favoriteGroups: 0,
+      favoriteGroups: favoriteCount,
       upcomingGroups: 0,
     };
   }, [
     categoryFilter,
     filteredParticipations.length,
     filteredCreations.length,
+    favoriteCount,
   ]);
 
   if (!authUser) {
@@ -405,11 +418,20 @@ const MyActivityPage = () => {
               </button>
             </div>
             <div className="p-4 sm:p-6">
-              <FootballStatsRadar
-                stats={footballStats}
-                height={340}
-                theme="dark"
-              />
+              {footballStatsLoading ? (
+                <div className="py-12 text-center text-[var(--color-text-secondary)]">스텟을 불러오는 중...</div>
+              ) : (
+                <>
+                  <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+                    매치 리뷰에서 동료들이 뽑아준 항목별 지표입니다. 많은 매치에 참여할수록 데이터가 쌓입니다.
+                  </p>
+                  <FootballStatsRadar
+                    stats={footballStats}
+                    height={340}
+                    theme="dark"
+                  />
+                </>
+              )}
             </div>
           </div>
         </div>

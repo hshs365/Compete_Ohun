@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { SelectedGroup } from '../types/selected-group';
 import { getCityCoordinates, type KoreanCity } from '../utils/locationUtils';
 import { api } from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
 import { MATCH_TYPE_THEME } from './HomeMatchTypeChoice';
 
 type MatchType = 'general' | 'rank' | 'event';
@@ -47,6 +48,7 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
   mapLayers = {},
   matchType = 'general',
 }) => {
+  const { user } = useAuth();
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
@@ -149,21 +151,25 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
     selectedGroupRef.current = selectedGroup;
   }, [selectedGroup]);
 
-  // 사용자 정보에서 residenceSido 가져오기
+  // 로그인된 경우에만 사용자 거주지(residenceSido) 조회. 미로그인 시 조회하지 않고 전국 기준으로 동작
   useEffect(() => {
+    if (!user) {
+      setUserResidenceSido(null);
+      return;
+    }
     const fetchUserResidence = async () => {
       try {
         const userData = await api.get<{ residenceSido: string | null }>('/api/auth/me');
-        if (userData.residenceSido) {
+        if (userData?.residenceSido) {
           setUserResidenceSido(userData.residenceSido);
         }
-      } catch (e) {
-        console.error('사용자 거주지 정보 가져오기 실패:', e);
+      } catch {
+        // 로그인 만료 등으로 실패해도 에러 노출 없이 무시 (전국 기준으로 표시)
+        setUserResidenceSido(null);
       }
     };
-    
     fetchUserResidence();
-  }, []);
+  }, [user]);
   
   // 위치 정보 초기 로드 및 localStorage 변경 감지
   // ⭐ selectedCity가 있으면 우선 사용, 없으면 localStorage 사용

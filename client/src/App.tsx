@@ -22,6 +22,7 @@ import CompleteProfilePage from './components/CompleteProfilePage'; // CompleteP
 import OAuthCallbackPage from './components/OAuthCallbackPage'; // OAuthCallbackPage 컴포넌트 import
 import NoticePage from './components/NoticePage'; // NoticePage 컴포넌트 import
 import FacilityReservationPage from './components/FacilityReservationPage';
+import FacilityDetailPage from './components/FacilityDetailPage';
 import FacilityRegisterPage from './components/FacilityRegisterPage';
 import HallOfFamePage from './components/HallOfFamePage'; // HallOfFamePage 컴포넌트 import
 import SportsEquipmentPage from './components/SportsEquipmentPage';
@@ -93,38 +94,38 @@ const DashboardLayout = () => {
     popularSpots: false,
   });
 
-  // 사용자 위치 기반으로 초기 도시 설정 (localStorage의 selectedCity 무시)
+  // 로그인 여부에 따른 지역 설정: 미로그인 시 전국, 로그인 시 사용자 위치 기반
   useEffect(() => {
-    const userCity = getUserCity();
+    if (isLoading) return;
+    if (!user) {
+      setSelectedCity('전체');
+      return;
+    }
+    const userCity = getUserCity(user.id);
     if (userCity) {
       setSelectedCity(userCity);
     }
-  }, []);
+  }, [user, isLoading]);
 
-  // 사용자 위치 변경 시 selectedCity 업데이트
+  // 로그인된 사용자만: 위치 변경 시 selectedCity 업데이트
   useEffect(() => {
+    if (!user) return;
+
     const handleLocationUpdate = () => {
-      const userCity = getUserCity();
+      const userCity = getUserCity(user.id);
       if (userCity) {
-        // '전체'가 아닐 때만 자동 업데이트 (사용자가 '전체'를 선택한 경우 유지)
         setSelectedCity((prev) => {
-          if (prev === '전체') {
-            return prev; // '전체' 선택은 유지
-          }
-          return userCity; // 새로운 위치의 도시로 업데이트
+          if (prev === '전체') return prev;
+          return userCity;
         });
       }
     };
 
-    // 초기 로드 시 한 번 실행
     handleLocationUpdate();
-
-    // userLocationUpdated 이벤트 리스너
     window.addEventListener('userLocationUpdated', handleLocationUpdate);
-    
-    // storage 이벤트 리스너 (다른 탭에서 변경 시)
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'userLocation') {
+      const locationKey = user?.id ? `userLocation_${user.id}` : 'userLocation';
+      if (e.key === locationKey) {
         handleLocationUpdate();
       }
     };
@@ -134,7 +135,7 @@ const DashboardLayout = () => {
       window.removeEventListener('userLocationUpdated', handleLocationUpdate);
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, []);
+  }, [user]);
 
   // selectedCity 변경 시 localStorage에 저장 (단, '전체'가 아닐 때만)
   useEffect(() => {
@@ -156,12 +157,13 @@ const DashboardLayout = () => {
     api.get<{ businessNumberVerified?: boolean; isAdmin?: boolean }>('/api/auth/me').then(setUserProfile).catch(() => setUserProfile(null));
   }, [user]);
 
-  // 이벤트매치 페이지에서 "이벤트매치 개최" 클릭 시 홈으로 이동 후 생성 모달 열기
+  // 시설 예약 모달 "매치 생성하러 가기" 또는 이벤트매치 페이지 "이벤트매치 개최" 클릭 시 홈으로 이동 후 생성 모달 열기
   const navigate = useNavigate();
   useEffect(() => {
-    const state = location.state as { openCreate?: boolean; matchType?: string } | null;
-    if (state?.openCreate && state?.matchType === 'event') {
-      setMatchType('event');
+    const state = location.state as { openCreate?: boolean; matchType?: string; category?: string } | null;
+    if (state?.openCreate && state?.matchType) {
+      if (state.category) setSelectedCategory(state.category);
+      setMatchType(state.matchType as 'general' | 'rank' | 'event');
       setHasEnteredMatchView(true);
       setHasSelectedCategory(true);
       setIsCreateModalOpen(true);
@@ -300,22 +302,28 @@ const DashboardLayout = () => {
           // 일정이 없으면 표시하지 않음
           if (!group.meetingTime) return false;
 
-          // meetingTime 파싱
+          // meetingTime 파싱 (다양한 형식 지원)
           let meetingDate: Date | null = null;
           const meetingTimeStr = group.meetingTime.trim();
 
-          if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(meetingTimeStr)) {
-            // datetime-local 형식 (YYYY-MM-DDTHH:MM)
-            meetingDate = new Date(meetingTimeStr);
-          } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}$/.test(meetingTimeStr)) {
-            // "YYYY-MM-DD HH:MM" 형식
-            meetingDate = new Date(meetingTimeStr.replace(' ', 'T'));
+          if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(meetingTimeStr)) {
+            // datetime-local 형식 (YYYY-MM-DDTHH:MM...)
+            meetingDate = new Date(meetingTimeStr.slice(0, 16));
+          } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(meetingTimeStr)) {
+            // "YYYY-MM-DD HH:MM ~ ..." 또는 "YYYY-MM-DD HH:MM" 형식
+            const startPart = meetingTimeStr.split('~')[0]?.trim() || meetingTimeStr;
+            meetingDate = new Date(startPart.replace(' ', 'T') + ':00');
           } else if (/^\d{4}-\d{2}-\d{2}$/.test(meetingTimeStr)) {
             // "YYYY-MM-DD" 형식
             meetingDate = new Date(meetingTimeStr + 'T00:00:00');
           } else {
-            // 기타 형식 시도
-            meetingDate = new Date(meetingTimeStr);
+            // YYYY-MM-DD 추출 시도 (예: "2026-02-05 13:00 ~ 15:00")
+            const dateMatch = meetingTimeStr.match(/^\d{4}-\d{2}-\d{2}/);
+            if (dateMatch) {
+              meetingDate = new Date(dateMatch[0] + 'T00:00:00');
+            } else {
+              meetingDate = new Date(meetingTimeStr);
+            }
           }
 
           if (!meetingDate || isNaN(meetingDate.getTime())) {
@@ -630,6 +638,11 @@ const MainLayout = () => {
             <Route path="facility-reservation/register" element={
               <ProtectedRoute>
                 <FacilityRegisterPage />
+              </ProtectedRoute>
+            } />
+            <Route path="facility-reservation/:id" element={
+              <ProtectedRoute>
+                <FacilityDetailPage />
               </ProtectedRoute>
             } />
             <Route path="facility-reservation" element={

@@ -23,8 +23,11 @@ import { GroupParticipantPosition } from './groups/entities/group-participant-po
 import { GroupEvaluation } from './groups/entities/group-evaluation.entity';
 import { GroupReferee } from './groups/entities/group-referee.entity';
 import { GroupFavorite } from './groups/entities/group-favorite.entity';
+import { MatchReview } from './groups/entities/match-review.entity';
+import { GroupProvisionalFacility } from './groups/entities/group-provisional-facility.entity';
 import { Facility } from './facilities/entities/facility.entity';
 import { FacilityReservation } from './facilities/entities/facility-reservation.entity';
+import { FacilityReview } from './facilities/entities/facility-review.entity';
 import { Notification } from './notifications/entities/notification.entity';
 import { PhoneVerification } from './auth/entities/phone-verification.entity';
 import { UserScoreHistory } from './users/entities/user-score-history.entity';
@@ -66,8 +69,11 @@ ConfigModule.forRoot({
           GroupEvaluation,
           GroupReferee,
           GroupFavorite,
+          MatchReview,
+          GroupProvisionalFacility,
           Facility,
           FacilityReservation,
+          FacilityReview,
           Notification,
           PhoneVerification,
           UserScoreHistory,

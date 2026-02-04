@@ -1,11 +1,22 @@
 import React, { useEffect, useRef } from 'react';
 
+export interface NaverMapMarkerItem {
+  lat: number;
+  lng: number;
+  id?: number;
+  name?: string;
+}
+
 interface NaverMapProps {
   center: [number, number]; // [latitude, longitude]
   zoom?: number;
   onMarkerDragEnd?: (lat: number, lng: number) => void;
   onMapLoad?: (map: any) => void;
   style?: React.CSSProperties;
+  /** 시설 등 추가 마커 (표시만, 클릭 불가) */
+  markers?: NaverMapMarkerItem[];
+  /** true면 중심에 드래그 가능 마커 표시. false면 시설 마커만 표시 */
+  showCenterMarker?: boolean;
 }
 
 declare global {
@@ -20,10 +31,13 @@ const NaverMap: React.FC<NaverMapProps> = ({
   onMarkerDragEnd,
   onMapLoad,
   style = { height: '100%', width: '100%' },
+  markers = [],
+  showCenterMarker = true,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  const facilityMarkersRef = useRef<any[]>([]);
   const scriptLoadedRef = useRef(false);
 
   // 네이버 지도 스크립트 로드
@@ -146,22 +160,22 @@ const NaverMap: React.FC<NaverMapProps> = ({
         const map = new window.naver.maps.Map(container, options);
         mapRef.current = map;
 
-        // 마커 생성
-        const markerPosition = new window.naver.maps.LatLng(lat, lng);
-        const marker = new window.naver.maps.Marker({
-          position: markerPosition,
-          map: map,
-          draggable: true,
-        });
-
-        markerRef.current = marker;
-
-        // 마커 드래그 이벤트
-        if (onMarkerDragEnd && window.naver && window.naver.maps) {
-          window.naver.maps.Event.addListener(marker, 'dragend', () => {
-            const position = marker.getPosition();
-            onMarkerDragEnd(position.lat(), position.lng());
+        if (showCenterMarker) {
+          const markerPosition = new window.naver.maps.LatLng(lat, lng);
+          const marker = new window.naver.maps.Marker({
+            position: markerPosition,
+            map: map,
+            draggable: true,
           });
+          markerRef.current = marker;
+          if (onMarkerDragEnd) {
+            window.naver.maps.Event.addListener(marker, 'dragend', () => {
+              const position = marker.getPosition();
+              onMarkerDragEnd(position.lat(), position.lng());
+            });
+          }
+        } else {
+          markerRef.current = null;
         }
 
         // 지도 로드 콜백
@@ -178,44 +192,36 @@ const NaverMap: React.FC<NaverMapProps> = ({
 
   // 중심 좌표 변경 시 지도 이동 및 확대
   useEffect(() => {
-    if (!mapRef.current || !markerRef.current || !window.naver || !window.naver.maps) return;
-    
-    // LatLng 생성자가 사용 가능한지 확인
-    if (typeof window.naver.maps.LatLng !== 'function') {
-      return;
-    }
+    if (!mapRef.current || !window.naver || !window.naver.maps) return;
+    if (typeof window.naver.maps.LatLng !== 'function') return;
 
     const [lat, lng] = center;
-    
     try {
-      // 카카오 레벨(1-14)을 네이버 레벨(0-21)로 변환
-      const convertKakaoLevelToNaver = (kakaoLevel: number): number => {
-        return Math.round((kakaoLevel - 1) * 1.5);
-      };
-      
+      const convertKakaoLevelToNaver = (kakaoLevel: number): number => Math.round((kakaoLevel - 1) * 1.5);
       const moveLatLon = new window.naver.maps.LatLng(lat, lng);
-
-      // 지도 중심 이동 (애니메이션 효과)
       mapRef.current.panTo(moveLatLon);
-      
-      // 확대 레벨 설정
-      if (zoom) {
-        mapRef.current.setZoom(convertKakaoLevelToNaver(zoom));
-      }
-
-      // 마커 위치 이동
-      markerRef.current.setPosition(moveLatLon);
-      
-      // 지도 크기 재조정 (컨테이너 크기 변경 대응)
+      if (zoom) mapRef.current.setZoom(convertKakaoLevelToNaver(zoom));
+      if (showCenterMarker && markerRef.current) markerRef.current.setPosition(moveLatLon);
       setTimeout(() => {
-        if (mapRef.current && typeof mapRef.current.refreshSize === 'function') {
-          mapRef.current.refreshSize();
-        }
+        if (mapRef.current && typeof mapRef.current.refreshSize === 'function') mapRef.current.refreshSize();
       }, 100);
     } catch (error) {
       console.error('지도 업데이트 중 에러 발생:', error);
     }
-  }, [center, zoom]);
+  }, [center, zoom, showCenterMarker]);
+
+  // 시설 마커 갱신
+  useEffect(() => {
+    if (!mapRef.current || !window.naver || !window.naver.maps || !Array.isArray(markers)) return;
+    const map = mapRef.current;
+    facilityMarkersRef.current.forEach((m) => m.setMap(null));
+    facilityMarkersRef.current = [];
+    markers.forEach((item) => {
+      const pos = new window.naver.maps.LatLng(item.lat, item.lng);
+      const m = new window.naver.maps.Marker({ position: pos, map, draggable: false });
+      facilityMarkersRef.current.push(m);
+    });
+  }, [markers]);
 
   return (
     <div

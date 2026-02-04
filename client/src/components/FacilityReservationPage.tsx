@@ -19,6 +19,13 @@ import ReservationModal from './ReservationModal';
 import CreateFacilityModal from './CreateFacilityModal';
 import { showWarning, showSuccess, showError } from '../utils/swal';
 
+const getImageUrl = (url: string | null | undefined): string => {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+  return base + url;
+};
+
 interface Facility {
   id: number;
   name: string;
@@ -59,10 +66,7 @@ const FacilityReservationPage = () => {
   const navigate = useNavigate();
   const [selectedSport, setSelectedSport] = useState<string>('전체');
   const [selectedType, setSelectedType] = useState<string>('전체');
-  const [selectedArea, setSelectedArea] = useState<string>(() => {
-    const city = getUserCity();
-    return city || '전체';
-  });
+  const [selectedArea, setSelectedArea] = useState<string>('전체');
   const [searchQuery, setSearchQuery] = useState('');
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -89,6 +93,14 @@ const FacilityReservationPage = () => {
       fetchUserProfile();
     }
   }, [user]);
+
+  // 로그인 사용자의 지역 기반 기본 선택
+  useEffect(() => {
+    if (user?.id) {
+      const city = getUserCity(user.id);
+      if (city) setSelectedArea(city);
+    }
+  }, [user?.id]);
 
   // 시설 목록 가져오기
   useEffect(() => {
@@ -209,7 +221,7 @@ const FacilityReservationPage = () => {
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 md:py-12">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-2">
             <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-text-primary)]">
-              시설 예약
+              시설
             </h1>
             {(userProfile?.businessNumberVerified || userProfile?.isAdmin) && (
               <button
@@ -340,6 +352,7 @@ const FacilityReservationPage = () => {
               address: selectedFacility.address,
               operatingHours: selectedFacility.operatingHours,
               price: selectedFacility.price,
+              facilityType: selectedFacility.type,
             }}
             onSuccess={() => {}}
           />
@@ -375,12 +388,21 @@ const FacilityReservationPage = () => {
           {filteredFacilities.map((facility) => (
             <div
               key={facility.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(`/facility-reservation/${facility.id}`)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  navigate(`/facility-reservation/${facility.id}`);
+                }
+              }}
               className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border-card)] overflow-hidden hover:shadow-lg hover:border-[var(--color-blue-primary)]/20 transition-all cursor-pointer"
             >
               {/* 시설 이미지 */}
               <div className="h-48 bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                 {facility.image ? (
-                  <img src={facility.image} alt={facility.name} className="w-full h-full object-cover" />
+                  <img src={getImageUrl(facility.image)} alt={facility.name} className="w-full h-full object-cover" />
                 ) : (
                   <BuildingOfficeIcon className="w-24 h-24 text-white opacity-50" />
                 )}
@@ -472,7 +494,11 @@ const FacilityReservationPage = () => {
                       </>
                     ) : (
                       <button
-                        onClick={() => handleReservation(facility.id)}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReservation(facility.id);
+                        }}
                         className="px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg font-semibold hover:opacity-90 transition-opacity text-sm"
                       >
                         예약하기

@@ -4,6 +4,7 @@ import { createClient, type RedisClientType } from 'redis';
 import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import { HttpExceptionLoggerFilter } from './common/filters/http-exception-logger.filter';
 
 /** Redis 사용 여부: true면 연결, false/비어있으면 개발 환경에서 미사용 */
 function isRedisEnabled(): boolean {
@@ -25,7 +26,10 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  
+
+  // 5xx 등 모든 예외 로그 (배포 환경 500 원인 파악용)
+  app.useGlobalFilters(new HttpExceptionLoggerFilter());
+
   // 정적 파일 서빙 설정 (업로드된 파일)
   const uploadsPath = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads');
   app.useStaticAssets(uploadsPath, {

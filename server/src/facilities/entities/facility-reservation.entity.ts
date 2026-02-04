@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Facility } from './facility.entity';
+import { Group } from '../../groups/entities/group.entity';
 
 export enum ReservationStatus {
   PENDING = 'pending',       // 예약 대기 (결제 전 또는 승인 대기)
@@ -17,6 +18,7 @@ export enum ReservationStatus {
   CANCELLED = 'cancelled',   // 예약 취소
   COMPLETED = 'completed',   // 이용 완료
   NO_SHOW = 'no_show',       // 노쇼
+  PROVISIONAL = 'provisional', // 가예약 (매치장이 순위 시설에 걸어둔 상태, 시설주 캘린더에 "가예약중" 표시)
 }
 
 @Entity('facility_reservations')
@@ -42,6 +44,15 @@ export class FacilityReservation {
   @Column({ name: 'user_id' })
   @Index()
   userId: number;
+
+  /** 매치 확정 시 생성된 예약인 경우 해당 매치 ID (가계약 확정용) */
+  @ManyToOne(() => Group, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'group_id' })
+  group: Group | null;
+
+  @Column({ name: 'group_id', nullable: true })
+  @Index()
+  groupId: number | null;
 
   // 예약 일자
   @Column({ type: 'date' })

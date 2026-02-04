@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { ReservationsService } from './reservations.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
+import { CreateProvisionalBulkDto } from './dto/create-provisional-bulk.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
@@ -30,6 +31,26 @@ export class ReservationsController {
   @HttpCode(HttpStatus.CREATED)
   create(@Body() createDto: CreateReservationDto, @CurrentUser() user: User) {
     return this.reservationsService.createReservation(createDto, user.id);
+  }
+
+  /**
+   * 가예약 일괄 생성 (순위 시설 1·2·3에 대해 시설주 캘린더에 "가예약중 - 매치장 닉네임" 표시)
+   */
+  @Post('provisional-bulk')
+  @HttpCode(HttpStatus.CREATED)
+  createProvisionalBulk(
+    @Body() dto: CreateProvisionalBulkDto,
+    @CurrentUser() user: User,
+  ) {
+    const nickname = user.nickname ?? '매치장';
+    return this.reservationsService.createProvisionalBulk(
+      dto.facilityIds,
+      dto.reservationDate,
+      dto.startTime,
+      dto.endTime,
+      user.id,
+      nickname,
+    );
   }
 
   /**

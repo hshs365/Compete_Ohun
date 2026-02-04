@@ -144,7 +144,8 @@ const WelcomeGuide: React.FC<WelcomeGuideProps> = ({ onClose }) => {
             const fullAddress = data.address;
             const locationData = { address: fullAddress };
             setLocation(locationData);
-            localStorage.setItem('userLocation', JSON.stringify(locationData));
+            const locationKey = user?.id ? `userLocation_${user.id}` : 'userLocation';
+            localStorage.setItem(locationKey, JSON.stringify(locationData));
             window.dispatchEvent(new CustomEvent('userLocationUpdated', {
               detail: locationData,
             }));
@@ -220,7 +221,8 @@ const WelcomeGuide: React.FC<WelcomeGuideProps> = ({ onClose }) => {
       const updateData: any = {};
 
       if (location) {
-        localStorage.setItem('userLocation', JSON.stringify({
+        const locationKey = user?.id ? `userLocation_${user.id}` : 'userLocation';
+        localStorage.setItem(locationKey, JSON.stringify({
           address: location.address,
         }));
         

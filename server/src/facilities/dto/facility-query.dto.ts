@@ -37,5 +37,25 @@ export class FacilityQueryDto {
   @IsOptional()
   @IsString()
   category?: string; // 모임 카테고리 (시설 타입 추천용)
+
+  /** 해당 날짜에 예약 가능한 시설만 조회 (YYYY-MM-DD) */
+  @IsOptional()
+  @IsString()
+  availableDate?: string;
+
+  /** 해당 시작 시간에 예약 가능한 시설만 조회 (HH:mm). availableDate와 함께 사용 */
+  @IsOptional()
+  @IsString()
+  availableTime?: string;
+
+  /** 종료 시간 (HH:mm). 있으면 해당 구간에 예약 가능한 시설만 조회 */
+  @IsOptional()
+  @IsString()
+  availableEndTime?: string;
+
+  /** 종료 일자 (YYYY-MM-DD). 야간(익일) 매치 시 availableEndTime과 함께 사용 */
+  @IsOptional()
+  @IsString()
+  availableEndDate?: string;
 }
 

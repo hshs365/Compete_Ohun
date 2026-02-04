@@ -95,12 +95,13 @@ export const extractCityFromAddress = (address: string): KoreanCity | null => {
 
 /**
  * 사용자의 현재 위치에서 도시를 가져옵니다.
+ * @param userId 로그인 사용자 ID (제공 시 사용자별 주소 사용, 계정 전환 시 올바른 지역 표시)
  * @returns 도시명 또는 null
  */
-export const getUserCity = (): KoreanCity | null => {
+export const getUserCity = (userId?: number): KoreanCity | null => {
   try {
-    // localStorage에서 저장된 위치 정보 가져오기
-    const savedLocation = localStorage.getItem('userLocation');
+    const locationKey = userId ? `userLocation_${userId}` : 'userLocation';
+    const savedLocation = localStorage.getItem(locationKey);
     if (savedLocation) {
       const location = JSON.parse(savedLocation);
       

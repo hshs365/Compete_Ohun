@@ -84,6 +84,7 @@ const FacilityRegisterPage = () => {
     phone: '',
     operatingHoursStart: '09:00',
     operatingHoursEnd: '21:00',
+    is24Hours: false,
     reservationSlotHours: 2,
     priceType: 'hourly' as 'hourly' | 'daily' | 'monthly' | 'package',
     price: '',
@@ -298,8 +299,10 @@ const FacilityRegisterPage = () => {
     }
     setIsSubmitting(true);
     try {
-      const operatingHours = formData.operatingHoursStart && formData.operatingHoursEnd
-        ? `${formData.operatingHoursStart} - ${formData.operatingHoursEnd}` : undefined;
+      const operatingHours = formData.is24Hours
+        ? '00:00 - 24:00'
+        : (formData.operatingHoursStart && formData.operatingHoursEnd
+          ? `${formData.operatingHoursStart} - ${formData.operatingHoursEnd}` : undefined);
       const priceValue = formData.price?.replace(/,/g, '');
       const priceString = priceValue
         ? `${formData.priceType === 'hourly' ? '시간당' : formData.priceType === 'daily' ? '일일' : formData.priceType === 'monthly' ? '월간' : '패키지'} ${formData.price}원`
@@ -504,7 +507,21 @@ const FacilityRegisterPage = () => {
                   <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">
                     <ClockIcon className="w-4 h-4 inline mr-1" />운영시간 <span className="text-[var(--color-text-secondary)] font-normal">(선택, 30분 단위)</span>
                   </label>
-                  <div className="flex items-center gap-2 mt-1">
+                  <label className="inline-flex items-center gap-2 mb-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.is24Hours}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, is24Hours: e.target.checked }))}
+                      className="rounded border-[var(--color-border-card)] text-[var(--color-blue-primary)] focus:ring-[var(--color-blue-primary)]"
+                    />
+                    <span className="text-sm text-[var(--color-text-primary)]">24시간 운영</span>
+                  </label>
+                  {!formData.is24Hours && (
+                  <p className="text-xs text-[var(--color-text-secondary)] mb-1">
+                    야간/새벽 운영 시 종료를 &quot;오전 12시&quot;(자정) 또는 &quot;오전 2시&quot; 등으로 선택할 수 있습니다.
+                  </p>
+                  )}
+                  <div className={`flex items-center gap-2 mt-1 ${formData.is24Hours ? 'opacity-50 pointer-events-none' : ''}`}>
                     <div className="flex items-center gap-1">
                       <span className="text-xs text-[var(--color-text-secondary)] shrink-0">시작</span>
                       <select

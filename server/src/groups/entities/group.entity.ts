@@ -81,7 +81,7 @@ export class Group {
   hasFee: boolean; // 참가비 여부
 
   @Column({ type: 'int', nullable: true })
-  feeAmount: number | null; // 참가비 금액 (원 단위)
+  feeAmount: number | null; // 참가비 금액 (포인트 단위)
 
   @Column({ type: 'int', nullable: true })
   facilityId: number | null; // 선택된 시설 ID (시설에서 진행하는 경우)

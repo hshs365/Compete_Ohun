@@ -113,16 +113,30 @@ export class CreateGroupDto {
   meetingDateTime?: Date | string; // 실제 모임 일시
 
   @IsOptional()
+  @IsString()
+  meetingEndTime?: string; // 종료 시간 (HH:mm). 가예약 생성용
+
+  @IsOptional()
+  @IsString()
+  meetingEndDate?: string; // 종료 일자 (YYYY-MM-DD). 야간 매치 시
+
+  @IsOptional()
   @IsBoolean()
   hasFee?: boolean; // 참가비 여부
 
   @IsOptional()
   @IsNumber()
-  feeAmount?: number; // 참가비 금액 (원 단위)
+  feeAmount?: number; // 참가비 금액 (포인트 단위)
 
   @IsOptional()
   @IsNumber()
-  facilityId?: number; // 선택된 시설 ID
+  facilityId?: number; // 단일 시설 시 (레거시). 가계약 시에는 provisionalFacilityIds 사용
+
+  /** 가계약: 1·2·3순위 시설 ID 배열. 인원 마감 시 1→2→3순위 순으로 빈 슬롯 있는 시설 확정 */
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  provisionalFacilityIds?: number[]; // [1순위 시설ID, 2순위 시설ID, 3순위 시설ID] (1~3개)
 
   @IsOptional()
   @IsString()

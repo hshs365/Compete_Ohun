@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import type { CompleteProfileData } from '../contexts/AuthContext';
@@ -44,36 +44,47 @@ const CompleteProfilePage = () => {
 
   const [nicknameAvailable, setNicknameAvailable] = useState<boolean | null>(null);
   const [nicknameChecking, setNicknameChecking] = useState(false);
-  const [nicknameCheckError, setNicknameCheckError] = useState(false);
+  const [nicknameCheckError, setNicknameCheckError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const checkNickname = useCallback(async (nickToCheck: string) => {
+    if (nickToCheck.length < 2) return;
+    setNicknameChecking(true);
+    setNicknameCheckError(null);
+    try {
+      const result = await api.get<{ available: boolean }>(
+        `/api/auth/check-nickname?nickname=${encodeURIComponent(nickToCheck)}`,
+      );
+      setNicknameAvailable(result.available);
+    } catch (error) {
+      setNicknameAvailable(null);
+      const isNetworkError =
+        error instanceof TypeError ||
+        (error instanceof Error && (error.message === 'Failed to fetch' || error.message.includes('NetworkError')));
+      setNicknameCheckError(
+        isNetworkError
+          ? '서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.'
+          : '확인할 수 없습니다. 잠시 후 다시 시도해주세요.'
+      );
+    } finally {
+      setNicknameChecking(false);
+    }
+  }, []);
 
   // 닉네임 중복 검사 (디바운스)
   useEffect(() => {
     if (formData.nickname.length < 2) {
       setNicknameAvailable(null);
-      setNicknameCheckError(false);
+      setNicknameCheckError(null);
       return;
     }
 
-    const timer = setTimeout(async () => {
-      setNicknameChecking(true);
-      setNicknameCheckError(false);
-      try {
-        const result = await api.get<{ available: boolean }>(
-          `/api/auth/check-nickname?nickname=${encodeURIComponent(formData.nickname)}`,
-        );
-        setNicknameAvailable(result.available);
-      } catch (error) {
-        // 502 등 서버/네트워크 오류 시 '이미 사용 중'으로 오해하지 않도록 null 유지
-        setNicknameAvailable(null);
-        setNicknameCheckError(true);
-      } finally {
-        setNicknameChecking(false);
-      }
+    const timer = setTimeout(() => {
+      checkNickname(formData.nickname);
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [formData.nickname]);
+  }, [formData.nickname, checkNickname]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,7 +184,16 @@ const CompleteProfilePage = () => {
                 <p className="mt-1 text-sm text-green-500">사용 가능한 닉네임입니다.</p>
               )}
               {nicknameCheckError && formData.nickname.length >= 2 && !nicknameChecking && (
-                <p className="mt-1 text-sm text-amber-500">확인할 수 없습니다. 잠시 후 다시 시도해주세요.</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <p className="text-sm text-amber-500">{nicknameCheckError}</p>
+                  <button
+                    type="button"
+                    onClick={() => checkNickname(formData.nickname)}
+                    className="text-sm font-medium text-[var(--color-blue-primary)] hover:underline"
+                  >
+                    다시 확인
+                  </button>
+                </div>
               )}
               {errors.nickname && <p className="mt-1 text-sm text-red-500">{errors.nickname}</p>}
             </div>

@@ -3,6 +3,7 @@ import GroupList from './GroupList';
 import SearchOptionsModal from './SearchOptionsModal';
 import { MagnifyingGlassIcon, MapPinIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 import { KOREAN_CITIES, getRegionDisplayName, getUserCity, type KoreanCity } from '../utils/locationUtils';
+import { useAuth } from '../contexts/AuthContext';
 import { MATCH_TYPE_THEME } from './HomeMatchTypeChoice';
 
 export type MatchType = 'general' | 'rank' | 'event';
@@ -23,6 +24,7 @@ interface GroupListPanelProps {
 }
 
 const GroupListPanel = ({ selectedCategory, onGroupClick, refreshTrigger, selectedCity: propSelectedCity, onCityChange, selectedDays = [], onDaysChange, matchType = 'general', onMatchTypeChange, matchTypeTheme = false }: GroupListPanelProps) => {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState<KoreanCity>(propSelectedCity as KoreanCity || '전체');
   const [showCityDropdown, setShowCityDropdown] = useState(false);
@@ -41,8 +43,8 @@ const GroupListPanel = ({ selectedCategory, onGroupClick, refreshTrigger, select
 
   // 사용자 위치 기반으로 기본 도시 설정 (prop이 없을 때만)
   useEffect(() => {
-    if (!propSelectedCity) {
-      const userCity = getUserCity();
+    if (!propSelectedCity && user?.id) {
+      const userCity = getUserCity(user.id);
       if (userCity) {
         setSelectedCity(userCity);
         if (onCityChange) {
@@ -50,7 +52,7 @@ const GroupListPanel = ({ selectedCategory, onGroupClick, refreshTrigger, select
         }
       }
     }
-  }, [propSelectedCity, onCityChange]);
+  }, [propSelectedCity, onCityChange, user?.id]);
 
   const theme = matchTypeTheme ? MATCH_TYPE_THEME[matchType] : null;
   // 테마 있을 때: 패널 전체를 매치 종류별 10% 투명도 단색으로 채움

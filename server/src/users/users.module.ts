@@ -15,9 +15,13 @@ import { GroupParticipant } from '../groups/entities/group-participant.entity';
 import { Group } from '../groups/entities/group.entity';
 import { GroupEvaluation } from '../groups/entities/group-evaluation.entity';
 import { Follow } from './entities/follow.entity';
+import { PointTransaction } from './entities/point-transaction.entity';
+import { MatchReview } from '../groups/entities/match-review.entity';
 import { FollowService } from './follow.service';
+import { PointsService } from './points.service';
 import { RecommendedUsersService } from './recommended-users.service';
 import { AthleteService } from './athlete.service';
+import { UserReviewStatsService } from './user-review-stats.service';
 
 @Module({
   imports: [
@@ -32,12 +36,14 @@ import { AthleteService } from './athlete.service';
       Group,
       GroupEvaluation,
       Follow,
+      PointTransaction,
+      MatchReview,
     ]),
     forwardRef(() => AuthModule),
     NotificationsModule,
   ],
   controllers: [UsersController],
-  providers: [UsersService, UserScoreService, FollowService, RecommendedUsersService, AthleteService],
-  exports: [UsersService, UserScoreService, FollowService],
+  providers: [UsersService, UserScoreService, FollowService, PointsService, RecommendedUsersService, AthleteService, UserReviewStatsService],
+  exports: [UsersService, UserScoreService, FollowService, PointsService],
 })
 export class UsersModule {}

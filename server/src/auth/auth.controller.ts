@@ -84,7 +84,10 @@ export class AuthController {
     try {
       return await this.authService.register(registerDto);
     } catch (err) {
-      console.error('[POST /api/auth/register] 회원가입 실패:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      const stack = err instanceof Error ? err.stack : '';
+      const code = err && typeof err === 'object' && 'code' in err ? (err as any).code : undefined;
+      console.error('[POST /api/auth/register] 회원가입 실패:', msg, code ? `code=${code}` : '', stack || '');
       throw err;
     }
   }
@@ -274,6 +277,7 @@ export class AuthController {
       athleteData: user.athleteData || null,
       ohunRanks: user.ohunRanks || {},
       effectiveRanks: getEffectiveOhunRanks(user),
+      points: user.points ?? 0,
     };
   }
 

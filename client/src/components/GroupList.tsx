@@ -205,18 +205,20 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, se
                    ? (group.maxParticipants - group.participantCount) <= Math.ceil(group.maxParticipants * 0.1)
                    : false;
                  
-                 // meetingTime 파싱
+                 // meetingTime 파싱 (다양한 형식 지원: "YYYY-MM-DD HH:MM ~ ..." 포함)
                  let parsedMeetingTime: Date | null = null;
                  if (group.meetingTime) {
                    const meetingTimeStr = group.meetingTime.trim();
-                   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(meetingTimeStr)) {
-                     parsedMeetingTime = new Date(meetingTimeStr);
-                   } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}$/.test(meetingTimeStr)) {
-                     parsedMeetingTime = new Date(meetingTimeStr.replace(' ', 'T'));
+                   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(meetingTimeStr)) {
+                     parsedMeetingTime = new Date(meetingTimeStr.slice(0, 16));
+                   } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(meetingTimeStr)) {
+                     const startPart = meetingTimeStr.split('~')[0]?.trim() || meetingTimeStr;
+                     parsedMeetingTime = new Date(startPart.replace(' ', 'T') + ':00');
                    } else if (/^\d{4}-\d{2}-\d{2}$/.test(meetingTimeStr)) {
                      parsedMeetingTime = new Date(meetingTimeStr + 'T00:00:00');
                    } else {
-                     parsedMeetingTime = new Date(meetingTimeStr);
+                     const dateMatch = meetingTimeStr.match(/^\d{4}-\d{2}-\d{2}/);
+                     parsedMeetingTime = dateMatch ? new Date(dateMatch[0] + 'T00:00:00') : new Date(meetingTimeStr);
                    }
                  }
                  
@@ -264,22 +266,20 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, se
                  // 일정이 없으면 표시하지 않음
                  if (!group.meetingTime) return false;
                  
-                 // meetingTime 파싱
+                 // meetingTime 파싱 (다양한 형식 지원: "YYYY-MM-DD HH:MM ~ ..." 포함)
                  let meetingDate: Date | null = null;
                  const meetingTimeStr = group.meetingTime.trim();
                  
-                 if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(meetingTimeStr)) {
-                   // datetime-local 형식 (YYYY-MM-DDTHH:MM)
-                   meetingDate = new Date(meetingTimeStr);
-                 } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}$/.test(meetingTimeStr)) {
-                   // "YYYY-MM-DD HH:MM" 형식
-                   meetingDate = new Date(meetingTimeStr.replace(' ', 'T'));
+                 if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(meetingTimeStr)) {
+                   meetingDate = new Date(meetingTimeStr.slice(0, 16));
+                 } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(meetingTimeStr)) {
+                   const startPart = meetingTimeStr.split('~')[0]?.trim() || meetingTimeStr;
+                   meetingDate = new Date(startPart.replace(' ', 'T') + ':00');
                  } else if (/^\d{4}-\d{2}-\d{2}$/.test(meetingTimeStr)) {
-                   // "YYYY-MM-DD" 형식
                    meetingDate = new Date(meetingTimeStr + 'T00:00:00');
                  } else {
-                   // 기타 형식 시도
-                   meetingDate = new Date(meetingTimeStr);
+                   const dateMatch = meetingTimeStr.match(/^\d{4}-\d{2}-\d{2}/);
+                   meetingDate = dateMatch ? new Date(dateMatch[0] + 'T00:00:00') : new Date(meetingTimeStr);
                  }
                  
                  if (!meetingDate || isNaN(meetingDate.getTime())) {

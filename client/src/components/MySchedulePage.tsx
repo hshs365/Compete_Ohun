@@ -23,10 +23,17 @@ interface GroupEvent {
     category: string;
     type: 'match' | 'reservation';
     reservationId?: number;
+    facilityId?: number;
     facilityName?: string;
     userName?: string;
     status?: string;
   };
+}
+
+interface MyFacility {
+  id: number;
+  name: string;
+  address?: string;
 }
 
 const MySchedulePage = () => {
@@ -39,11 +46,31 @@ const MySchedulePage = () => {
   const [viewType, setViewType] = useState<'dayGridMonth' | 'timeGridWeek' | 'timeGridDay'>('timeGridWeek');
   const [showReservations, setShowReservations] = useState(true);
   const [showMatches, setShowMatches] = useState(true);
+  const [myFacilities, setMyFacilities] = useState<MyFacility[]>([]);
+  /** 시설별 예약 표시 여부 (facilityId → checked). 기본값: 전체 선택 */
+  const [selectedFacilityIds, setSelectedFacilityIds] = useState<Set<number>>(new Set());
 
-  // 사업자 회원인지 확인
-  const isBusinessMember = user?.memberType === 'business';
+  // 시설 등록 권한: 사업자 또는 내가 등록한 시설이 있는 경우
+  const hasFacilities = myFacilities.length > 0;
 
-  // 참가한 매치 및 생성한 매치 목록 가져오기 + 사업자인 경우 시설 예약 현황
+  // 내가 등록한 시설 목록 조회 (시설별 필터용)
+  useEffect(() => {
+    if (!user?.id) return;
+    const fetchMyFacilities = async () => {
+      try {
+        const list = await api.get<MyFacility[]>('/api/facilities/my');
+        const facilities = Array.isArray(list) ? list : [];
+        setMyFacilities(facilities);
+        setSelectedFacilityIds(new Set(facilities.map((f) => f.id)));
+      } catch (error) {
+        console.error('내 시설 목록 조회 실패:', error);
+        setMyFacilities([]);
+      }
+    };
+    fetchMyFacilities();
+  }, [user?.id]);
+
+  // 참가한 매치 및 생성한 매치 목록 가져오기 + 시설 등록자인 경우 시설 예약 현황
   useEffect(() => {
     const fetchSchedules = async () => {
       if (!user?.id) {
@@ -88,12 +115,16 @@ const MySchedulePage = () => {
             if (!group.meetingTime) return null;
             let startDate: Date | null = null;
             const meetingTimeStr = group.meetingTime.trim();
-            if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}$/.test(meetingTimeStr)) {
-              startDate = new Date(meetingTimeStr.replace(' ', 'T'));
+            if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(meetingTimeStr)) {
+              startDate = new Date(meetingTimeStr.slice(0, 16));
+            } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(meetingTimeStr)) {
+              const startPart = meetingTimeStr.split('~')[0]?.trim() || meetingTimeStr;
+              startDate = new Date(startPart.replace(' ', 'T') + ':00');
             } else if (/^\d{4}-\d{2}-\d{2}$/.test(meetingTimeStr)) {
               startDate = new Date(meetingTimeStr + 'T00:00:00');
             } else {
-              startDate = new Date(meetingTimeStr);
+              const dateMatch = meetingTimeStr.match(/^\d{4}-\d{2}-\d{2}/);
+              startDate = dateMatch ? new Date(dateMatch[0] + 'T00:00:00') : new Date(meetingTimeStr);
             }
             if (!startDate || isNaN(startDate.getTime())) return null;
             const endDate = new Date(startDate);
@@ -116,53 +147,62 @@ const MySchedulePage = () => {
 
         allEvents.push(...matchEvents);
 
-        // 2. 사업자 회원인 경우: 내가 등록한 시설에 대한 예약(일반 회원이 예약한 것) 조회
-        if (isBusinessMember) {
-          try {
-            const raw = await api.get<unknown>('/api/reservations/owner');
-            const reservations = Array.isArray(raw) ? raw : [];
-            
-            const reservationEvents: GroupEvent[] = reservations
-              .map((res: any) => {
-                if (!res.reservationDate || !res.startTime) return null;
-                
-                const startDate = new Date(`${res.reservationDate}T${res.startTime}`);
-                const endDate = new Date(`${res.reservationDate}T${res.endTime}`);
-                
-                if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return null;
+        // 2. 시설 등록자인 경우: 내가 등록한 시설에 대한 예약 (가예약, 확정 등) 조회
+        try {
+          const raw = await api.get<unknown>('/api/reservations/owner');
+          const reservations = Array.isArray(raw) ? raw : [];
 
-                // 예약 상태별 색상
-                const statusColors: Record<string, string> = {
-                  pending: '#f59e0b',    // 대기 - 주황
-                  confirmed: '#10b981',  // 확정 - 녹색
-                  completed: '#6b7280',  // 완료 - 회색
-                  cancelled: '#ef4444',  // 취소 - 빨강
-                  no_show: '#dc2626',    // 노쇼 - 진한 빨강
-                };
+          const reservationEvents: GroupEvent[] = reservations
+            .map((res: any) => {
+              if (!res.reservationDate || !res.startTime) return null;
 
-                return {
-                  id: res.id + 100000, // 매치 ID와 충돌 방지
-                  title: `[예약] ${res.facility?.name || '시설'} - ${res.user?.nickname || '사용자'}`,
-                  start: startDate.toISOString(),
-                  end: endDate.toISOString(),
-                  color: statusColors[res.status] || '#6366f1',
-                  extendedProps: {
-                    type: 'reservation' as const,
-                    reservationId: res.id,
-                    facilityName: res.facility?.name,
-                    userName: res.user?.nickname,
-                    status: res.status,
-                    location: res.facility?.address || '',
-                    category: '시설예약',
-                  },
-                };
-              })
-              .filter((event): event is GroupEvent => event !== null);
+              const startDate = new Date(`${res.reservationDate}T${res.startTime}`);
+              const endDate = new Date(`${res.reservationDate}T${res.endTime}`);
 
-            allEvents.push(...reservationEvents);
-          } catch (error) {
-            console.error('시설 예약 현황 조회 실패:', error);
-          }
+              if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return null;
+
+              // 예약 상태별 색상 (가예약 포함)
+              const statusColors: Record<string, string> = {
+                pending: '#f59e0b',    // 대기 - 주황
+                confirmed: '#10b981',  // 확정 - 녹색
+                completed: '#6b7280',  // 완료 - 회색
+                cancelled: '#ef4444',  // 취소 - 빨강
+                no_show: '#dc2626',    // 노쇼 - 진한 빨강
+                provisional: '#a855f7', // 가예약 - 보라
+              };
+
+              const isProvisional = res.status === 'provisional';
+              const titleSuffix = isProvisional ? ' (가예약)' : '';
+              // 예약자/매치장 닉네임: user.nickname 우선, 가예약 시 memo에서 "가예약중 - 닉네임" 추출
+              let hostNickname = res.user?.nickname;
+              if (!hostNickname && isProvisional && res.memo) {
+                const match = String(res.memo).match(/가예약중\s*-\s*(.+)/);
+                hostNickname = match ? match[1].trim() : undefined;
+              }
+              hostNickname = hostNickname || '사용자';
+              return {
+                id: res.id + 100000, // 매치 ID와 충돌 방지
+                title: `[예약] ${res.facility?.name || '시설'} - ${hostNickname}${titleSuffix}`,
+                start: startDate.toISOString(),
+                end: endDate.toISOString(),
+                color: statusColors[res.status] || '#6366f1',
+                extendedProps: {
+                  type: 'reservation' as const,
+                  reservationId: res.id,
+                  facilityId: res.facilityId ?? res.facility?.id,
+                  facilityName: res.facility?.name,
+                  userName: hostNickname,
+                  status: res.status,
+                  location: res.facility?.address || '',
+                  category: '시설예약',
+                },
+              };
+            })
+            .filter((event): event is GroupEvent => event !== null);
+
+          allEvents.push(...reservationEvents);
+        } catch (error) {
+          console.error('시설 예약 현황 조회 실패:', error);
         }
 
         setEvents(allEvents);
@@ -175,7 +215,7 @@ const MySchedulePage = () => {
     };
 
     fetchSchedules();
-  }, [user?.id, isBusinessMember]);
+  }, [user?.id]);
 
   const goToToday = () => {
     const today = new Date();
@@ -299,28 +339,59 @@ const MySchedulePage = () => {
                   />
                   매치 일정
                 </label>
-                {isBusinessMember && (
-                  <label className="flex items-center gap-2 cursor-pointer text-sm text-[var(--color-text-secondary)]">
-                    <input
-                      type="checkbox"
-                      checked={showReservations}
-                      onChange={(e) => setShowReservations(e.target.checked)}
-                      className="rounded"
-                    />
-                    <span
-                      className="w-3 h-3 rounded-full shrink-0"
-                      style={{ backgroundColor: '#10b981' }}
-                      aria-hidden
-                    />
-                    시설 예약
-                  </label>
+                {hasFacilities && (
+                  <>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm text-[var(--color-text-secondary)]">
+                      <input
+                        type="checkbox"
+                        checked={showReservations}
+                        onChange={(e) => setShowReservations(e.target.checked)}
+                        className="rounded"
+                      />
+                      <span
+                        className="w-3 h-3 rounded-full shrink-0"
+                        style={{ backgroundColor: '#10b981' }}
+                        aria-hidden
+                      />
+                      시설 예약
+                    </label>
+                    <div className="ml-4 mt-2 space-y-1.5 border-l-2 border-[var(--color-border-card)] pl-3">
+                      {myFacilities.map((f) => (
+                        <label
+                          key={f.id}
+                          className="flex items-center gap-2 cursor-pointer text-xs text-[var(--color-text-secondary)]"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedFacilityIds.has(f.id)}
+                            onChange={(e) => {
+                              setSelectedFacilityIds((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(f.id);
+                                else next.delete(f.id);
+                                return next;
+                              });
+                            }}
+                            className="rounded"
+                          />
+                          <span className="truncate" title={f.name}>
+                            {f.name}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
             </details>
-            {isBusinessMember && (
+            {hasFacilities && (
               <div className="mt-4 pt-4 border-t border-[var(--color-border-card)]">
                 <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-2">예약 상태 색상</p>
                 <div className="space-y-1.5 text-xs text-[var(--color-text-secondary)]">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#a855f7]" />
+                    <span>가예약</span>
+                  </div>
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" />
                     <span>대기</span>
@@ -409,7 +480,11 @@ const MySchedulePage = () => {
                 headerToolbar={false}
                 events={events.filter((e) => {
                   if (e.extendedProps.type === 'match' && !showMatches) return false;
-                  if (e.extendedProps.type === 'reservation' && !showReservations) return false;
+                  if (e.extendedProps.type === 'reservation') {
+                    if (!showReservations) return false;
+                    const fid = e.extendedProps.facilityId;
+                    if (fid != null && selectedFacilityIds.size > 0 && !selectedFacilityIds.has(fid)) return false;
+                  }
                   return true;
                 })}
                 editable={false}
@@ -425,6 +500,7 @@ const MySchedulePage = () => {
                   const props = info.event.extendedProps;
                   if (props.type === 'reservation') {
                     const statusKo: Record<string, string> = {
+                      provisional: '가예약',
                       pending: '대기',
                       confirmed: '확정',
                       completed: '완료',
@@ -432,7 +508,7 @@ const MySchedulePage = () => {
                       no_show: '노쇼',
                     };
                     await showInfo(
-                      `시설: ${props.facilityName || '-'}\n예약자: ${props.userName || '-'}\n상태: ${statusKo[props.status as string] || props.status}\n위치: ${props.location}`,
+                      `시설: ${props.facilityName || '-'}\n매치장 닉네임: ${props.userName || '-'}\n상태: ${statusKo[props.status as string] || props.status}\n위치: ${props.location}`,
                       '예약 정보'
                     );
                   } else {
@@ -446,8 +522,8 @@ const MySchedulePage = () => {
               </div>
               {events.length === 0 && (
                 <p className="mt-3 text-center text-sm text-[var(--color-text-secondary)]">
-                  {isBusinessMember
-                    ? '참가·생성한 모임이나 내 시설에 대한 예약이 여기에 표시됩니다.'
+                  {hasFacilities
+                    ? '참가·생성한 모임이나 내 시설에 대한 예약(가예약·확정)이 여기에 표시됩니다.'
                     : '참가하거나 생성한 모임이 있으면 여기에 일정이 표시됩니다.'}
                 </p>
               )}

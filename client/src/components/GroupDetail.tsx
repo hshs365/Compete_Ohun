@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { XMarkIcon, MapPinIcon, UsersIcon, WrenchScrewdriverIcon, TrashIcon, LockClosedIcon, LockOpenIcon, UserGroupIcon, TrophyIcon, StarIcon, CurrencyDollarIcon, BuildingOfficeIcon, ClipboardDocumentCheckIcon, HeartIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, MapPinIcon, UsersIcon, WrenchScrewdriverIcon, TrashIcon, LockClosedIcon, LockOpenIcon, UserGroupIcon, TrophyIcon, StarIcon, CurrencyDollarIcon, BuildingOfficeIcon, ClipboardDocumentCheckIcon, HeartIcon, PencilSquareIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid, HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
 import type { SelectedGroup } from '../types/selected-group';
 import { api } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import UserDetailModal from './UserDetailModal';
 import FootballPitch from './FootballPitch';
+import MatchReviewModal from './MatchReviewModal';
 import { showError, showSuccess, showInfo, showConfirm } from '../utils/swal';
 
 interface GroupDetailProps {
@@ -82,7 +83,14 @@ interface GroupDetailData {
     name: string;
     address: string;
     type: string;
+    image?: string | null;
   } | null;
+  /** 가계약 1·2·3순위 시설 (인원 마감 전 또는 미확정 시) */
+  provisionalFacilities?: Array<{
+    priority: number;
+    facilityId: number;
+    facility: { id: number; name: string; address: string; type: string; image?: string | null } | null;
+  }>;
   referees?: Array<{
     id: number;
     userId: number;
@@ -90,10 +98,33 @@ interface GroupDetailData {
     user: { id: number; nickname: string; tag?: string };
   }>;
   isUserReferee?: boolean;
+  isFavorited?: boolean;
+}
+
+const FOOTBALL_FEE_NORMAL = 10000;
+const FOOTBALL_FEE_EARLY = 8000;
+
+const getImageUrl = (url: string | null | undefined): string => {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+  return base + url;
+};
+
+/** 매치 당일이 아닌 이전날부터 참가 시 2,000P 할인 (축구) */
+function getRequiredPoints(feeAmount: number, category: string, meetingDateTime: string | null | undefined): number {
+  if (category !== '축구') return feeAmount;
+  if (!meetingDateTime) return FOOTBALL_FEE_NORMAL;
+  const meeting = new Date(meetingDateTime);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  meeting.setHours(0, 0, 0, 0);
+  const diffDays = Math.floor((meeting.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+  return diffDays >= 1 ? FOOTBALL_FEE_EARLY : FOOTBALL_FEE_NORMAL;
 }
 
 const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipantChange }) => {
-  const { user } = useAuth();
+  const { user, checkAuth } = useAuth();
   const navigate = useNavigate();
   const [isParticipant, setIsParticipant] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -103,14 +134,18 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
   const [creatorId, setCreatorId] = useState<number | null>(null);
   const [isClosed, setIsClosed] = useState(false);
   const [maxParticipants, setMaxParticipants] = useState<number | null>(null);
+  const [minParticipants, setMinParticipants] = useState<number | null>(null);
   const [isCreator, setIsCreator] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | null>(null);
   const [gameSettings, setGameSettings] = useState<GameSettings | null>(null);
   const [hasFee, setHasFee] = useState(false);
   const [feeAmount, setFeeAmount] = useState<number | null>(null);
-  const [facility, setFacility] = useState<{ id: number; name: string; address: string; type: string } | null>(null);
+  const [facility, setFacility] = useState<{ id: number; name: string; address: string; type: string; image?: string | null } | null>(null);
+  const [provisionalFacilities, setProvisionalFacilities] = useState<Array<{ priority: number; facilityId: number; facility: { id: number; name: string; address: string; type: string; image?: string | null } | null }>>([]);
+  /** 가계약 시설 캐러셀 인덱스 (화살표로 1·2·3순위 전환) */
+  const [provisionalFacilityIndex, setProvisionalFacilityIndex] = useState(0);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('');
+  const [groupMeetingDateTime, setGroupMeetingDateTime] = useState<string | null>(null);
   const [showPositionModal, setShowPositionModal] = useState(false);
   /** 전술 포지션 모달에서 보는 팀 (한 팀씩 크게 보기) */
   const [positionModalTeam, setPositionModalTeam] = useState<'red' | 'blue'>('red');
@@ -118,17 +153,46 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
   const [isPastMatch, setIsPastMatch] = useState(false);
   const [referees, setReferees] = useState<Array<{ id: number; userId: number; user: { id: number; nickname: string; tag?: string } }>>([]);
   const [isUserReferee, setIsUserReferee] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [isFavoriteLoading, setIsFavoriteLoading] = useState(false);
   /** 매치 유형: normal=일반(매치장 진행), rank=랭크(심판), event=이벤트 */
   const [groupType, setGroupType] = useState<'normal' | 'rank' | 'event'>('normal');
+
+  /** 매치 10분 전 이후면 참가 신청 불가 */
+  const isJoinClosedByTime =
+    !!groupMeetingDateTime &&
+    new Date() > new Date(new Date(groupMeetingDateTime).getTime() - 10 * 60 * 1000);
 
   useEffect(() => {
     if (group) {
       setParticipantCount(group.memberCount || 0);
       fetchGroupDetail();
     }
-  }, [group]);
+  }, [group?.id, user?.id]); // user 변경 시 재요청 (로그인 후 isFavorited 갱신)
+
+  // 매치 종료 후 참가자면 리뷰 모달 자동 오픈
+  const hasAutoOpenedReview = React.useRef(false);
+  useEffect(() => {
+    if (
+      user &&
+      group &&
+      isPastMatch &&
+      (isParticipant || isCreator) &&
+      !showReviewModal &&
+      !hasAutoOpenedReview.current
+    ) {
+      hasAutoOpenedReview.current = true;
+      setShowReviewModal(true);
+    }
+  }, [user, group, isPastMatch, isParticipant, isCreator, showReviewModal]);
+
+  // 결제 모달 열릴 때 사용자 포인트 새로고침
+  useEffect(() => {
+    if (showPaymentModal) {
+      checkAuth().then(() => {});
+    }
+  }, [showPaymentModal, checkAuth]);
 
   // localStorage에서 프로필 이미지 가져오기
   const getProfileImage = (userId: number, profileImage?: string | null): string | null => {
@@ -196,6 +260,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
       // 매치 마감 상태 설정
       setIsClosed(groupData.isClosed || false);
       setMaxParticipants(groupData.maxParticipants || null);
+      setMinParticipants(groupData.minParticipants ?? null);
       setIsCreator(user?.id === groupData.creatorId);
       setGameSettings(groupData.gameSettings || null);
       setHasFee(groupData.hasFee || false);
@@ -227,7 +292,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
         setFacility(groupData.facility);
       } else if (groupData.facilityId) {
         try {
-          const facilityData = await api.get<{ id: number; name: string; address: string; type: string }>(
+          const facilityData = await api.get<{ id: number; name: string; address: string; type: string; image?: string | null }>(
             `/api/facilities/${groupData.facilityId}`
           );
           setFacility(facilityData);
@@ -238,6 +303,18 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
       } else {
         setFacility(null);
       }
+
+      const prov = Array.isArray((groupData as any).provisionalFacilities) ? (groupData as any).provisionalFacilities : [];
+      setProvisionalFacilities(prov);
+      setProvisionalFacilityIndex(0);
+      const meetingDt = groupData.meetingDateTime ?? (groupData.meetingTime ? (() => {
+        const s = String(groupData.meetingTime).trim();
+        if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return s;
+        if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(s)) return s.replace(' ', 'T') + ':00';
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s + 'T12:00:00';
+        return null;
+      })() : null);
+      setGroupMeetingDateTime(meetingDt);
     } catch (error) {
       console.error('매치 상세 정보 조회 실패:', error);
     }
@@ -246,6 +323,11 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
   const handleJoin = async () => {
     if (!group || isLoading) return;
 
+    if (isJoinClosedByTime) {
+      await showInfo('매치 시작 10분 전까지만 참가 신청이 가능합니다.', '참가 마감');
+      return;
+    }
+
     // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
     if (!user) {
       await showInfo('매치에 참가하려면 로그인이 필요합니다.', '로그인 필요');
@@ -253,24 +335,29 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
       return;
     }
 
-    // 참가비가 있으면 결제 모달 표시
-    if (hasFee && feeAmount && feeAmount > 0) {
+    // 축구는 항상 포인트로 참가 (10,000P 또는 전일 이전 8,000P)
+    const needsPayment = group?.category === '축구' || (hasFee && feeAmount && feeAmount > 0);
+    if (needsPayment) {
       setShowPaymentModal(true);
       return;
     }
 
-    // 참가비가 없으면 바로 참가
     await processJoin();
   };
 
   const handleJoinWithPosition = async (positionCode: string, team: 'red' | 'blue' = 'red'): Promise<boolean> => {
     if (!group || isLoading) return false;
+    if (isJoinClosedByTime) {
+      await showInfo('매치 시작 10분 전까지만 참가 신청이 가능합니다.', '참가 마감');
+      return false;
+    }
     if (!user) {
       await showInfo('매치에 참가하려면 로그인이 필요합니다.', '로그인 필요');
       navigate('/login');
       return false;
     }
-    if (hasFee && feeAmount && feeAmount > 0) {
+    const needsPayment = group?.category === '축구' || (hasFee && feeAmount && feeAmount > 0);
+    if (needsPayment) {
       setShowPaymentModal(true);
       return false;
     }
@@ -342,6 +429,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
       // 매치 마감 상태 설정
       setIsClosed(groupData.isClosed || false);
       setMaxParticipants(groupData.maxParticipants || null);
+      setMinParticipants(groupData.minParticipants ?? null);
       setReferees(groupData.referees || []);
       setIsUserReferee(groupData.isUserReferee || false);
       setIsFavorited(groupData.isFavorited ?? false);
@@ -356,7 +444,6 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
       
       // 결제 모달 닫기
       setShowPaymentModal(false);
-      setPaymentMethod('');
       
       // 성공 메시지 표시
       await showSuccess('매치에 참가했습니다!', '매치 참가');
@@ -372,12 +459,14 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
   };
 
   const handlePaymentConfirm = async () => {
-    if (!paymentMethod.trim()) {
-      await showError('결제 수단을 선택해주세요.', '결제 수단 선택');
+    const effectiveFee = (group?.category === '축구' ? FOOTBALL_FEE_NORMAL : feeAmount) ?? 0;
+    if (effectiveFee <= 0) return;
+    const required = getRequiredPoints(effectiveFee, group?.category || '', groupMeetingDateTime);
+    const myPoints = user?.points ?? 0;
+    if (myPoints < required) {
+      await showError(`보유 포인트가 부족합니다. (필요: ${required.toLocaleString()}P, 보유: ${myPoints.toLocaleString()}P)`, '포인트 부족');
       return;
     }
-    
-    // 결제 처리 (향후 실제 결제 시스템 연동)
     await processJoin();
   };
 
@@ -893,8 +982,12 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
               <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--color-bg-secondary)] rounded-lg">
                 <UsersIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
                 <span className="text-sm text-[var(--color-text-secondary)]">
-                  <span className="font-semibold text-[var(--color-text-primary)]">{participantCount}명</span>
-                  {maxParticipants && (
+                  <span className="font-semibold text-[var(--color-text-primary)]">
+                    {minParticipants != null
+                      ? `${participantCount}/${minParticipants}`
+                      : participantCount + '명'}
+                  </span>
+                  {minParticipants == null && maxParticipants && (
                     <>
                       <span className="mx-1 text-[var(--color-text-secondary)]">/</span>
                       <span className="text-[var(--color-text-secondary)]">{maxParticipants}명</span>
@@ -1032,56 +1125,150 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
             </div>
           )}
 
-          {/* 참가비 및 시설 정보 */}
-          {(hasFee || facility) && (
+          {/* 시설 정보 */}
+          {(facility || provisionalFacilities.length > 0) && (
+            <div className="border-t border-[var(--color-border-card)] pt-6">
+              <div className="flex items-center gap-2 mb-4">
+                <BuildingOfficeIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
+                <h3 className="text-base font-bold text-[var(--color-text-primary)]">시설</h3>
+              </div>
+              {facility ? (
+                <div className="rounded-xl border border-[var(--color-border-card)] overflow-hidden bg-[var(--color-bg-secondary)]">
+                  <div className="aspect-video w-full bg-[var(--color-bg-primary)]">
+                    {(facility.image || (facility as { images?: string[] }).images?.[0]) ? (
+                      <img
+                        src={getImageUrl(facility.image ?? (facility as { images?: string[] }).images?.[0])}
+                        alt={facility.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[var(--color-text-secondary)]">
+                        <BuildingOfficeIcon className="w-16 h-16" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <span className="text-xs font-semibold text-green-600 dark:text-green-400">시설 확정</span>
+                    <div className="text-base font-semibold text-[var(--color-text-primary)] mt-0.5">{facility.name}</div>
+                    <div className="text-sm text-[var(--color-text-secondary)] mt-1">{facility.address}</div>
+                    {facility.type && <div className="text-xs text-[var(--color-text-secondary)] mt-0.5">{facility.type}</div>}
+                  </div>
+                </div>
+              ) : provisionalFacilities.length > 0 ? (
+                <div className="rounded-xl border border-amber-500/30 overflow-hidden bg-amber-500/5">
+                  <div className="relative">
+                    {(() => {
+                      const idx = Math.min(provisionalFacilityIndex, provisionalFacilities.length - 1);
+                      const p = provisionalFacilities[idx];
+                      const f = p?.facility;
+                      const imgUrl = f?.image ?? (f as { images?: string[] })?.images?.[0];
+                      return (
+                        <>
+                          <div className="aspect-video w-full bg-[var(--color-bg-primary)] relative">
+                            {imgUrl ? (
+                              <img
+                                src={getImageUrl(imgUrl)}
+                                alt={f?.name ?? `시설 #${p?.facilityId}`}
+                                className="w-full h-full object-cover"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-[var(--color-text-secondary)]">
+                                <BuildingOfficeIcon className="w-16 h-16" />
+                              </div>
+                            )}
+                            {provisionalFacilities.length > 1 && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setProvisionalFacilityIndex((i) => (i <= 0 ? provisionalFacilities.length - 1 : i - 1))}
+                                  className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors"
+                                  aria-label="이전 시설"
+                                >
+                                  <ChevronLeftIcon className="w-6 h-6" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setProvisionalFacilityIndex((i) => (i >= provisionalFacilities.length - 1 ? 0 : i + 1))}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors"
+                                  aria-label="다음 시설"
+                                >
+                                  <ChevronRightIcon className="w-6 h-6" />
+                                </button>
+                                <span className="absolute bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-black/50 text-white text-xs font-medium">
+                                  {provisionalFacilityIndex + 1} / {provisionalFacilities.length}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                          <div className="p-4">
+                            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">가계약 시설 (인원 마감 시 1→2→3순위로 확정)</span>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-bold">{p.priority}순위</span>
+                              <span className="text-base font-semibold text-[var(--color-text-primary)]">{f?.name ?? `시설 #${p?.facilityId}`}</span>
+                            </div>
+                            {f?.address && <div className="text-sm text-[var(--color-text-secondary)] mt-1">{f.address}</div>}
+                            {f?.type && <div className="text-xs text-[var(--color-text-secondary)] mt-0.5">{f.type}</div>}
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {/* 참가비 (별도 섹션) */}
+          {(group?.category === '축구' || (hasFee && feeAmount && feeAmount > 0)) && (
             <div className="border-t border-[var(--color-border-card)] pt-6">
               <div className="flex items-center gap-2 mb-4">
                 <CurrencyDollarIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-                <h3 className="text-base font-bold text-[var(--color-text-primary)]">참가비 및 시설</h3>
+                <h3 className="text-base font-bold text-[var(--color-text-primary)]">참가비</h3>
               </div>
-              <div className="space-y-3">
-                {facility && (
-                  <div className="p-3 bg-[var(--color-bg-secondary)] rounded-lg border border-[var(--color-border-card)]">
-                    <div className="flex items-center gap-2 mb-2">
-                      <BuildingOfficeIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
-                      <span className="text-sm font-medium text-[var(--color-text-primary)]">시설</span>
-                    </div>
-                    <div className="text-sm text-[var(--color-text-primary)] font-semibold">
-                      {facility.name}
-                    </div>
-                    <div className="text-xs text-[var(--color-text-secondary)] mt-1">
-                      {facility.address}
-                    </div>
-                    <div className="text-xs text-[var(--color-text-secondary)] mt-1">
-                      {facility.type}
-                    </div>
-                  </div>
-                )}
-                {hasFee && feeAmount && feeAmount > 0 && (
-                  <div className="p-3 bg-[var(--color-bg-secondary)] rounded-lg border border-[var(--color-border-card)]">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CurrencyDollarIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
-                      <span className="text-sm font-medium text-[var(--color-text-primary)]">참가비</span>
-                    </div>
-                    <div className="text-lg text-[var(--color-text-primary)] font-bold">
-                      {feeAmount.toLocaleString()}원
-                    </div>
-                    <div className="text-xs text-[var(--color-text-secondary)] mt-1">
-                      참가 시 결제가 필요합니다.
-                    </div>
-                  </div>
-                )}
+              <div className="p-3 bg-[var(--color-bg-secondary)] rounded-lg border border-[var(--color-border-card)]">
+                <div className="text-lg text-[var(--color-text-primary)] font-bold">
+                  {group?.category === '축구'
+                    ? getRequiredPoints(FOOTBALL_FEE_NORMAL, '축구', groupMeetingDateTime).toLocaleString()
+                    : (feeAmount ?? 0).toLocaleString()}P
+                </div>
+                <div className="text-xs text-[var(--color-text-secondary)] mt-1">
+                  {group?.category === '축구'
+                    ? '참가 시 포인트로 결제됩니다. (매치 전일 이전 참가 시 2,000P 할인)'
+                    : '참가 시 포인트로 결제됩니다.'}
+                </div>
               </div>
             </div>
           )}
 
           {/* 참가자 목록 (일반매치는 단일 목록, 랭크/이벤트 포지션 매치일 때만 레드/블루 구분) */}
           <div className="border-t border-[var(--color-border-card)] pt-6">
-            <div className="flex items-center gap-2 mb-4">
-              <UsersIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-              <h3 className="text-base font-bold text-[var(--color-text-primary)]">
-                참가자 <span className="text-sm font-normal text-[var(--color-text-secondary)]">({participantCount}명)</span>
-              </h3>
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <UsersIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
+                <h3 className="text-base font-bold text-[var(--color-text-primary)]">
+                  참가자
+                  {minParticipants != null ? (
+                    <span className="text-sm font-normal text-[var(--color-text-secondary)] ml-1">
+                      ({participantCount}/{minParticipants})
+                    </span>
+                  ) : maxParticipants != null ? (
+                    <span className="text-sm font-normal text-[var(--color-text-secondary)] ml-1">
+                      ({participantCount}/{maxParticipants}명)
+                    </span>
+                  ) : (
+                    <span className="text-sm font-normal text-[var(--color-text-secondary)] ml-1">({participantCount}명)</span>
+                  )}
+                </h3>
+              </div>
+              {!isClosed && minParticipants != null && participantCount < minParticipants && (
+                <div className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 animate-[pulse_2.5s_ease-in-out_infinite]">
+                  <span className="text-amber-700 dark:text-amber-400 text-sm font-semibold">
+                    매치 성사까지 <span className="text-base font-bold">{minParticipants - participantCount}</span>명 남음
+                  </span>
+                </div>
+              )}
             </div>
             {groupType !== 'normal' && gameSettings?.gameType === 'team' ? (
               <div className="space-y-4">
@@ -1251,31 +1438,64 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
           )}
 
           {/* 액션 버튼 */}
-          <div className="flex gap-2.5 pt-6 border-t border-[var(--color-border-card)]">
+          <div className="flex flex-wrap gap-2.5 pt-6 border-t border-[var(--color-border-card)]">
             {isCreator ? (
-              <div className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500/10 to-blue-600/10 border border-blue-500/20 text-blue-500 rounded-lg font-semibold flex items-center justify-center gap-2">
-                <StarIconSolid className="w-5 h-5" />
-                <span>매치장</span>
-              </div>
+              <>
+                <div className="flex-1 min-w-[120px] px-4 py-3 bg-gradient-to-r from-blue-500/10 to-blue-600/10 border border-blue-500/20 text-blue-500 rounded-lg font-semibold flex items-center justify-center gap-2">
+                  <StarIconSolid className="w-5 h-5" />
+                  <span>매치장</span>
+                </div>
+                {isPastMatch && (
+                  <button
+                    type="button"
+                    onClick={() => setShowReviewModal(true)}
+                    className="flex-1 min-w-[120px] px-4 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg font-semibold shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2"
+                  >
+                    <PencilSquareIcon className="w-5 h-5" />
+                    리뷰 작성
+                  </button>
+                )}
+              </>
             ) : isParticipant ? (
-              <button
-                onClick={handleLeave}
-                disabled={isLoading || isClosed}
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? '처리 중...' : '매치 나가기'}
-              </button>
+              <>
+                {!isPastMatch && (
+                  <button
+                    onClick={handleLeave}
+                    disabled={isLoading || isClosed}
+                    className="flex-1 min-w-[120px] px-4 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? '처리 중...' : '매치 나가기'}
+                  </button>
+                )}
+                {isPastMatch && (
+                  <button
+                    type="button"
+                    onClick={() => setShowReviewModal(true)}
+                    className="flex-1 min-w-[120px] px-4 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg font-semibold shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2"
+                  >
+                    <PencilSquareIcon className="w-5 h-5" />
+                    리뷰 작성
+                  </button>
+                )}
+              </>
             ) : (
               <button
                 onClick={handleJoin}
-                disabled={isLoading || isClosed}
-                className={`flex-1 px-4 py-3 rounded-lg font-semibold shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isClosed
+                disabled={isLoading || isClosed || isJoinClosedByTime}
+                className={`flex-1 min-w-[120px] px-4 py-3 rounded-lg font-semibold shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isClosed || isJoinClosedByTime
                     ? 'bg-gray-400 text-white cursor-not-allowed'
                     : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:shadow-md'
                 }`}
               >
-                {isLoading ? '처리 중...' : isClosed ? '인원 마감' : '참가하기'}
+                {isLoading ? '처리 중...' : isClosed ? '인원 마감' : isJoinClosedByTime ? '참가 마감' : (() => {
+                  if (group?.category === '축구' || (hasFee && feeAmount && feeAmount > 0)) {
+                    const baseFee = group?.category === '축구' ? FOOTBALL_FEE_NORMAL : (feeAmount ?? 0);
+                    const required = getRequiredPoints(baseFee, group?.category || '', groupMeetingDateTime);
+                    return `참가하기 ${required.toLocaleString()}P`;
+                  }
+                  return '참가하기';
+                })()}
               </button>
             )}
             <button 
@@ -1286,6 +1506,16 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
             </button>
         </div>
       </div>
+
+      {/* 매치 리뷰 작성 모달 */}
+      {group && showReviewModal && (
+        <MatchReviewModal
+          groupId={group.id}
+          groupName={group.name}
+          isOpen={showReviewModal}
+          onClose={() => setShowReviewModal(false)}
+        />
+      )}
 
       {/* 참가자(매치장 포함) 상세 → 유저 프로필 모달 (2번 캡쳐와 동일) */}
       {selectedParticipant && (
@@ -1304,64 +1534,64 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
         />
       )}
 
-      {/* 참가비 결제 모달 — 전술 포지션 모달보다 위에 표시 */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 bg-black/50 z-[150] flex items-center justify-center p-4">
-          <div className="bg-[var(--color-bg-card)] rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-[var(--color-text-primary)] mb-4">참가비 결제</h3>
-            
-            <div className="mb-6">
-              <div className="p-4 bg-[var(--color-bg-secondary)] rounded-lg border border-[var(--color-border-card)] mb-4">
-                <div className="text-sm text-[var(--color-text-secondary)] mb-1">결제 금액</div>
-                <div className="text-2xl font-bold text-[var(--color-text-primary)]">
-                  {feeAmount?.toLocaleString()}원
+      {/* 참가비 결제 모달 — 포인트 결제 (축구는 항상, 그 외는 feeAmount 있을 때) */}
+      {showPaymentModal && (group?.category === '축구' || (feeAmount != null && feeAmount > 0)) && (
+        (() => {
+          const baseFee = group?.category === '축구' ? FOOTBALL_FEE_NORMAL : (feeAmount ?? 0);
+          const required = getRequiredPoints(baseFee, group?.category || '', groupMeetingDateTime);
+          const myPoints = user?.points ?? 0;
+          const canPay = myPoints >= required;
+          const isEarlyDiscount = group?.category === '축구' && required === FOOTBALL_FEE_EARLY;
+          return (
+            <div className="fixed inset-0 bg-black/50 z-[150] flex items-center justify-center p-4">
+              <div className="bg-[var(--color-bg-card)] rounded-lg shadow-xl max-w-md w-full p-6">
+                <h3 className="text-xl font-bold text-[var(--color-text-primary)] mb-4">참가비 결제 (포인트)</h3>
+
+                <div className="mb-6">
+                  <div className="p-4 bg-[var(--color-bg-secondary)] rounded-lg border border-[var(--color-border-card)] mb-4">
+                    <div className="text-sm text-[var(--color-text-secondary)] mb-1">결제 포인트</div>
+                    <div className="text-2xl font-bold text-[var(--color-text-primary)]">
+                      {required.toLocaleString()}P
+                    </div>
+                    {isEarlyDiscount && (
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                        매치 전일 이전 예약 2,000P 할인 적용
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="p-4 bg-[var(--color-bg-secondary)] rounded-lg border border-[var(--color-border-card)] mb-4">
+                    <div className="text-sm text-[var(--color-text-secondary)] mb-1">보유 포인트</div>
+                    <div className="text-lg font-semibold text-[var(--color-text-primary)]">
+                      {(user?.points ?? 0).toLocaleString()}P
+                    </div>
+                    {!canPay && (
+                      <p className="text-xs text-red-500 mt-1">
+                        포인트가 부족합니다. 리뷰 작성·시설 리뷰 등으로 적립하거나 충전해 주세요.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowPaymentModal(false)}
+                    className="flex-1 px-4 py-2 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-lg font-semibold hover:opacity-80 transition-opacity"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handlePaymentConfirm}
+                    disabled={!canPay || isLoading}
+                    className="flex-1 px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? '처리 중...' : `${required.toLocaleString()}P 결제 및 참가`}
+                  </button>
                 </div>
               </div>
-
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                  결제 수단 선택
-                </label>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                >
-                  <option value="">결제 수단을 선택하세요</option>
-                  <option value="card">신용카드</option>
-                  <option value="bank">계좌이체</option>
-                  <option value="kakao">카카오페이</option>
-                  <option value="toss">토스페이</option>
-                </select>
-              </div>
-
-              <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                <p className="text-xs text-[var(--color-text-secondary)]">
-                  💳 결제 시스템은 향후 실제 결제 게이트웨이와 연동 예정입니다.
-                </p>
-              </div>
             </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowPaymentModal(false);
-                  setPaymentMethod('');
-                }}
-                className="flex-1 px-4 py-2 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-lg font-semibold hover:opacity-80 transition-opacity"
-              >
-                취소
-              </button>
-              <button
-                onClick={handlePaymentConfirm}
-                disabled={!paymentMethod.trim() || isLoading}
-                className="flex-1 px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? '처리 중...' : '결제 및 참가'}
-              </button>
-            </div>
-          </div>
-        </div>
+          );
+        })()
       )}
 
       {/* 전술 포지션 모달 — 새 매치 만들기(방장) 화면과 동일한 디자인 */}

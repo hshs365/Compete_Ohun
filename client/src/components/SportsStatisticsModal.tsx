@@ -3,6 +3,7 @@ import { XMarkIcon, ChartBarIcon, MapPinIcon, CalendarIcon, ClockIcon, TrophyIco
 import { api } from '../utils/api';
 import { SPORTS_LIST } from '../constants/sports';
 import { extractCityFromAddress } from '../utils/locationUtils';
+import FootballStatsRadar from './FootballStatsRadar';
 
 interface SportsStatisticsModalProps {
   userId: number;
@@ -19,8 +20,13 @@ interface GroupData {
   createdAt: string;
 }
 
+const FOOTBALL_STAT_KEYS = ['멘탈', '수비', '공격', '피지컬', '스피드', '테크닉'] as const;
+const defaultFootballStats: Record<string, number> = Object.fromEntries(FOOTBALL_STAT_KEYS.map((k) => [k, 0]));
+
 const SportsStatisticsModal: React.FC<SportsStatisticsModalProps> = ({ userId, isOpen, onClose }) => {
   const [isLoading, setIsLoading] = useState(true);
+  const [footballStats, setFootballStats] = useState<Record<string, number>>(defaultFootballStats);
+  const [footballStatsLoading, setFootballStatsLoading] = useState(false);
   const [statistics, setStatistics] = useState({
     categoryStats: {} as Record<string, number>,
     regionStats: {} as Record<string, number>,
@@ -38,6 +44,17 @@ const SportsStatisticsModal: React.FC<SportsStatisticsModalProps> = ({ userId, i
     if (isOpen && userId) {
       fetchStatistics();
     }
+  }, [isOpen, userId]);
+
+  // 내 스탯(매치 리뷰 기반) — 레이더 차트용
+  useEffect(() => {
+    if (!isOpen || !userId) return;
+    setFootballStatsLoading(true);
+    api
+      .get<Record<string, number>>('/api/users/me/football-stats')
+      .then((data) => setFootballStats((prev) => ({ ...defaultFootballStats, ...data })))
+      .catch(() => setFootballStats(defaultFootballStats))
+      .finally(() => setFootballStatsLoading(false));
   }, [isOpen, userId]);
 
   const fetchStatistics = async () => {

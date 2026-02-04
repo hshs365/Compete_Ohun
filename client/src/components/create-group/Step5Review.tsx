@@ -8,6 +8,8 @@ interface Step5ReviewProps {
   location: string;
   meetingDate: string;
   meetingTime: string;
+  meetingEndDate?: string;
+  meetingEndTime?: string;
   maxParticipants: string;
   minParticipants: string;
   genderRestriction: 'male' | 'female' | null;
@@ -31,6 +33,8 @@ const Step5Review: React.FC<Step5ReviewProps> = ({
   location,
   meetingDate,
   meetingTime,
+  meetingEndDate,
+  meetingEndTime,
   maxParticipants,
   minParticipants,
   genderRestriction,
@@ -126,12 +130,18 @@ const Step5Review: React.FC<Step5ReviewProps> = ({
         <div className="p-4 bg-[var(--color-bg-secondary)] rounded-lg border border-[var(--color-border-card)]">
           <h4 className="font-semibold text-[var(--color-text-primary)] mb-3">일정 및 인원</h4>
           <div className="space-y-2 text-sm">
-            <div className="flex justify-between items-center py-2 pl-3 border-l-2 border-[var(--color-blue-primary)] bg-[var(--color-bg-card)]/50 rounded-r">
-              <span className="text-[var(--color-text-secondary)]">매치 일정:</span>
-              <span className="text-[var(--color-text-primary)] font-bold text-base">
-                {meetingDate && meetingTime 
-                  ? `${meetingDate} ${meetingTime}`
-                  : '(미설정)'}
+            <div className="flex justify-between items-start py-2 pl-3 border-l-2 border-[var(--color-blue-primary)] bg-[var(--color-bg-card)]/50 rounded-r gap-2">
+              <span className="text-[var(--color-text-secondary)] shrink-0">매치 일정:</span>
+              <span className="text-[var(--color-text-primary)] font-bold text-base text-right">
+                {meetingDate && meetingTime ? (
+                  <>
+                    <div>
+                      {meetingDate} {meetingTime.slice(0, 5)} ~ {meetingEndDate && meetingEndDate !== meetingDate ? `${meetingEndDate} ` : ''}{meetingEndTime?.slice(0, 5) || '20:00'}
+                    </div>
+                  </>
+                ) : (
+                  '(미설정)'
+                )}
               </span>
             </div>
             <div className="flex justify-between">
@@ -156,7 +166,7 @@ const Step5Review: React.FC<Step5ReviewProps> = ({
         </div>
 
         {/* 참가비 및 시설 정보 */}
-        {(hasFee || selectedFacility) && (
+        {((category === '축구' || hasFee) || selectedFacility) && (
           <div className="p-4 bg-[var(--color-bg-secondary)] rounded-lg border border-[var(--color-border-card)]">
             <h4 className="font-semibold text-[var(--color-text-primary)] mb-3">참가비 및 시설</h4>
             <div className="space-y-2 text-sm">
@@ -173,11 +183,11 @@ const Step5Review: React.FC<Step5ReviewProps> = ({
                   </div>
                 </div>
               )}
-              {hasFee && (
+              {(category === '축구' || hasFee) && (
                 <div className="flex justify-between items-center py-2 pl-3 border-l-2 border-[var(--color-blue-primary)] bg-[var(--color-bg-card)]/50 rounded-r">
                   <span className="text-[var(--color-text-secondary)]">참가비:</span>
                   <span className="text-[var(--color-text-primary)] font-bold text-base">
-                    {feeAmount ? `${parseInt(feeAmount, 10).toLocaleString()}원` : '(금액 미입력)'}
+                    {category === '축구' ? '10,000P (전일 이전 8,000P)' : feeAmount ? `${parseInt(feeAmount, 10).toLocaleString()}P` : '(금액 미입력)'}
                   </span>
                 </div>
               )}

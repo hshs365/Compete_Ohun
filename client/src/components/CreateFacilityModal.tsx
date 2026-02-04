@@ -41,11 +41,14 @@ const MINUTE_OPTIONS_30 = [
   { value: '30', label: '30' },
 ];
 
-const parseOperatingHours = (hours: string | null | undefined): { start: string; end: string } => {
-  if (!hours || typeof hours !== 'string') return { start: '09:00', end: '21:00' };
+const parseOperatingHours = (hours: string | null | undefined): { start: string; end: string; is24Hours: boolean } => {
+  if (!hours || typeof hours !== 'string') return { start: '09:00', end: '21:00', is24Hours: false };
   const parts = hours.split(/\s*-\s*/).map((s) => s.trim());
-  if (parts.length >= 2) return { start: parts[0], end: parts[1] };
-  return { start: '09:00', end: '21:00' };
+  if (parts.length >= 2) {
+    const is24 = parts[1] === '24:00' || (parts[0] === '00:00' && parts[1] === '00:00');
+    return { start: parts[0], end: parts[1], is24Hours: is24 };
+  }
+  return { start: '09:00', end: '21:00', is24Hours: false };
 };
 
 const parsePrice = (price: string | null | undefined): { priceType: 'hourly' | 'daily' | 'monthly' | 'package'; price: string } => {
@@ -85,6 +88,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
     phone: '',
     operatingHoursStart: '09:00',
     operatingHoursEnd: '21:00',
+    is24Hours: false,
     reservationSlotHours: 2,
     priceType: 'hourly' as 'hourly' | 'daily' | 'monthly' | 'package',
     price: '',
@@ -102,7 +106,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
   useEffect(() => {
     if (!isOpen) return;
     if (initialFacility) {
-      const { start, end } = parseOperatingHours(initialFacility.operatingHours);
+      const { start, end, is24Hours } = parseOperatingHours(initialFacility.operatingHours);
       const { priceType, price } = parsePrice(initialFacility.price);
       const coords: [number, number] = initialFacility.latitude != null && initialFacility.longitude != null
         ? [Number(initialFacility.latitude), Number(initialFacility.longitude)]
@@ -115,6 +119,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
         phone: initialFacility.phone ?? '',
         operatingHoursStart: start,
         operatingHoursEnd: end,
+        is24Hours,
         reservationSlotHours: initialFacility.reservationSlotHours ?? 2,
         priceType,
         price,
@@ -356,9 +361,11 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
     setIsSubmitting(true);
     try {
       // 운영 시간 포맷팅
-      const operatingHours = formData.operatingHoursStart && formData.operatingHoursEnd
-        ? `${formData.operatingHoursStart} - ${formData.operatingHoursEnd}`
-        : undefined;
+      const operatingHours = formData.is24Hours
+        ? '00:00 - 24:00'
+        : (formData.operatingHoursStart && formData.operatingHoursEnd
+          ? `${formData.operatingHoursStart} - ${formData.operatingHoursEnd}`
+          : undefined);
 
       // 가격에서 콤마 제거 (숫자만 추출)
       const priceValue = formData.price ? formData.price.replace(/,/g, '') : undefined;
@@ -398,6 +405,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
           phone: '',
           operatingHoursStart: '09:00',
           operatingHoursEnd: '21:00',
+          is24Hours: false,
           reservationSlotHours: 2,
           priceType: 'hourly',
           price: '',
@@ -610,14 +618,28 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
             />
           </div>
 
-          {/* 운영시간 + 예약 단위 (같은 라인) */}
+          {/* 운영시간 + 예약 단위 (같은 라인) — 야간(자정) 지원 */}
           <div className="flex flex-wrap items-end gap-6">
             <div>
               <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">
                 <ClockIcon className="w-4 h-4 inline mr-1" />
                 운영시간 <span className="text-xs text-[var(--color-text-secondary)] font-normal">(선택, 30분 단위)</span>
               </label>
-              <div className="flex items-center gap-2 mt-1">
+              <label className="inline-flex items-center gap-2 mb-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.is24Hours}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, is24Hours: e.target.checked }))}
+                  className="rounded border-[var(--color-border-card)] text-[var(--color-blue-primary)] focus:ring-[var(--color-blue-primary)]"
+                />
+                <span className="text-sm text-[var(--color-text-primary)]">24시간 운영</span>
+              </label>
+              {!formData.is24Hours && (
+              <p className="text-xs text-[var(--color-text-secondary)] mb-1">
+                야간/새벽 운영 시 종료를 &quot;오전 12시&quot;(자정) 또는 &quot;오전 2시&quot; 등으로 선택할 수 있습니다.
+              </p>
+              )}
+              <div className={`flex items-center gap-2 mt-1 ${formData.is24Hours ? 'opacity-50 pointer-events-none' : ''}`}>
                 <div className="flex items-center gap-1">
                   <span className="text-xs text-[var(--color-text-secondary)] shrink-0">시작</span>
                   <select
