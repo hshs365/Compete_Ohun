@@ -124,6 +124,24 @@ http://localhost:3000
 
 ---
 
+## 🔴 회원가입 시 500 Internal Server Error (배포 서버)
+
+### 증상
+- Jenkins로 빌드·배포한 뒤 회원가입(5/5 단계 제출) 시 **"Internal server error"** 팝업
+- 브라우저 콘솔: `api/auth/register` 요청이 **500** 응답
+
+### 원인 파악 방법 (서버에 직접 접속이 어려울 때)
+개발 PC에서 배포 서버 루트에 접근할 수 없어도, **서버에서 명령을 실행한 결과만 공유**해 주면 원인 분석이 가능합니다.
+
+**단계별 점검 가이드**: [docs/troubleshooting-register-500.md](docs/troubleshooting-register-500.md)
+
+1. **가장 먼저**: 배포 서버에서 `pm2 logs backend --lines 150` 실행 후, **`[POST /api/auth/register] 회원가입 실패:`** 뒤에 나오는 **에러 메시지·스택**을 복사해 공유
+2. 이어서: DB 연결(.env, `psql` 테스트), 테이블 존재 여부(`\dt`), 환경 변수 등은 가이드의 Step 1~7 순서대로 실행한 결과를 공유
+
+가이드에 따라 서버 측 출력을 가져오시면, 그 결과를 바탕으로 원인과 수정 방법을 안내할 수 있습니다.
+
+---
+
 ## 📞 추가 도움
 
 문제가 계속되면:

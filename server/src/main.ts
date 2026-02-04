@@ -63,54 +63,40 @@ async function bootstrap() {
   }
   
   // CORS 설정 (프론트엔드와 통신)
-  // localhost와 IP 주소 모두 허용
   const allowedOrigins = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
-    'http://192.168.198.172:5173', // 현재 PC의 IP 주소
+    'http://192.168.198.172:5173',
   ];
-  
-  // 환경 변수로 추가 origin 지정 가능
   if (process.env.FRONTEND_URL) {
     const envOrigins = process.env.FRONTEND_URL.split(',').map(url => url.trim());
     allowedOrigins.push(...envOrigins);
   }
-  
+  const productionOriginPatterns = [
+    'https://ohun.kr',
+    'https://www.ohun.kr',
+    'http://ohun.kr',
+    'http://www.ohun.kr',
+  ];
+
   app.enableCors({
     origin: (origin, callback) => {
-      // origin이 없으면 (같은 origin 요청 등) 허용
-      if (!origin) {
-        return callback(null, true);
-      }
-      
-      // 허용된 origin 목록에 있으면 허용
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      
-      // 개발 환경에서는 localhost나 192.168.x.x로 시작하는 origin 허용
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      if (productionOriginPatterns.some(allowed => origin.startsWith(allowed))) return callback(null, true);
+      if (origin.includes('ohun.kr')) return callback(null, true);
+
       const isDevelopment = process.env.NODE_ENV !== 'production';
       if (isDevelopment) {
-        if (origin.startsWith('http://localhost:') || 
-            origin.startsWith('http://127.0.0.1:') ||
+        if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:') ||
             origin.match(/^http:\/\/192\.168\.\d+\.\d+:5173$/)) {
-          return callback(null, true);
-        }
-      } else {
-        // 운영 환경: https + http 도메인 허용 (리다이렉트·프록시 환경 대응)
-        const productionOrigins = [
-          'https://ohun.kr',
-          'https://www.ohun.kr',
-          'http://ohun.kr',
-          'http://www.ohun.kr',
-        ];
-        if (productionOrigins.some(allowed => origin.startsWith(allowed))) {
           return callback(null, true);
         }
       }
 
       console.warn('[CORS] 차단된 origin:', origin);
-      callback(new Error('CORS 정책에 의해 차단되었습니다.'));
+      // 거부 시 Error를 넘기면 500이 되므로, false만 넘겨 브라우저에서 CORS 실패로 처리
+      callback(null, false);
     },
     credentials: true,
   });
