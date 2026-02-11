@@ -10,6 +10,12 @@ export interface User {
   profileImageUrl?: string | null;
   /** 보유 포인트 (참가비 결제 등) */
   points?: number;
+  /** 거주 시/도 (홈 지역 표시 등) */
+  residenceSido?: string | null;
+  /** 거주 시/군/구 */
+  residenceSigungu?: string | null;
+  /** 전체 주소 (도로명/지번 + 상세주소). 회원가입/내 정보 저장값 */
+  residenceAddress?: string | null;
 }
 
 // 닉네임과 태그를 조합하여 표시하는 헬퍼 함수
@@ -26,6 +32,8 @@ interface RegisterData {
   birthDate?: string;
   residenceSido: string;
   residenceSigungu: string;
+  /** 전체 주소 (도로명/지번 + 상세주소). 내 정보 주소 표시용 */
+  residenceAddress?: string;
   interestedSports?: string[];
   /** 스포츠별 포지션 (축구·풋살 등) */
   sportPositions?: { sport: string; positions: string[] }[];
@@ -196,10 +204,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const register = async (email: string, password: string, userData: RegisterData, skipNavigate?: boolean) => {
     try {
       console.log('register 함수 호출:', { email, userData });
+      const trimmedEmail = typeof email === 'string' ? email.trim() : '';
       const data = await apiCall('/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({
-          email,
+          email: trimmedEmail,
           password,
           ...userData,
         }),

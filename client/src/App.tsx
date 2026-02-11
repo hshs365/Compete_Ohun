@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, createContext, useContext, useRef, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import GroupListPanel from './components/GroupListPanel';
@@ -10,7 +10,7 @@ import GroupDetail from './components/GroupDetail';
 import MultiStepCreateGroup from './components/MultiStepCreateGroup';
 import NotificationPanel from './components/NotificationPanel';
 import { api } from './utils/api';
-import { getUserCity, extractCityFromAddress, type KoreanCity } from './utils/locationUtils';
+import { getUserCity, type KoreanCity } from './utils/locationUtils';
 import MyInfoPage from './components/MyInfoPage'; // MyInfoPage 컴포넌트 import
 import MyActivityPage from './components/MyActivityPage';
 import MySchedulePage from './components/MySchedulePage'; // MySchedulePage 컴포넌트 import
@@ -27,8 +27,10 @@ import FacilityRegisterPage from './components/FacilityRegisterPage';
 import HallOfFamePage from './components/HallOfFamePage'; // HallOfFamePage 컴포넌트 import
 import SportsEquipmentPage from './components/SportsEquipmentPage';
 import SportsEquipmentDetailPage from './components/SportsEquipmentDetailPage';
+import SportsEquipmentCartPage from './components/SportsEquipmentCartPage';
 import ProductRegisterPage from './components/ProductRegisterPage';
 import FollowersPage from './components/FollowersPage'; // FollowersPage 컴포넌트 import
+import MatchEntryPage from './components/MatchEntryPage';
 import GuidePage from './components/GuidePage';
 import TeamsPage from './components/TeamsPage'; // TeamsPage 컴포넌트 import
 import TeamDetailPage from './components/TeamDetailPage'; // TeamDetailPage 컴포넌트 import
@@ -69,10 +71,15 @@ const DashboardLayout = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [allGroups, setAllGroups] = useState<SelectedGroup[]>([]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
-  // localStorage에서 저장된 도시 선택 복원 (초기에는 null로 시작)
-  const [selectedCity, setSelectedCity] = useState<KoreanCity | null>(null);
+  /** 마커 클릭 시 해당 시설의 매치 목록 필터 (시설명, 매치 목록) */
+  const [facilityFilter, setFacilityFilter] = useState<{ facilityName: string; groups: SelectedGroup[] } | null>(null);
+  // 선택 지역: '전체' | 시/도 | 구 fullName | 동 fullName (localStorage 복원)
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('selectedRegion') || localStorage.getItem('selectedCity') || null;
+  });
   const [selectedDays, setSelectedDays] = useState<number[]>([]); // 검색 옵션: 선택된 요일
-  /** 매치 종류: 일반 매치 | 랭크매치 | 이벤트매치 (홈에서 탭으로 전환) */
+  /** 매치 종류: 일반 매치 | 랭크 매치 | 이벤트매치 (홈에서 탭으로 전환) */
   const [matchType, setMatchType] = useState<'general' | 'rank' | 'event'>(() => {
     if (typeof window === 'undefined') return 'general';
     const saved = localStorage.getItem('home_match_type') as 'general' | 'rank' | 'event' | null;
@@ -93,28 +100,41 @@ const DashboardLayout = () => {
     events: false,
     popularSpots: false,
   });
+  /** 지도 기본 보기 단위 (사용자 주소 기준). 시/구/동 */
+  const [mapViewLevel, setMapViewLevel] = useState<'sido' | 'gu' | 'dong'>(() => {
+    if (typeof window === 'undefined') return 'sido';
+    const saved = localStorage.getItem('mapViewLevel') as 'sido' | 'gu' | 'dong' | null;
+    return saved === 'gu' || saved === 'dong' ? saved : 'sido';
+  });
 
-  // 로그인 여부에 따른 지역 설정: 미로그인 시 전국, 로그인 시 사용자 위치 기반
+  // 로그인 여부에 따른 지역 설정: 미로그인 시 전국, 로그인 시 저장된 주소(내 정보/회원가입) 기반
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
-      setSelectedCity('전체');
+      setSelectedRegion('전체');
       return;
     }
-    const userCity = getUserCity(user.id);
+    const apiResidence = user.residenceAddress != null || user.residenceSido != null
+      ? { residenceAddress: user.residenceAddress ?? undefined, residenceSido: user.residenceSido ?? undefined }
+      : undefined;
+    const userCity = getUserCity(user.id, apiResidence);
     if (userCity) {
-      setSelectedCity(userCity);
+      setSelectedRegion((prev) => prev || userCity);
     }
   }, [user, isLoading]);
 
-  // 로그인된 사용자만: 위치 변경 시 selectedCity 업데이트
+  // 로그인된 사용자만: 위치 변경 시 selectedRegion 업데이트 (localStorage 또는 API 주소)
   useEffect(() => {
     if (!user) return;
 
+    const apiResidence = user.residenceAddress != null || user.residenceSido != null
+      ? { residenceAddress: user.residenceAddress ?? undefined, residenceSido: user.residenceSido ?? undefined }
+      : undefined;
+
     const handleLocationUpdate = () => {
-      const userCity = getUserCity(user.id);
+      const userCity = getUserCity(user.id, apiResidence);
       if (userCity) {
-        setSelectedCity((prev) => {
+        setSelectedRegion((prev) => {
           if (prev === '전체') return prev;
           return userCity;
         });
@@ -137,16 +157,17 @@ const DashboardLayout = () => {
     };
   }, [user]);
 
-  // selectedCity 변경 시 localStorage에 저장 (단, '전체'가 아닐 때만)
+  // selectedRegion 변경 시 localStorage에 저장 (구/동 경로 포함)
   useEffect(() => {
-    if (selectedCity && selectedCity !== '전체') {
+    if (selectedRegion && selectedRegion !== '전체') {
       try {
-        localStorage.setItem('selectedCity', selectedCity);
+        localStorage.setItem('selectedRegion', selectedRegion);
+        localStorage.setItem('selectedCity', selectedRegion);
       } catch (e) {
         // 무시
       }
     }
-  }, [selectedCity]);
+  }, [selectedRegion]);
 
   // 사업자 여부(이벤트매치 생성 권한) 조회
   useEffect(() => {
@@ -185,7 +206,7 @@ const DashboardLayout = () => {
 
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const handleGroupClick = (group: SelectedGroup) => {
+const handleGroupClick = (group: SelectedGroup) => {
     setSelectedGroup(group);
   };
 
@@ -193,7 +214,7 @@ const DashboardLayout = () => {
     setSelectedGroup(null);
   };
 
-  // URL 쿼리 ?group=id 로 들어온 경우 해당 모임 자동 선택 (내정보 → 매치 목록 보기)
+  // URL 쿼리 ?group=id 로 들어온 경우 해당 모임 자동 선택 (내 정보 → 매치 목록 보기)
   useEffect(() => {
     const groupId = searchParams.get('group');
     if (!groupId || isLoadingGroups) return;
@@ -205,7 +226,7 @@ const DashboardLayout = () => {
       setSearchParams({}, { replace: true });
       return;
     }
-    api.get<{ id: number; name: string; location: string; latitude: number; longitude: number; participantCount: number; category: string; description?: string; meetingTime?: string; contact?: string; equipment?: string[] }>(`/api/groups/${id}`)
+    api.get<{ id: number; name: string; location: string; latitude: number; longitude: number; participantCount: number; category: string; type?: 'normal' | 'rank' | 'event'; description?: string; meetingTime?: string; contact?: string; equipment?: string[] }>(`/api/groups/${id}`)
       .then((g) => {
         const selected: SelectedGroup = {
           id: g.id,
@@ -214,6 +235,7 @@ const DashboardLayout = () => {
           coordinates: [Number(g.latitude), Number(g.longitude)],
           memberCount: g.participantCount,
           category: g.category,
+          type: g.type,
           description: g.description,
           meetingTime: g.meetingTime,
           contact: g.contact,
@@ -250,113 +272,15 @@ const DashboardLayout = () => {
     }
   };
 
-  // 모든 그룹 목록 가져오기 (지도 마커용) — 매치 종류 선택 후에만 실행
+  // 매치 뷰 진입 시 로딩 초기화 (목록·지도 데이터는 GroupList에서 가져옴)
   useEffect(() => {
     if (!hasEnteredMatchView) {
       setIsLoadingGroups(false);
       setAllGroups([]);
-      return;
+    } else {
+      setIsLoadingGroups(true);
     }
-    const fetchAllGroups = async () => {
-      try {
-        setIsLoadingGroups(true);
-        const category = selectedCategory === '전체' || selectedCategory === null ? undefined : selectedCategory;
-        const queryParams = new URLSearchParams();
-        
-        if (category) {
-          queryParams.append('category', category);
-        }
-        if (matchType === 'rank') {
-          queryParams.append('onlyRanker', 'true');
-          queryParams.append('type', 'normal');
-        } else if (matchType === 'event') {
-          queryParams.append('type', 'event');
-        }
-        queryParams.append('limit', '1000'); // 충분히 많은 데이터 가져오기 (지역 필터링을 위해)
-
-        const response = await api.get<{ groups: any[]; total: number }>(
-          `/api/groups?${queryParams.toString()}`
-        );
-
-        let mappedGroups: SelectedGroup[] = response.groups.map((group) => ({
-          id: group.id,
-          name: group.name,
-          location: group.location,
-          coordinates: [parseFloat(group.latitude.toString()), parseFloat(group.longitude.toString())] as [number, number],
-          memberCount: group.participantCount,
-          category: group.category,
-          description: group.description || undefined,
-          meetingTime: group.meetingTime || undefined,
-          contact: group.contact || undefined,
-          equipment: group.equipment || [],
-        }));
-
-        // ⭐ 날짜 필터링: 오늘부터 7일 이내 모임만 표시
-        const today = new Date();
-        today.setHours(0, 0, 0, 0); // 오늘 00:00:00
-
-        const sevenDaysLater = new Date(today);
-        sevenDaysLater.setDate(today.getDate() + 7); // 7일 후 00:00:00
-
-        mappedGroups = mappedGroups.filter((group) => {
-          // 일정이 없으면 표시하지 않음
-          if (!group.meetingTime) return false;
-
-          // meetingTime 파싱 (다양한 형식 지원)
-          let meetingDate: Date | null = null;
-          const meetingTimeStr = group.meetingTime.trim();
-
-          if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(meetingTimeStr)) {
-            // datetime-local 형식 (YYYY-MM-DDTHH:MM...)
-            meetingDate = new Date(meetingTimeStr.slice(0, 16));
-          } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(meetingTimeStr)) {
-            // "YYYY-MM-DD HH:MM ~ ..." 또는 "YYYY-MM-DD HH:MM" 형식
-            const startPart = meetingTimeStr.split('~')[0]?.trim() || meetingTimeStr;
-            meetingDate = new Date(startPart.replace(' ', 'T') + ':00');
-          } else if (/^\d{4}-\d{2}-\d{2}$/.test(meetingTimeStr)) {
-            // "YYYY-MM-DD" 형식
-            meetingDate = new Date(meetingTimeStr + 'T00:00:00');
-          } else {
-            // YYYY-MM-DD 추출 시도 (예: "2026-02-05 13:00 ~ 15:00")
-            const dateMatch = meetingTimeStr.match(/^\d{4}-\d{2}-\d{2}/);
-            if (dateMatch) {
-              meetingDate = new Date(dateMatch[0] + 'T00:00:00');
-            } else {
-              meetingDate = new Date(meetingTimeStr);
-            }
-          }
-
-          if (!meetingDate || isNaN(meetingDate.getTime())) {
-            return false; // 파싱 실패 시 표시하지 않음
-          }
-
-          // 날짜만 비교 (시간 제외)
-          const meetingDateOnly = new Date(meetingDate);
-          meetingDateOnly.setHours(0, 0, 0, 0);
-
-          // 오늘부터 7일 이내인지 확인
-          return meetingDateOnly >= today && meetingDateOnly < sevenDaysLater;
-        });
-
-        // ⭐ 지역 필터링: 선택된 도시에 해당하는 모임만 표시
-        if (selectedCity && selectedCity !== '전체') {
-          mappedGroups = mappedGroups.filter((group) => {
-            const groupCity = extractCityFromAddress(group.location);
-            return groupCity === selectedCity;
-          });
-        }
-
-        setAllGroups(mappedGroups);
-      } catch (err) {
-        console.error('모임 목록 조회 실패:', err);
-        setAllGroups([]);
-      } finally {
-        setIsLoadingGroups(false);
-      }
-    };
-
-    fetchAllGroups();
-  }, [hasEnteredMatchView, selectedCategory, selectedCity, refreshTrigger, matchType]);
+  }, [hasEnteredMatchView]);
 
   // 홈 진입 시 1단계: 종목 선택 화면
   if (!hasSelectedCategory) {
@@ -445,14 +369,20 @@ const DashboardLayout = () => {
             selectedCategory={selectedCategory} 
             onGroupClick={handleGroupClick}
             refreshTrigger={refreshTrigger}
-            selectedCity={selectedCity}
-            onCityChange={setSelectedCity}
+            facilityFilter={facilityFilter}
+            onClearFacilityFilter={() => setFacilityFilter(null)}
+            selectedRegion={selectedRegion}
+            onRegionChange={(region) => {
+              setSelectedRegion(region);
+              setFacilityFilter(null); // 지역 변경 시 시설 필터 해제
+            }}
             selectedDays={selectedDays}
             onDaysChange={setSelectedDays}
             matchType={matchType}
             onMatchTypeChange={(type) => {
               setMatchType(type);
-              setSelectedGroup(null); // 매치 타입 전환 시 열린 상세 패널 닫기 (선택 지역은 유지)
+              setSelectedGroup(null);
+              setFacilityFilter(null); // 매치 타입 전환 시 시설 필터 해제
               setIsLoadingGroups(true);
               try {
                 localStorage.setItem('home_match_type', type);
@@ -461,6 +391,17 @@ const DashboardLayout = () => {
               }
             }}
             matchTypeTheme
+            onGroupsChange={setAllGroups}
+            onLoadingChange={setIsLoadingGroups}
+            mapViewLevel={mapViewLevel}
+            onMapViewLevelChange={(level) => {
+              setMapViewLevel(level);
+              try {
+                localStorage.setItem('mapViewLevel', level);
+              } catch (e) {
+                /* ignore */
+              }
+            }}
           />
         </div>
         {/* 상세 패널: 목록에서 매치 클릭 시에만 생성·펼쳐짐, 좌측 50% 안에서 나머지 공간 차지 */}
@@ -506,23 +447,28 @@ const DashboardLayout = () => {
                 <span>초기 화면</span>
               </button>
               <span className="flex-1 text-center truncate px-2">
-                {selectedCategory ?? '전체'} · {matchType === 'general' ? '일반 매치' : matchType === 'rank' ? '랭크매치' : '이벤트매치'}
+                {selectedCategory ?? '전체'} · {matchType === 'general' ? '일반 매치' : matchType === 'rank' ? '랭크 매치' : '이벤트매치'}
               </span>
               <span className="w-[4.5rem] flex-shrink-0" aria-hidden />
             </div>
             <NaverMapPanel 
               selectedGroup={selectedGroup}
               allGroups={allGroups}
+              onFacilityMarkerClick={(info) => {
+                setFacilityFilter({ facilityName: info.facilityName, groups: info.groups });
+                setSelectedGroup(null); // 상세 패널 닫고 목록만 표시
+              }}
               onCreateGroupClick={
-                matchType === 'event' && !userProfile?.businessNumberVerified && !userProfile?.isAdmin
+                !user || (matchType === 'event' && !userProfile?.businessNumberVerified && !userProfile?.isAdmin)
                   ? undefined
                   : () => setIsCreateModalOpen(true)
               }
               onGroupClick={handleGroupClick}
-              selectedCity={selectedCity}
+              selectedRegion={selectedRegion}
               selectedCategory={selectedCategory}
               mapLayers={mapLayers}
               matchType={matchType}
+              mapViewLevel={mapViewLevel}
             />
             {/* 가이드 버튼 - 지도 영역 왼쪽 하단, 가이드 페이지로 이동 */}
             <button
@@ -543,6 +489,12 @@ const DashboardLayout = () => {
         onClose={() => setIsCreateModalOpen(false)}
         onSubmit={handleCreateGroup}
         onSuccess={handleGroupCreated}
+        onDuplicateMatchFound={(group) => {
+          setIsCreateModalOpen(false);
+          setSearchParams({}, { replace: true }); // ?group= 으로 인한 selectedGroup 덮어쓰기 방지
+          setSelectedGroup(group);
+          setRefreshTrigger((prev) => prev + 1);
+        }}
         initialCategory={selectedCategory ?? undefined}
         initialMatchType={matchType}
       />
@@ -607,11 +559,37 @@ const PublicRoute = ({ children }: { children: React.ReactElement }) => {
 
 // 메인 레이아웃 컴포넌트
 const MainLayout = () => {
+  const location = useLocation();
+  const mainScrollRef = useRef<HTMLDivElement>(null);
+  const [showTopButton, setShowTopButton] = useState(false);
+
+  const checkScroll = useCallback(() => {
+    const el = mainScrollRef.current;
+    setShowTopButton(!!el && el.scrollTop > 300);
+  }, []);
+
+  useEffect(() => {
+    const el = mainScrollRef.current;
+    if (!el) return;
+    checkScroll();
+    el.addEventListener('scroll', checkScroll, { passive: true });
+    return () => el.removeEventListener('scroll', checkScroll);
+  }, [checkScroll]);
+
+  // 페이지 전환 시 스크롤 맨 위로
+  useEffect(() => {
+    mainScrollRef.current?.scrollTo(0, 0);
+  }, [location.pathname]);
+
+  const scrollToTop = () => {
+    mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <PublicRoute>
       <div className="flex h-screen bg-[var(--color-bg-primary)] overflow-hidden">
         <Sidebar />
-        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        <div ref={mainScrollRef} className="flex-1 flex flex-col min-w-0 overflow-y-auto relative">
           <Routes>
             {/* 공개 접근 가능한 페이지 */}
             <Route index element={<DashboardLayout />} />
@@ -655,6 +633,11 @@ const MainLayout = () => {
                 <ProductRegisterPage />
               </ProtectedRoute>
             } />
+            <Route path="sports-equipment/cart" element={
+              <ProtectedRoute>
+                <SportsEquipmentCartPage />
+              </ProtectedRoute>
+            } />
             <Route path="sports-equipment/:id" element={
               <ProtectedRoute>
                 <SportsEquipmentDetailPage />
@@ -686,6 +669,11 @@ const MainLayout = () => {
                 <FollowersPage />
               </ProtectedRoute>
             } />
+            <Route path="match-entry/:groupId" element={
+              <ProtectedRoute>
+                <MatchEntryPage />
+              </ProtectedRoute>
+            } />
             <Route path="guide" element={<GuidePage />} />
             <Route path="settings" element={
               <ProtectedRoute>
@@ -694,6 +682,17 @@ const MainLayout = () => {
             } />
           </Routes>
         </div>
+        {/* TOP 버튼 - 앱 전체, 스크롤 시 표시 */}
+        {showTopButton && (
+          <button
+            type="button"
+            onClick={scrollToTop}
+            className="fixed bottom-6 right-6 z-[9998] w-12 h-12 rounded-full bg-[var(--color-blue-primary)] text-white shadow-lg hover:bg-[var(--color-blue-primary)]/90 hover:scale-105 active:scale-95 transition-all flex items-center justify-center font-bold text-sm"
+            aria-label="맨 위로"
+          >
+            TOP
+          </button>
+        )}
         {/* 알림 패널 - 사이드바 상단에 고정 (모든 페이지에서 표시) */}
         <NotificationPanel />
       </div>

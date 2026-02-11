@@ -87,6 +87,14 @@ export class UsersService {
     return qb.getOne();
   }
 
+  /** 내 지역 랭크매치 심판 알림 수신 동의한 활성 사용자 목록 (알림 발송용) */
+  async findWithRefereeRankMatchNotification(): Promise<User[]> {
+    return this.userRepository.find({
+      where: { notifyRefereeRankMatchInRegion: true, status: UserStatus.ACTIVE },
+      select: ['id', 'residenceSido', 'residenceAddress'],
+    });
+  }
+
   /** 전체 유저 검색 (닉네임, 태그 - 부분 일치). 이메일은 개인정보 보호를 위해 검색 불가 */
   async searchUsers(query: string, excludeUserId: number, limit = 30): Promise<User[]> {
     const q = `%${query.replace(/%/g, '\\%').replace(/_/g, '\\_')}%`;
@@ -367,7 +375,7 @@ export class UsersService {
       throw new NotFoundException('사용자를 찾을 수 없습니다.');
     }
     if (!user.realName?.trim()) {
-      return { success: false, message: '선수 등록을 위해 먼저 실명을 등록해 주세요. (내정보 또는 회원가입 시 실명 입력)' };
+      return { success: false, message: '선수 등록을 위해 먼저 실명을 등록해 주세요. (내 정보 또는 회원가입 시 실명 입력)' };
     }
 
     const result = await this.athleteService.findByRealName(

@@ -22,10 +22,10 @@ export class UserReviewStatsService {
   async getFootballStatsFromReviews(userId: number): Promise<FootballStatsFromReviews> {
     const rows = await this.matchReviewRepository
       .createQueryBuilder('r')
-      .select('r.category_key', 'key')
+      .select('r.categoryKey', 'key')
       .addSelect('COUNT(*)', 'cnt')
-      .where('r.selected_user_id = :userId', { userId })
-      .groupBy('r.category_key')
+      .where('r.selectedUserId = :userId', { userId })
+      .groupBy('r.categoryKey')
       .getRawMany<{ key: string; cnt: string }>();
 
     const counts: Record<string, number> = {};

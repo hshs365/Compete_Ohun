@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserGroupIcon, UserIcon, TrophyIcon, StarIcon, XMarkIcon, UserPlusIcon } from '@heroicons/react/24/outline';
 import { isTeamSport, getMinParticipantsForSport } from '../../constants/sports';
-import FootballPitch from '../FootballPitch';
+import { useAuth } from '../../contexts/AuthContext';
+import TacticalPitch from '../TacticalPitch';
+import { positionToDefaultCoords } from '../../utils/tacticalPositionUtils';
 
 // 팀 게임 포지션 정의
 const TEAM_POSITIONS: Record<string, string[]> = {
@@ -33,7 +35,10 @@ interface Step2GameSettingsProps {
     balanceByRank: boolean;
     minPlayersPerTeam: number;
     creatorPositionCode?: string;
+    creatorSlotLabel?: string;
     creatorTeam?: 'red' | 'blue';
+    creatorPositionX?: number;
+    creatorPositionY?: number;
   };
   onTeamSettingsChange: (settings: {
     positions: string[];
@@ -41,7 +46,10 @@ interface Step2GameSettingsProps {
     balanceByRank: boolean;
     minPlayersPerTeam: number;
     creatorPositionCode?: string;
+    creatorSlotLabel?: string;
     creatorTeam?: 'red' | 'blue';
+    creatorPositionX?: number;
+    creatorPositionY?: number;
   }) => void;
 }
 
@@ -57,6 +65,7 @@ const Step2GameSettings: React.FC<Step2GameSettingsProps> = ({
   teamSettings,
   onTeamSettingsChange,
 }) => {
+  const { user } = useAuth();
   const isTeam = isTeamSport(category);
   const accent = accentHex ?? 'var(--color-blue-primary)';
   const accentStyle = accentHex ? { borderColor: accentHex, backgroundColor: `${accentHex}18`, color: accentHex } : undefined;
@@ -68,6 +77,25 @@ const Step2GameSettings: React.FC<Step2GameSettingsProps> = ({
   const [creatorPitchTeam, setCreatorPitchTeam] = useState<'red' | 'blue'>(
     (teamSettings.creatorTeam as 'red' | 'blue') || 'red'
   );
+  const creatorProfileImage =
+    user?.profileImageUrl ||
+    (user?.id && typeof localStorage !== 'undefined' ? localStorage.getItem(`profileImage_${user.id}`) : null);
+
+  // 모임장 포지션 모달을 열었을 때 값이 없으면 필드 중앙을 기본으로 저장
+  useEffect(() => {
+    if (!showCreatorPitchModal || category !== '축구') return;
+    if (teamSettings.creatorPositionX != null && teamSettings.creatorPositionY != null) return;
+    const center = { x: 50, y: 50, positionCode: 'MF' as const, slotLabel: 'CM' as const };
+    onTeamSettingsChange({
+      ...teamSettings,
+      creatorPositionCode: center.positionCode,
+      creatorSlotLabel: center.slotLabel,
+      creatorPositionX: center.x,
+      creatorPositionY: center.y,
+      creatorTeam: (teamSettings.creatorTeam as 'red' | 'blue') || 'red',
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCreatorPitchModal, category]);
 
   const handlePositionToggle = (position: string) => {
     const newPositions = teamSettings.positions.includes(position)
@@ -116,6 +144,34 @@ const Step2GameSettings: React.FC<Step2GameSettingsProps> = ({
         <div className="grid grid-cols-2 gap-4">
           <button
             type="button"
+            onClick={() => onFreeMatchSubTypeChange('twoWay')}
+            className={`relative p-6 rounded-xl border-2 transition-all text-left ${
+              freeMatchSubType === 'twoWay' && !accentHex
+                ? 'border-[var(--color-blue-primary)] bg-blue-50 dark:bg-blue-900/20'
+                : freeMatchSubType !== 'twoWay'
+                  ? 'border-[var(--color-border-card)] bg-[var(--color-bg-secondary)]' + (!accentHex ? ' hover:border-[var(--color-blue-primary)]/50' : '')
+                  : ''
+            }`}
+            style={freeMatchSubType === 'twoWay' && accentStyle ? accentStyle : undefined}
+          >
+            <div className="flex items-start gap-4">
+              <UserPlusIcon className={`w-8 h-8 flex-shrink-0 ${freeMatchSubType === 'twoWay' ? '' : 'text-[var(--color-text-secondary)]'}`} style={freeMatchSubType === 'twoWay' ? { color: accentHex || 'var(--color-blue-primary)' } : undefined} />
+              <div className="flex-1">
+                <div className="font-semibold text-lg mb-1 text-[var(--color-text-primary)]">
+                  2파전
+                </div>
+                <p className="text-sm text-[var(--color-text-secondary)]">
+                  두 팀이 경기합니다.
+                </p>
+              </div>
+              {freeMatchSubType === 'twoWay' && (
+                <span className="text-xl" style={{ color: accentHex || 'var(--color-blue-primary)' }}>✓</span>
+              )}
+            </div>
+          </button>
+
+          <button
+            type="button"
             onClick={() => onFreeMatchSubTypeChange('threeWay')}
             className={`relative p-6 rounded-xl border-2 transition-all text-left ${
               freeMatchSubType === 'threeWay' && !accentHex
@@ -141,38 +197,13 @@ const Step2GameSettings: React.FC<Step2GameSettingsProps> = ({
               )}
             </div>
           </button>
-
-          <button
-            type="button"
-            onClick={() => onFreeMatchSubTypeChange('twoWay')}
-            className={`relative p-6 rounded-xl border-2 transition-all text-left ${
-              freeMatchSubType === 'twoWay' && !accentHex
-                ? 'border-[var(--color-blue-primary)] bg-blue-50 dark:bg-blue-900/20'
-                : freeMatchSubType !== 'twoWay'
-                  ? 'border-[var(--color-border-card)] bg-[var(--color-bg-secondary)]' + (!accentHex ? ' hover:border-[var(--color-blue-primary)]/50' : '')
-                  : ''
-            }`}
-            style={freeMatchSubType === 'twoWay' && accentStyle ? accentStyle : undefined}
-          >
-            <div className="flex items-start gap-4">
-              <UserPlusIcon className={`w-8 h-8 flex-shrink-0 ${freeMatchSubType === 'twoWay' ? '' : 'text-[var(--color-text-secondary)]'}`} style={freeMatchSubType === 'twoWay' ? { color: accentHex || 'var(--color-blue-primary)' } : undefined} />
-              <div className="flex-1">
-                <div className="font-semibold text-lg mb-1 text-[var(--color-text-primary)]">
-                  2파전
-                </div>
-                <p className="text-sm text-[var(--color-text-secondary)]">
-                  후보 선수 교체 투입 방식으로 두 팀이 경기합니다.
-                </p>
-              </div>
-              {freeMatchSubType === 'twoWay' && (
-                <span className="text-xl" style={{ color: accentHex || 'var(--color-blue-primary)' }}>✓</span>
-              )}
-            </div>
-          </button>
         </div>
       </div>
     );
   }
+
+  // 랭크 매치: (개인) 포지션 지정 매치 vs (팀) 팀 매치
+  const isRankMatch = matchType === 'rank';
 
   return (
     <div className="space-y-6">
@@ -180,88 +211,148 @@ const Step2GameSettings: React.FC<Step2GameSettingsProps> = ({
         <h3 className="text-xl font-bold text-[var(--color-text-primary)] mb-2">
           매치 진행 방식 설정
         </h3>
-        {!isGeneralFootball && (
+        {isRankMatch && (
+          <p className="text-sm text-[var(--color-text-secondary)]">
+            포지션 지정 매치(개인)는 레드/블루 2파전으로 선호 포지션을 선택해 참가하고, 팀 매치는 앱에 등록된 팀끼리 대결합니다.
+          </p>
+        )}
+        {!isGeneralFootball && !isRankMatch && (
           <p className="text-sm text-[var(--color-text-secondary)]">
             {category}는 팀 기반 매치입니다. 매치 진행 방식은 포지션 지정 매치 또는 자유 매칭 중 선택하세요.
           </p>
         )}
       </div>
 
-      {/* 매치 진행 방식 선택 — 일반매치가 아닐 때만 포지션 지정 옵션 표시 */}
+      {/* 매치 진행 방식 선택 — 랭크: 포지션 지정(개인) / 팀 매치 | 이벤트/기타: 포지션 지정(team) / 자유(individual) */}
       <div className="space-y-4">
         <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-3">
           매치 진행 방식 선택
         </label>
         <div className="grid grid-cols-2 gap-4">
-          {matchType !== 'general' && (
-            <button
-              type="button"
-              onClick={() => onGameTypeChange('team')}
-              className={`relative p-6 rounded-xl border-2 transition-all ${
-                gameType === 'team' && !accentHex
-                  ? 'border-[var(--color-blue-primary)] bg-blue-50 dark:bg-blue-900/20'
-                  : gameType !== 'team'
-                    ? 'border-[var(--color-border-card)] bg-[var(--color-bg-secondary)]' + (!accentHex ? ' hover:border-[var(--color-blue-primary)]/50' : '')
-                    : ''
-              }`}
-              style={gameType === 'team' && accentStyle ? accentStyle : undefined}
-            >
-              <div className="flex items-start gap-4">
-                <UserGroupIcon className={`w-8 h-8 flex-shrink-0 ${gameType === 'team' ? '' : 'text-[var(--color-text-secondary)]'}`} style={gameType === 'team' ? { color: accentHex || 'var(--color-blue-primary)' } : undefined} />
-                <div className="flex-1 text-left">
-                  <div className="font-semibold text-lg mb-1 text-[var(--color-text-primary)]">
-                    포지션 지정 매치
+          {isRankMatch ? (
+            <>
+              {/* 랭크: (개인) 포지션 지정 매치 → gameType individual */}
+              <button
+                type="button"
+                onClick={() => onGameTypeChange('individual')}
+                className={`relative p-6 rounded-xl border-2 transition-all text-left ${
+                  gameType === 'individual' ? '' : 'border-[var(--color-border-card)] bg-[var(--color-bg-secondary)] hover:opacity-90'
+                }`}
+                style={gameType === 'individual' ? accentStyle : undefined}
+              >
+                <div className="flex items-start gap-4">
+                  <UserIcon className={`w-8 h-8 flex-shrink-0 ${gameType === 'individual' ? '' : 'text-[var(--color-text-secondary)]'}`} style={gameType === 'individual' ? { color: accentHex || 'var(--color-blue-primary)' } : undefined} />
+                  <div className="flex-1">
+                    <div className="font-semibold text-lg mb-1 text-[var(--color-text-primary)]">
+                      포지션 지정 매치 (개인)
+                    </div>
+                    <p className="text-sm text-[var(--color-text-secondary)]">
+                      모르는 유저들이 경기 전 선호 포지션을 선택한 뒤, 레드팀·블루팀 2파전으로 해당 포지션에서만 경기합니다.
+                    </p>
                   </div>
-                  <p className="text-sm text-[var(--color-text-secondary)]">
-                    상세보기에서 블루팀/레드팀 전술 포지션을 열고, 참가자들이 팀과 포지션을 직접 선택합니다.
-                  </p>
+                  {gameType === 'individual' && (
+                    <span className="text-xl" style={{ color: accentHex || 'var(--color-blue-primary)' }}>✓</span>
+                  )}
                 </div>
-                {gameType === 'team' && (
-                  <span className="text-xl" style={{ color: accentHex || 'var(--color-blue-primary)' }}>✓</span>
-                )}
-              </div>
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => onGameTypeChange('individual')}
-            className={`relative p-6 rounded-xl border-2 transition-all ${
-              gameType === 'individual' && !accentHex
-                ? 'border-[var(--color-blue-primary)] bg-blue-50 dark:bg-blue-900/20'
-                : gameType !== 'individual'
-                  ? 'border-[var(--color-border-card)] bg-[var(--color-bg-secondary)]' + (!accentHex ? ' hover:border-[var(--color-blue-primary)]/50' : '')
-                  : ''
-            }`}
-            style={gameType === 'individual' && accentStyle ? accentStyle : undefined}
-          >
-            <div className="flex items-start gap-4">
-              <UserIcon className={`w-8 h-8 flex-shrink-0 ${gameType === 'individual' ? '' : 'text-[var(--color-text-secondary)]'}`} style={gameType === 'individual' ? { color: accentHex || 'var(--color-blue-primary)' } : undefined} />
-              <div className="flex-1 text-left">
-                <div className="font-semibold text-lg mb-1 text-[var(--color-text-primary)]">
-                  자유 매칭
+              </button>
+              {/* 랭크: (팀) 팀 매치 → gameType team */}
+              <button
+                type="button"
+                onClick={() => onGameTypeChange('team')}
+                className={`relative p-6 rounded-xl border-2 transition-all text-left ${
+                  gameType === 'team' ? '' : 'border-[var(--color-border-card)] bg-[var(--color-bg-secondary)] hover:opacity-90'
+                }`}
+                style={gameType === 'team' ? accentStyle : undefined}
+              >
+                <div className="flex items-start gap-4">
+                  <UserGroupIcon className={`w-8 h-8 flex-shrink-0 ${gameType === 'team' ? '' : 'text-[var(--color-text-secondary)]'}`} style={gameType === 'team' ? { color: accentHex || 'var(--color-blue-primary)' } : undefined} />
+                  <div className="flex-1">
+                    <div className="font-semibold text-lg mb-1 text-[var(--color-text-primary)]">
+                      팀 매치
+                    </div>
+                    <p className="text-sm text-[var(--color-text-secondary)]">
+                      앱에 등록된 팀끼리의 매치로 진행됩니다.
+                    </p>
+                  </div>
+                  {gameType === 'team' && (
+                    <span className="text-xl" style={{ color: accentHex || 'var(--color-blue-primary)' }}>✓</span>
+                  )}
                 </div>
-                <p className="text-sm text-[var(--color-text-secondary)]">
-                  무작위로 인원을 모집해 만난 뒤, 현장에서 포지션을 정하는 방식입니다.
-                </p>
-              </div>
-              {gameType === 'individual' && (
-                <span className="text-xl" style={{ color: accentHex || 'var(--color-blue-primary)' }}>✓</span>
+              </button>
+            </>
+          ) : (
+            <>
+              {matchType !== 'general' && (
+                <button
+                  type="button"
+                  onClick={() => onGameTypeChange('team')}
+                  className={`relative p-6 rounded-xl border-2 transition-all ${
+                    gameType === 'team' && !accentHex
+                      ? 'border-[var(--color-blue-primary)] bg-blue-50 dark:bg-blue-900/20'
+                      : gameType !== 'team'
+                        ? 'border-[var(--color-border-card)] bg-[var(--color-bg-secondary)]' + (!accentHex ? ' hover:border-[var(--color-blue-primary)]/50' : '')
+                        : ''
+                  }`}
+                  style={gameType === 'team' && accentStyle ? accentStyle : undefined}
+                >
+                  <div className="flex items-start gap-4">
+                    <UserGroupIcon className={`w-8 h-8 flex-shrink-0 ${gameType === 'team' ? '' : 'text-[var(--color-text-secondary)]'}`} style={gameType === 'team' ? { color: accentHex || 'var(--color-blue-primary)' } : undefined} />
+                    <div className="flex-1 text-left">
+                      <div className="font-semibold text-lg mb-1 text-[var(--color-text-primary)]">
+                        포지션 지정 매치
+                      </div>
+                      <p className="text-sm text-[var(--color-text-secondary)]">
+                        상세보기에서 블루팀/레드팀 전술 포지션을 열고, 참가자들이 팀과 포지션을 직접 선택합니다.
+                      </p>
+                    </div>
+                    {gameType === 'team' && (
+                      <span className="text-xl" style={{ color: accentHex || 'var(--color-blue-primary)' }}>✓</span>
+                    )}
+                  </div>
+                </button>
               )}
-            </div>
-          </button>
+
+              <button
+                type="button"
+                onClick={() => onGameTypeChange('individual')}
+                className={`relative p-6 rounded-xl border-2 transition-all ${
+                  gameType === 'individual' && !accentHex
+                    ? 'border-[var(--color-blue-primary)] bg-blue-50 dark:bg-blue-900/20'
+                    : gameType !== 'individual'
+                      ? 'border-[var(--color-border-card)] bg-[var(--color-bg-secondary)]' + (!accentHex ? ' hover:border-[var(--color-blue-primary)]/50' : '')
+                      : ''
+                }`}
+                style={gameType === 'individual' && accentStyle ? accentStyle : undefined}
+              >
+                <div className="flex items-start gap-4">
+                  <UserIcon className={`w-8 h-8 flex-shrink-0 ${gameType === 'individual' ? '' : 'text-[var(--color-text-secondary)]'}`} style={gameType === 'individual' ? { color: accentHex || 'var(--color-blue-primary)' } : undefined} />
+                  <div className="flex-1 text-left">
+                    <div className="font-semibold text-lg mb-1 text-[var(--color-text-primary)]">
+                      자유 매칭
+                    </div>
+                    <p className="text-sm text-[var(--color-text-secondary)]">
+                      무작위로 인원을 모집해 만난 뒤, 현장에서 포지션을 정하는 방식입니다.
+                    </p>
+                  </div>
+                  {gameType === 'individual' && (
+                    <span className="text-xl" style={{ color: accentHex || 'var(--color-blue-primary)' }}>✓</span>
+                  )}
+                </div>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      {/* 팀 게임 설정 — onlyMatchType이면 3단계에서 따로 보여주므로 여기서는 숨김 */}
-      {!onlyMatchType && gameType === 'team' && (
+      {/* 팀 게임 설정 — onlyMatchType이면 3단계에서 따로 보여주므로 여기서는 숨김. 랭크 매치도 다음 단계에서 처리 */}
+      {!onlyMatchType && gameType === 'team' && !isRankMatch && (
         <div className="space-y-6 pt-4 border-t border-[var(--color-border-card)]">
           {/* 모임장 포지션·팀 (축구 등 포지션 지정 매치) */}
           {category === '축구' && (
             <div className="space-y-4 p-4 bg-[var(--color-bg-secondary)] rounded-xl border border-[var(--color-border-card)]">
               <h4 className="text-sm font-semibold text-[var(--color-text-primary)]">모임장 참가 포지션</h4>
               <p className="text-xs text-[var(--color-text-secondary)]">
-                매치 생성 시 모임장이 참가할 포지션과 팀을 미리 선택합니다. 구장 그림에서 클릭해 선택할 수 있습니다.
+                매치 생성 시 모임장이 참가할 포지션과 팀을 미리 선택합니다. 구장에서 모임장 칩을 드래그해 배치하거나 빈 자리를 클릭하세요.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -275,9 +366,9 @@ const Step2GameSettings: React.FC<Step2GameSettingsProps> = ({
                 >
                   구장에서 선택
                 </button>
-                {teamSettings.creatorPositionCode && (
+                {(teamSettings.creatorPositionCode || teamSettings.creatorSlotLabel) && (
                   <span className="text-sm text-[var(--color-text-secondary)]">
-                    선택됨: {(teamSettings.creatorTeam || 'red') === 'red' ? '레드팀' : '블루팀'} {teamSettings.creatorPositionCode}
+                    선택됨: {(teamSettings.creatorTeam || 'red') === 'red' ? '레드팀' : '블루팀'} {teamSettings.creatorSlotLabel || teamSettings.creatorPositionCode}
                   </span>
                 )}
               </div>
@@ -342,24 +433,36 @@ const Step2GameSettings: React.FC<Step2GameSettingsProps> = ({
                           </button>
                         </div>
                       </div>
-                      <div className="flex-1 min-h-0 flex flex-col w-full max-w-5xl mx-auto">
-                        <div className="flex-1 min-h-0 flex items-center justify-center w-full">
-                          <FootballPitch
-                            mode="match"
-                            participants={[]}
-                            onSlotClick={(positionCode, slotLabel) => {
+                      <div className="flex-1 min-h-0 flex flex-col w-full max-w-5xl mx-auto overflow-auto">
+                        <div className="flex-1 min-h-0 flex items-center justify-center w-full p-4">
+                          <TacticalPitch
+                            value={
+                              teamSettings.creatorPositionCode || teamSettings.creatorPositionX != null
+                                ? {
+                                    x: teamSettings.creatorPositionX ?? positionToDefaultCoords(teamSettings.creatorPositionCode ?? 'MF', teamSettings.creatorSlotLabel ?? 'CM').x,
+                                    y: teamSettings.creatorPositionY ?? positionToDefaultCoords(teamSettings.creatorPositionCode ?? 'MF', teamSettings.creatorSlotLabel ?? 'CM').y,
+                                    positionCode: teamSettings.creatorPositionCode ?? 'MF',
+                                    slotLabel: teamSettings.creatorSlotLabel ?? 'CM',
+                                  }
+                                : { x: 50, y: 50, positionCode: 'MF', slotLabel: 'CM' }
+                            }
+                            onChange={(placement) => {
+                              if (!placement) return;
                               onTeamSettingsChange({
                                 ...teamSettings,
-                                creatorPositionCode: positionCode,
-                                creatorSlotLabel: slotLabel,
+                                creatorPositionCode: placement.positionCode,
+                                creatorSlotLabel: placement.slotLabel,
+                                creatorPositionX: placement.x,
+                                creatorPositionY: placement.y,
                                 creatorTeam: creatorPitchTeam,
                               });
                               setShowCreatorPitchModal(false);
                             }}
-                            isUserParticipant={false}
-                            recruitPositions={['GK', 'DF', 'MF', 'FW']}
-                            size="default"
+                            dragItemLabel="모임장"
+                            dragItemImageUrl={creatorProfileImage}
                             teamAccent={creatorPitchTeam}
+                            size="modal"
+                            leaderOnly
                           />
                         </div>
                       </div>

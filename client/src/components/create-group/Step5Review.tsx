@@ -2,6 +2,9 @@ import React from 'react';
 import { CheckCircleIcon } from '@heroicons/react/24/outline';
 import { isTeamSport } from '../../constants/sports';
 
+type MatchType = 'general' | 'rank' | 'event';
+type FreeMatchSubType = 'threeWay' | 'twoWay';
+
 interface Step5ReviewProps {
   category: string;
   name: string;
@@ -12,6 +15,9 @@ interface Step5ReviewProps {
   meetingEndTime?: string;
   maxParticipants: string;
   minParticipants: string;
+  /** 축구 3파전/2파전·랭크 시 고정 인원 표시용 */
+  matchType?: MatchType;
+  freeMatchSubType?: FreeMatchSubType | null;
   genderRestriction: 'male' | 'female' | null;
   hasFee: boolean;
   feeAmount: string;
@@ -37,6 +43,8 @@ const Step5Review: React.FC<Step5ReviewProps> = ({
   meetingEndTime,
   maxParticipants,
   minParticipants,
+  matchType,
+  freeMatchSubType,
   genderRestriction,
   hasFee,
   feeAmount,
@@ -47,6 +55,14 @@ const Step5Review: React.FC<Step5ReviewProps> = ({
   teamSettings,
 }) => {
   const isTeam = isTeamSport(category);
+
+  // 축구 3파전/2파전·랭크: 참여자 수 고정 (최소/최대 없이 무조건 해당 인원)
+  const fixedParticipantDisplay = (() => {
+    if (category !== '축구') return null;
+    if (matchType === 'rank' || freeMatchSubType === 'twoWay') return { count: 22, label: '22명 (2파전 11vs11 고정)' };
+    if (freeMatchSubType === 'threeWay') return { count: 33, label: '33명 (3파전 11명×3팀 고정)' };
+    return null;
+  })();
 
   return (
     <div className="space-y-6">
@@ -89,7 +105,9 @@ const Step5Review: React.FC<Step5ReviewProps> = ({
               <div className="flex justify-between">
                 <span className="text-[var(--color-text-secondary)]">매치 진행 방식:</span>
                 <span className="text-[var(--color-text-primary)] font-medium">
-                  {gameType === 'team' ? '포지션 지정 매치' : '자유 매칭'}
+                  {matchType === 'rank'
+                    ? (gameType === 'team' ? '팀 매치' : '포지션 지정 매치 (개인)')
+                    : (gameType === 'team' ? '포지션 지정 매치' : '자유 매칭')}
                 </span>
               </div>
               {gameType === 'team' && (
@@ -144,18 +162,29 @@ const Step5Review: React.FC<Step5ReviewProps> = ({
                 )}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--color-text-secondary)]">최소 참여자 수:</span>
-              <span className="text-[var(--color-text-primary)] font-medium">
-                {minParticipants ? `${minParticipants}명` : '(제한 없음)'}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--color-text-secondary)]">최대 참여자 수:</span>
-              <span className="text-[var(--color-text-primary)] font-medium">
-                {maxParticipants ? `${maxParticipants}명` : '(제한 없음)'}
-              </span>
-            </div>
+            {fixedParticipantDisplay ? (
+              <div className="flex justify-between">
+                <span className="text-[var(--color-text-secondary)]">참여자:</span>
+                <span className="text-[var(--color-text-primary)] font-medium">
+                  {fixedParticipantDisplay.label}
+                </span>
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-[var(--color-text-secondary)]">최소 참여자 수:</span>
+                  <span className="text-[var(--color-text-primary)] font-medium">
+                    {minParticipants ? `${minParticipants}명` : '(제한 없음)'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--color-text-secondary)]">최대 참여자 수:</span>
+                  <span className="text-[var(--color-text-primary)] font-medium">
+                    {maxParticipants ? `${maxParticipants}명` : '(제한 없음)'}
+                  </span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between">
               <span className="text-[var(--color-text-secondary)]">성별 제한:</span>
               <span className="text-[var(--color-text-primary)] font-medium">

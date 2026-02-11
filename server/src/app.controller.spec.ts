@@ -18,7 +18,7 @@ describe('AppController', () => {
     it('should return API status object', () => {
       const result = appController.getHello();
       expect(result).toEqual({
-        message: 'Ohun API Server',
+        message: 'Allcourtplay API Server',
         status: 'running',
         api: '/api',
       });

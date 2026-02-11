@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { XMarkIcon, BellIcon } from '@heroicons/react/24/outline';
 import { api } from '../utils/api';
 
@@ -6,7 +7,7 @@ interface Notification {
   id: number;
   title: string;
   message: string;
-  type: 'group_join' | 'group_leave' | 'group_closed' | 'group_deleted' | 'facility_reservation' | 'system';
+  type: 'group_join' | 'group_leave' | 'group_closed' | 'group_deleted' | 'group_cancelled' | 'group_waitlist_spot_open' | 'referee_rank_match_in_region' | 'creator_new_match' | 'new_follower' | 'facility_reservation' | 'system';
   isRead: boolean;
   createdAt: string;
   metadata?: Record<string, any>;
@@ -17,9 +18,11 @@ interface NotificationPanelProps {
 }
 
 const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: propNotifications }) => {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>(propNotifications || []);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // 백엔드에서 알림 가져오기 (읽은 알림 포함)
   const fetchNotifications = async () => {
@@ -128,9 +131,34 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
         border: 'border-red-600 dark:border-red-700',
         text: 'text-white',
       },
+      group_waitlist_spot_open: {
+        bg: 'bg-amber-500 dark:bg-amber-600',
+        border: 'border-amber-600 dark:border-amber-700',
+        text: 'text-white',
+      },
       facility_reservation: {
         bg: 'bg-blue-500 dark:bg-blue-600',
         border: 'border-blue-600 dark:border-blue-700',
+        text: 'text-white',
+      },
+      new_follower: {
+        bg: 'bg-indigo-500 dark:bg-indigo-600',
+        border: 'border-indigo-600 dark:border-indigo-700',
+        text: 'text-white',
+      },
+      referee_rank_match_in_region: {
+        bg: 'bg-purple-500 dark:bg-purple-600',
+        border: 'border-purple-600 dark:border-purple-700',
+        text: 'text-white',
+      },
+      creator_new_match: {
+        bg: 'bg-amber-500 dark:bg-amber-600',
+        border: 'border-amber-600 dark:border-amber-700',
+        text: 'text-white',
+      },
+      group_cancelled: {
+        bg: 'bg-red-500 dark:bg-red-600',
+        border: 'border-red-600 dark:border-red-700',
         text: 'text-white',
       },
       system: {
@@ -142,7 +170,33 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
     return styles[type] || styles.system;
   };
 
-  const [isExpanded, setIsExpanded] = useState(false);
+  /** 알림 클릭 시 타입·metadata에 맞는 페이지로 이동 (취소된 매치는 이동 없음) */
+  const handleNotificationClick = (n: Notification) => {
+    if (!n.isRead) markAsRead(n.id);
+    setIsExpanded(false);
+    // 취소된 매치 알림: 상세로 가지 않고 클릭 동작 없음
+    if (n.type === 'group_cancelled') return;
+    const meta = n.metadata || {};
+    switch (n.type) {
+      case 'group_join':
+      case 'group_closed':
+      case 'group_deleted':
+      case 'group_waitlist_spot_open':
+      case 'referee_rank_match_in_region':
+      case 'creator_new_match':
+        if (meta.groupId != null) {
+          navigate(`/?group=${meta.groupId}`);
+        }
+        break;
+      case 'new_follower':
+        if (meta.followerId != null) {
+          navigate('/followers', { state: { openUserId: meta.followerId } });
+        }
+        break;
+      default:
+        break;
+    }
+  };
 
   return (
     <div className="fixed top-20 left-1/2 -translate-x-1/2 md:left-auto md:translate-x-0 md:right-6 z-[9999] flex flex-row-reverse items-start md:items-start gap-2 pointer-events-none">
@@ -193,11 +247,12 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
               <div className="flex flex-col">
                 {notifications.map((notification) => {
                   const styles = getNotificationStyles(notification.type);
+                  const isCancelled = notification.type === 'group_cancelled';
                   return (
                     <div
                       key={notification.id}
-                      className={`${styles.bg} ${styles.border} ${styles.text} border-b border-t-0 border-l-0 border-r-0 last:border-b-0 p-4 flex items-start gap-3 hover:opacity-90 transition-opacity cursor-pointer ${!notification.isRead ? 'ring-2 ring-white/50' : 'opacity-80'}`}
-                      onClick={() => !notification.isRead && markAsRead(notification.id)}
+                      className={`${styles.bg} ${styles.border} ${styles.text} border-b border-t-0 border-l-0 border-r-0 last:border-b-0 p-4 flex items-start gap-3 transition-opacity ${!notification.isRead ? 'ring-2 ring-white/50' : 'opacity-80'} ${isCancelled ? 'cursor-default' : 'cursor-pointer hover:opacity-90'}`}
+                      onClick={() => handleNotificationClick(notification)}
                     >
                       <BellIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">

@@ -3,8 +3,7 @@ import { XMarkIcon, CheckCircleIcon, StarIcon } from '@heroicons/react/24/outlin
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { api } from '../utils/api';
 import { showError, showSuccess, showConfirm } from '../utils/swal';
-
-const STAR_OPTIONS = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5] as const;
+import { useAuth } from '../contexts/AuthContext';
 
 export type ReviewEligibility = {
   canReview: boolean;
@@ -25,35 +24,64 @@ type MatchReviewModalProps = {
   onSubmitted?: () => void;
 };
 
+/** 5개 별, 클릭 위치에 따라 0.5 또는 1점 단위로 입력 (왼쪽 절반 = 0.5, 오른쪽 절반 = 1) */
 const StarRating: React.FC<{
   value: number;
   onChange: (v: number) => void;
   label: string;
-}> = ({ value, onChange, label }) => (
-  <div>
-    <div className="text-sm font-medium text-[var(--color-text-primary)] mb-2">{label}</div>
-    <div className="flex items-center gap-1">
-      {STAR_OPTIONS.map((opt) => (
-        <button
-          key={opt}
-          type="button"
-          onClick={() => onChange(opt)}
-          className="p-0.5 rounded hover:bg-amber-400/20 transition-colors"
-          title={`${opt}점`}
-        >
-          {value >= opt ? (
-            <StarIconSolid className="w-8 h-8 text-amber-400" />
-          ) : (
-            <StarIcon className="w-8 h-8 text-[var(--color-text-secondary)] opacity-60" />
-          )}
-        </button>
-      ))}
+}> = ({ value, onChange, label }) => {
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>, starIndex: number) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const isLeftHalf = x < rect.width / 2;
+    const newValue = starIndex + (isLeftHalf ? 0.5 : 1);
+    onChange(Math.min(5, Math.max(0.5, newValue)));
+  };
+
+  return (
+    <div>
+      <div className="text-sm font-medium text-[var(--color-text-primary)] mb-2">{label}</div>
+      <div className="flex items-center gap-0.5">
+        {[0, 1, 2, 3, 4].map((i) => {
+          const starValue = i + 1;
+          const filled = value >= starValue;
+          const half = value >= i + 0.5 && value < starValue;
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={(e) => handleClick(e, i)}
+              className="p-0.5 rounded hover:bg-amber-400/20 transition-colors relative inline-flex"
+              title={`${i + 0.5}~${starValue}점`}
+            >
+              {filled ? (
+                <StarIconSolid className="w-8 h-8 text-amber-400" />
+              ) : half ? (
+                <span className="relative inline-block w-8 h-8 shrink-0">
+                  <StarIcon className="w-8 h-8 text-[var(--color-text-secondary)] opacity-60" />
+                  <span className="absolute left-0 top-0 h-full w-1/2 overflow-hidden">
+                    <StarIconSolid className="w-8 h-8 text-amber-400" />
+                  </span>
+                </span>
+              ) : (
+                <StarIcon className="w-8 h-8 text-[var(--color-text-secondary)] opacity-60" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <span className="text-xs text-[var(--color-text-secondary)] mt-1 block">
+        {value || 0} / 5점 (0.5단위)
+      </span>
     </div>
-    <span className="text-xs text-[var(--color-text-secondary)] mt-1 block">
-      {value || 0} / 5점 (0.5단위)
-    </span>
-  </div>
-);
+  );
+};
+
+/** 선수 리뷰에서 선택 가능한 참가자 (본인 제외) */
+const getSelectableParticipants = (
+  participants: ReviewEligibility['participants'],
+  currentUserId: number | undefined
+) => (currentUserId == null ? participants : participants.filter((p) => p.id !== currentUserId));
 
 const MatchReviewModal: React.FC<MatchReviewModalProps> = ({
   groupId,
@@ -62,12 +90,17 @@ const MatchReviewModal: React.FC<MatchReviewModalProps> = ({
   onClose,
   onSubmitted,
 }) => {
+  const { user } = useAuth();
   const [eligibility, setEligibility] = useState<ReviewEligibility | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submittingFacility, setSubmittingFacility] = useState(false);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [facilityScores, setFacilityScores] = useState({ cleanliness: 0, suitableForGame: 0, overall: 0 });
+
+  const selectableParticipants = eligibility?.participants
+    ? getSelectableParticipants(eligibility.participants, user?.id)
+    : [];
 
   useEffect(() => {
     if (!isOpen || !groupId) return;
@@ -104,10 +137,15 @@ const MatchReviewModal: React.FC<MatchReviewModalProps> = ({
     if (confirmed) onClose();
   };
 
+  /** 신고 외 항목은 필수 */
+  const requiredCategories = eligibility?.categories.filter((c) => c.key !== '신고') ?? [];
+  const isPlayerReviewComplete =
+    requiredCategories.length > 0 && requiredCategories.every((c) => answers[c.key] != null && answers[c.key] !== '');
+
   const handleSubmitPlayer = async () => {
-    if (!eligibility?.canReview || eligibility.categories.some((c) => answers[c.key] == null)) {
-      const missing = eligibility?.categories.find((c) => answers[c.key] == null);
-      await showError(missing ? `"${missing.label}" 항목을 선택해 주세요.` : '모든 항목을 선택해 주세요.', '선택 필요');
+    if (!eligibility?.canReview || !isPlayerReviewComplete) {
+      const missing = requiredCategories.find((c) => answers[c.key] == null || answers[c.key] === '');
+      await showError(missing ? `"${missing.label}" 항목을 선택해 주세요.` : '필수 항목을 모두 선택해 주세요.', '선택 필요');
       return;
     }
     setSubmitting(true);
@@ -159,11 +197,15 @@ const MatchReviewModal: React.FC<MatchReviewModalProps> = ({
     eligibility.alreadySubmitted &&
     (!eligibility.facilityId || eligibility.facilityReviewSubmitted);
 
+  /** 선수 리뷰 단계 중이면 시설 리뷰는 숨김(선수 리뷰 완료 후 다음 단계로 표시) */
+  const showPlayerReviewStep = hasPlayerReview && !eligibility?.alreadySubmitted;
+  const showFacilityReviewStep = hasFacilityReview && (eligibility?.alreadySubmitted || !hasPlayerReview);
+
   if (!isOpen) return null;
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/30"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -214,19 +256,22 @@ const MatchReviewModal: React.FC<MatchReviewModalProps> = ({
                 선수 리뷰 500P, 시설 리뷰 500P (총 1,000P)를 받을 수 있습니다.
               </p>
 
-              {hasPlayerReview && (
+              {showPlayerReviewStep && (
                 <div className="mb-6">
                   <h4 className="text-base font-semibold text-[var(--color-text-primary)] mb-3">
                     선수 리뷰 (500P)
                   </h4>
                   <p className="text-sm text-[var(--color-text-secondary)] mb-4">
-                    참가자 중에서 각 항목에 가장 어울리는 한 명을 선택해 주세요.
+                    참가자 중에서 각 항목에 가장 어울리는 한 명을 선택해 주세요. (본인 제외)
                   </p>
                   <div className="space-y-5">
                     {eligibility!.categories.map((cat) => (
                       <div key={cat.key}>
                         <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
                           {cat.label}
+                          {cat.key === '신고' && (
+                            <span className="text-xs text-[var(--color-text-secondary)] font-normal ml-1">(선택)</span>
+                          )}
                         </label>
                         <select
                           value={answers[cat.key] ?? ''}
@@ -238,8 +283,10 @@ const MatchReviewModal: React.FC<MatchReviewModalProps> = ({
                           }
                           className="w-full px-4 py-2.5 rounded-xl border border-[var(--color-border-card)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:ring-2 focus:ring-[var(--color-blue-primary)] focus:border-transparent"
                         >
-                          <option value="">선택하세요</option>
-                          {eligibility!.participants.map((p) => (
+                          <option value="">
+                            {cat.key === '신고' ? '해당 없음' : '선택하세요'}
+                          </option>
+                          {selectableParticipants.map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.nickname}
                               {p.tag ? ` ${p.tag}` : ''}
@@ -249,29 +296,28 @@ const MatchReviewModal: React.FC<MatchReviewModalProps> = ({
                       </div>
                     ))}
                   </div>
-                  {!eligibility!.alreadySubmitted && (
-                    <button
-                      type="button"
-                      onClick={handleSubmitPlayer}
-                      disabled={submitting || eligibility!.categories.some((c) => answers[c.key] == null)}
-                      className="mt-3 w-full px-4 py-2.5 rounded-xl font-semibold bg-[var(--color-blue-primary)] text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-                    >
-                      {submitting ? '저장 중...' : '선수 리뷰 제출 (500P)'}
-                    </button>
-                  )}
-                  {eligibility!.alreadySubmitted && (
-                    <div className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400 text-sm">
-                      <CheckCircleIcon className="w-4 h-4" /> 선수 리뷰 완료
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleSubmitPlayer}
+                    disabled={submitting || !isPlayerReviewComplete}
+                    className="mt-3 w-full px-4 py-2.5 rounded-xl font-semibold bg-[var(--color-blue-primary)] text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                  >
+                    {submitting ? '저장 중...' : '선수 리뷰 제출 (500P)'}
+                  </button>
                 </div>
               )}
 
-              {hasFacilityReview && (
-                <div className="mb-6">
-                  <h4 className="text-base font-semibold text-[var(--color-text-primary)] mb-3">
-                    시설 리뷰 (500P) · {eligibility!.facilityName}
-                  </h4>
+              {showFacilityReviewStep && (
+                <>
+                  {eligibility?.alreadySubmitted && hasPlayerReview && (
+                    <div className="mb-4 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400 text-sm">
+                      <CheckCircleIcon className="w-4 h-4" /> 선수 리뷰 완료 — 시설 리뷰를 작성해 주세요.
+                    </div>
+                  )}
+                  <div className="mb-6">
+                    <h4 className="text-base font-semibold text-[var(--color-text-primary)] mb-3">
+                      시설 리뷰 (500P) · {eligibility!.facilityName}
+                    </h4>
                   <p className="text-sm text-[var(--color-text-secondary)] mb-4">
                     각 항목별로 0.5~5점(0.5단위)로 별점을 선택해 주세요.
                   </p>
@@ -306,6 +352,7 @@ const MatchReviewModal: React.FC<MatchReviewModalProps> = ({
                     {submittingFacility ? '저장 중...' : '시설 리뷰 제출 (500P)'}
                   </button>
                 </div>
+                </>
               )}
 
               <div className="mt-6 flex gap-2">

@@ -224,7 +224,7 @@ const NoticePage = () => {
       )}
 
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !isSubmitting && setShowCreateModal(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30" onClick={() => !isSubmitting && setShowCreateModal(false)}>
           <div
             className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border-card)] shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}

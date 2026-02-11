@@ -20,6 +20,8 @@ interface Step2MatchScheduleProps {
   onMeetingEndDateChange?: (endDate: string) => void;
   /** true면 시간을 시 단위(오전/오후, 시)로만 선택 */
   timeStepHourOnly?: boolean;
+  /** 설정 시 종료시간을 시작+ N시간으로 고정(빠른선택 비표시, 종료시간 읽기 전용). 예: 랭크 2파전 90분 = 2 */
+  fixedDurationHours?: number;
 }
 
 function addHoursToTime(timeHHmm: string, hours: number): string {
@@ -141,20 +143,30 @@ const Step2MatchSchedule: React.FC<Step2MatchScheduleProps> = ({
   onMeetingEndTimeChange,
   onMeetingEndDateChange,
   timeStepHourOnly = false,
+  fixedDurationHours,
 }) => {
   const [durationPreset, setDurationPreset] = useState<DurationPreset | null>(() => {
+    if (fixedDurationHours != null) return null;
     if (!onMeetingEndTimeChange || !meetingTime || !meetingEndTime) return '2';
     const p = getDurationPreset(meetingTime, meetingEndTime);
     return p ?? '2';
   });
 
+  // 고정 경기 시간(예: 랭크 2시간): 시작 시간 변경 시 종료 시간·종료일 자동 반영
   useEffect(() => {
+    if (fixedDurationHours == null || !onMeetingEndTimeChange || !meetingTime || meetingTime.length < 5) return;
+    const end = addHoursToTime(meetingTime, fixedDurationHours);
+    onMeetingEndTimeChange(end);
+  }, [meetingTime, fixedDurationHours, onMeetingEndTimeChange]);
+
+  useEffect(() => {
+    if (fixedDurationHours != null) return;
     if (!onMeetingEndTimeChange || !meetingTime || meetingTime.length < 5) return;
     if (durationPreset && ['1', '2', '3', '4', '5', '6'].includes(durationPreset)) {
       const end = addHoursToTime(meetingTime, parseInt(durationPreset, 10));
       onMeetingEndTimeChange(end);
     }
-  }, [meetingTime, durationPreset, onMeetingEndTimeChange]);
+  }, [meetingTime, durationPreset, onMeetingEndTimeChange, fixedDurationHours]);
 
   // 야간(종료 시간이 오전으로 넘어가면 익일) — 종료일자 자동 설정
   // 빠른선택 +4시간 등으로 00:00 넘어가면 종료일자를 다음날로, 당일이면 당일로
@@ -205,6 +217,18 @@ const Step2MatchSchedule: React.FC<Step2MatchScheduleProps> = ({
           매치 일정
         </h3>
 
+        {/* 랭크 매치: 전후반 45분·2시간 고정 안내 */}
+        {fixedDurationHours != null && (
+          <div className="p-4 rounded-xl bg-amber-500/15 border border-amber-500/40 text-left">
+            <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+              랭크 매치는 전후반 45분, 시간 설정 없이 2시간 동안 진행됩니다.
+            </p>
+            <p className="text-xs text-[var(--color-text-secondary)] mt-1">
+              시작 시간만 선택하면 종료 시간은 자동으로 2시간 후로 설정됩니다.
+            </p>
+          </div>
+        )}
+
         {/* 수직 스택: 날짜 설정(한 줄) → 시간 설정 → 빠른 선택 */}
         <div className="space-y-6">
           {/* 일자 설정 — [ 시작 일자 ] ~ [ 종료 일자 ] 한 줄 */}
@@ -213,25 +237,31 @@ const Step2MatchSchedule: React.FC<Step2MatchScheduleProps> = ({
               일자 설정
             </label>
             <div className="flex items-center gap-3">
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 relative">
                 <input
                   type="date"
                   required
                   value={meetingDate}
                   onChange={(e) => onDateTimeChange(e.target.value || '', meetingTime)}
                   min={todayMin}
-                  className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
+                  className="w-full pl-4 pr-10 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark date-input-with-icon"
                 />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
+                  <CalendarIcon className="w-5 h-5" />
+                </span>
               </div>
               <span className="text-[var(--color-text-secondary)] font-medium shrink-0">~</span>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 relative">
                 <input
                   type="date"
                   value={meetingEndDate || meetingDate}
                   onChange={(e) => onMeetingEndDateChange?.(e.target.value || meetingDate)}
                   min={meetingDate || todayMin}
-                  className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
+                  className="w-full pl-4 pr-10 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark date-input-with-icon"
                 />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
+                  <CalendarIcon className="w-5 h-5" />
+                </span>
               </div>
             </div>
             <p className="text-xs text-[var(--color-text-secondary)]">
@@ -257,7 +287,7 @@ const Step2MatchSchedule: React.FC<Step2MatchScheduleProps> = ({
               <span className="text-[var(--color-text-secondary)] font-medium shrink-0">~</span>
               <div className="flex-1 min-w-0 flex items-center gap-2 rounded-lg border border-[var(--color-border-card)] bg-[var(--color-bg-primary)] px-3 py-2.5 focus-within:ring-2 focus-within:ring-[var(--color-blue-primary)] focus-within:border-transparent">
                 <CalendarIcon className="w-4 h-4 shrink-0 text-[var(--color-text-secondary)]" />
-                {onMeetingEndTimeChange ? (
+                {onMeetingEndTimeChange && fixedDurationHours == null ? (
                   <TimeDropdown
                     value={endTimeValue}
                     placeholder="종료 시간"
@@ -276,8 +306,8 @@ const Step2MatchSchedule: React.FC<Step2MatchScheduleProps> = ({
             </div>
           </div>
 
-          {/* 빠른 선택 — 캡슐 버튼 (+1시간 ~ +6시간) */}
-          {onMeetingEndTimeChange && (
+          {/* 빠른 선택 — 고정 경기 시간(랭크 2시간 등)이 아닐 때만 표시 */}
+          {onMeetingEndTimeChange && fixedDurationHours == null && (
             <div className="space-y-2">
               <span className="block text-xs font-medium text-[var(--color-text-secondary)] text-left">
                 빠른 선택
@@ -321,34 +351,44 @@ const Step2MatchSchedule: React.FC<Step2MatchScheduleProps> = ({
           <label className="block text-sm font-medium text-[var(--color-text-primary)] text-left">
             날짜 및 시간
           </label>
-          <input
-            type="datetime-local"
-            value={meetingDate && meetingTime ? `${meetingDate}T${meetingTime}` : ''}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value) {
-                const [date, time] = value.split('T');
-                onDateTimeChange(date || '', time || '');
-              } else {
-                onDateTimeChange('', '');
-              }
-            }}
-            min={datetimeLocalMin}
-            className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
-          />
+          <div className="relative">
+            <input
+              type="datetime-local"
+              value={meetingDate && meetingTime ? `${meetingDate}T${meetingTime}` : ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value) {
+                  const [date, time] = value.split('T');
+                  onDateTimeChange(date || '', time || '');
+                } else {
+                  onDateTimeChange('', '');
+                }
+              }}
+              min={datetimeLocalMin}
+              className="w-full pl-4 pr-10 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark date-input-with-icon"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
+              <CalendarIcon className="w-5 h-5" />
+            </span>
+          </div>
         </div>
         {onMeetingEndDateChange && (
           <div className="space-y-2">
             <label className="block text-sm font-medium text-[var(--color-text-primary)] text-left">
               종료 일자
             </label>
-            <input
-              type="date"
-              value={meetingEndDate || meetingDate}
-              onChange={(e) => onMeetingEndDateChange(e.target.value || meetingDate)}
-              min={meetingDate || todayMin}
-              className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
-            />
+            <div className="relative">
+              <input
+                type="date"
+                value={meetingEndDate || meetingDate}
+                onChange={(e) => onMeetingEndDateChange(e.target.value || meetingDate)}
+                min={meetingDate || todayMin}
+                className="w-full pl-4 pr-10 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark date-input-with-icon"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
+                <CalendarIcon className="w-5 h-5" />
+              </span>
+            </div>
           </div>
         )}
         {onMeetingEndTimeChange && (

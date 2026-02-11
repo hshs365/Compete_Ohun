@@ -22,7 +22,7 @@ const StepMatchName: React.FC<StepMatchNameProps> = ({ name, onNameChange, sugge
       <div>
         <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
           <TagIcon className="w-4 h-4 inline mr-1" />
-          매치 이름 <span className="text-red-500">*</span>
+          매치 이름 <span className="text-[var(--color-text-secondary)]">(필수)</span>
         </label>
         <input
           type="text"

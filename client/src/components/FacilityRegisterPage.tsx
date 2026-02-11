@@ -252,7 +252,8 @@ const FacilityRegisterPage = () => {
 
     if (coords) {
       setFormData((prev) => ({ ...prev, coordinates: coords!, address }));
-      setMapZoom(3);
+      // 주소 검색 후 ~300m 축척으로 확대
+      setMapZoom(11);
       setShowMap(true);
       setMapKey((k) => k + 1);
     } else {
@@ -265,7 +266,8 @@ const FacilityRegisterPage = () => {
 
   const handleMarkerDragEnd = async (lat: number, lng: number) => {
     setFormData((prev) => ({ ...prev, coordinates: [lat, lng] }));
-    setMapZoom(3);
+    // 마커 이동 시 이동된 마커 중심으로 ~300m 축척 유지
+    setMapZoom(11);
     const NAVER_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID;
     const NAVER_CLIENT_SECRET = import.meta.env.VITE_NAVER_MAP_CLIENT_SECRET;
     if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) return;
@@ -332,7 +334,7 @@ const FacilityRegisterPage = () => {
   };
 
   return (
-    <div className="flex flex-col flex-1 w-full min-h-0 bg-[var(--color-bg-primary)]">
+    <div className="flex flex-col w-full bg-[var(--color-bg-primary)]">
       <header className="flex-shrink-0 border-b border-[var(--color-border-card)] bg-[var(--color-bg-card)]">
         <div className="max-w-4xl mx-auto px-4 md:px-6 py-4">
           <Link
@@ -349,7 +351,7 @@ const FacilityRegisterPage = () => {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto max-w-4xl mx-auto w-full px-4 md:px-6 py-6">
+      <main className="max-w-4xl mx-auto w-full px-4 md:px-6 py-6">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="bg-[var(--color-bg-card)] border border-[var(--color-border-card)] rounded-2xl p-6">
             <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">시설 정보</h2>

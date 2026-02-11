@@ -42,6 +42,7 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
     residenceSido: string;
     residenceSigungu: string;
     selectedAddress: string;
+    detailAddress: string;
   }>({
     memberType: 'individual',
     termsServiceAgreed: false,
@@ -61,6 +62,7 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
     residenceSido: '',
     residenceSigungu: '',
     selectedAddress: '',
+    detailAddress: '',
   });
 
   // 사업자 회원인 경우 사업자등록번호 검증 단계 추가
@@ -274,14 +276,23 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
       return;
     }
 
+    const trimmedEmail = formData.email?.trim() ?? '';
+    if (!trimmedEmail || !/\S+@\S+\.\S+/.test(trimmedEmail)) {
+      await showError('올바른 이메일 형식을 입력해 주세요.', '이메일 오류');
+      setIsSubmitting(false);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      const fullAddress = [formData.selectedAddress, formData.detailAddress].filter(Boolean).map(s => s.trim()).join(' ').trim();
       const registerData: RegisterData = {
         realName: formData.realName,
         nickname: formData.nickname,
         gender: formData.gender,
         residenceSido: formData.residenceSido,
         residenceSigungu: (formData.residenceSigungu && formData.residenceSigungu.trim()) ? formData.residenceSigungu : formData.residenceSido,
+        residenceAddress: fullAddress || undefined,
         termsServiceAgreed: formData.termsServiceAgreed,
         termsPrivacyAgreed: formData.termsPrivacyAgreed,
         marketingConsent: formData.marketingConsent,
@@ -291,7 +302,7 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
         businessNumber: formData.memberType === 'business' ? formData.businessNumber : undefined,
       };
 
-      await register(formData.email, formData.password, registerData);
+      await register(trimmedEmail, formData.password, registerData);
       // register 함수에서 자동으로 navigate('/') 호출
     } catch (error) {
       console.error('회원가입 에러:', error);
@@ -373,9 +384,11 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
               residenceSido={formData.residenceSido}
               residenceSigungu={formData.residenceSigungu}
               selectedAddress={formData.selectedAddress}
+              detailAddress={formData.detailAddress}
               onNicknameChange={(nickname) => setFormData((prev) => ({ ...prev, nickname }))}
               onGenderChange={(gender) => setFormData((prev) => ({ ...prev, gender }))}
               onResidenceChange={(residence) => setFormData((prev) => ({ ...prev, ...residence }))}
+              onDetailAddressChange={(detailAddress) => setFormData((prev) => ({ ...prev, detailAddress }))}
             />
           );
         }
@@ -388,9 +401,11 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
             residenceSido={formData.residenceSido}
             residenceSigungu={formData.residenceSigungu}
             selectedAddress={formData.selectedAddress}
+            detailAddress={formData.detailAddress}
             onNicknameChange={(nickname) => setFormData((prev) => ({ ...prev, nickname }))}
             onGenderChange={(gender) => setFormData((prev) => ({ ...prev, gender }))}
             onResidenceChange={(residence) => setFormData((prev) => ({ ...prev, ...residence }))}
+            onDetailAddressChange={(detailAddress) => setFormData((prev) => ({ ...prev, detailAddress }))}
           />
         );
       default:
@@ -407,7 +422,7 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
             <div className="w-10 h-10 bg-[var(--color-blue-primary)] rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-xl">오</span>
             </div>
-            <div className="text-2xl font-bold text-[var(--color-text-primary)]">오운</div>
+            <div className="text-2xl font-bold text-[var(--color-text-primary)]">올코트플레이</div>
           </div>
         </div>
 

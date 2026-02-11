@@ -80,7 +80,7 @@ export class PhoneVerificationService {
       secretKey,
     });
 
-    const message = `[오운] 인증번호는 ${code}입니다. 5분 내에 입력해주세요.`;
+    const message = `[올코트플레이] 인증번호는 ${code}입니다. 5분 내에 입력해주세요.`;
 
     try {
       await axios.post(

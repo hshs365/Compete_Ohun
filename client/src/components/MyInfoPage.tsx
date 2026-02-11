@@ -26,7 +26,9 @@ import { useNavigate } from 'react-router-dom';
 import LoadingSpinner from './LoadingSpinner';
 import SportsStatisticsModal from './SportsStatisticsModal';
 import { getEarnedTitles, getCountByCategory } from '../utils/titles';
-import { getOhunRankStyle } from '../constants/ohunRank';
+import { getAllcourtplayRankStyle } from '../constants/allcourtplayRank';
+import { getFollowerGrade, getFollowerGradeBadgeStyle } from '../constants/followerGrade';
+import FormatNumber from './FormatNumber';
 
 interface UserProfileData {
   id: number;
@@ -39,6 +41,8 @@ interface UserProfileData {
   birthDate: string | null;
   residenceSido: string | null;
   residenceSigungu: string | null;
+  /** 전체 주소 (도로명/지번 + 상세주소). 회원가입/내 정보에서 저장 */
+  residenceAddress?: string | null;
   interestedSports: string[];
   sportPositions?: { sport: string; positions: string[] }[];
   skillLevel: string | null;
@@ -61,10 +65,12 @@ interface UserProfileData {
   realName?: string | null;
   athleteVerified?: boolean;
   athleteData?: { sport?: string; subSport?: string; registeredYear?: number; [key: string]: unknown } | null;
-  /** 종목별 오운 랭크 (S~F). 랭크매치 참여 후 심판이 승패 기록한 종목만 포함 */
+  /** 종목별 올코트플레이 랭크 (S~F). 랭크 매치 참여 후 심판이 승패 기록한 종목만 포함 */
   effectiveRanks?: Record<string, string>;
   /** 보유 포인트 */
   points?: number;
+  /** 내 지역 랭크매치 생성 시 심판 신청 알림 받기 */
+  notifyRefereeRankMatchInRegion?: boolean;
 }
 
 export interface PointHistoryItem {
@@ -100,6 +106,7 @@ const MyInfoPage = () => {
   const [showPointHistoryModal, setShowPointHistoryModal] = useState(false);
   const [pointHistory, setPointHistory] = useState<PointHistoryItem[]>([]);
   const [pointHistoryLoading, setPointHistoryLoading] = useState(false);
+  const [isCharging, setIsCharging] = useState(false);
   const lastFetchTimeRef = useRef<number>(0);
 
   const closeChangeBusinessNumberModal = () => {
@@ -193,22 +200,36 @@ const MyInfoPage = () => {
       setNickname(data.nickname || '');
       setPhone(data.phone || '');
       
-      // 사용자별 주소 (계정 전환 시 이전 사용자 주소가 보이지 않도록)
+      // 사용자별 주소: 1) localStorage(주소 검색으로 저장한 값) 2) 없으면 API의 residenceAddress 또는 residenceSido/residenceSigungu
       const locationKey = `userLocation_${data.id}`;
       const savedLocation = localStorage.getItem(locationKey);
+      const fromApi = (data.residenceAddress && data.residenceAddress.trim())
+        ? data.residenceAddress.trim()
+        : [data.residenceSido, data.residenceSigungu].filter(Boolean).join(' ').trim();
+
       if (savedLocation) {
         try {
           const location = JSON.parse(savedLocation);
-          if (location.address && !location.address.startsWith('위도:')) {
-            setUserLocation({ address: location.address });
+          const addr = location.address && typeof location.address === 'string' ? location.address.trim() : '';
+          if (addr && !addr.startsWith('위도:')) {
+            setUserLocation({ address: addr });
           } else {
-            setUserLocation(null);
+            // 빈 주소나 잘못된 형식이면 localStorage 제거 후 API 값 사용
+            localStorage.removeItem(locationKey);
+            if (fromApi) setUserLocation({ address: fromApi });
+            else setUserLocation(null);
           }
         } catch (e) {
-          setUserLocation(null);
+          localStorage.removeItem(locationKey);
+          if (fromApi) setUserLocation({ address: fromApi });
+          else setUserLocation(null);
         }
       } else {
-        setUserLocation(null);
+        if (fromApi) {
+          setUserLocation({ address: fromApi });
+        } else {
+          setUserLocation(null);
+        }
       }
     } catch (error) {
       console.error('사용자 정보 로드 실패:', error);
@@ -226,7 +247,7 @@ const MyInfoPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser]); // fetchUserData는 useCallback으로 안정적이므로 dependency에서 제외
 
-  // 페이지 포커스 시 데이터 새로고침 (가이드 완료 후 내정보 페이지로 이동했을 때)
+  // 페이지 포커스 시 데이터 새로고침 (가이드 완료 후 내 정보 페이지로 이동했을 때)
   // 15초 이상 경과한 경우에만 재요청 (불필요한 새로고침 방지)
   const FOCUS_REFRESH_INTERVAL_MS = 15000;
   useEffect(() => {
@@ -302,7 +323,7 @@ const MyInfoPage = () => {
   });
 
   const [isAthleteRegistering, setIsAthleteRegistering] = useState(false);
-  /** 랭크 매치 점수가 있는 종목을 시간에 따라 자동 전환 (오운 랭크 패널) */
+  /** 랭크 매치 점수가 있는 종목을 시간에 따라 자동 전환 (올코트플레이 랭크 패널) */
   const [rankCycleIndex, setRankCycleIndex] = useState(0);
 
   // 모달 배경 클릭 감지용 (드래그와 클릭 구분)
@@ -402,7 +423,7 @@ const MyInfoPage = () => {
     }
   }, [authUser, profileData]);
 
-  // 오운 랭크: 점수가 있는 종목을 일정 간격으로 자동 전환 (3초)
+  // 올코트플레이 랭크: 점수가 있는 종목을 일정 간격으로 자동 전환 (3초)
   useEffect(() => {
     const entries = Object.entries(profileData?.effectiveRanks || {});
     if (entries.length <= 1) return;
@@ -603,6 +624,18 @@ const MyInfoPage = () => {
     }
   };
 
+  const handleRefereeRankMatchNotifyChange = async (value: boolean) => {
+    if (!profileData) return;
+    try {
+      await api.put('/api/auth/me', { notifyRefereeRankMatchInRegion: value });
+      setProfileData({ ...profileData, notifyRefereeRankMatchInRegion: value });
+      showSuccess(value ? '내 지역 랭크매치 심판 알림을 켰어요.' : '내 지역 랭크매치 심판 알림을 껐어요.');
+    } catch (error) {
+      console.error('심판 알림 설정 업데이트 실패:', error);
+      showError('설정 저장에 실패했어요. 다시 시도해 주세요.');
+    }
+  };
+
   // 획득 타이틀: 참여·생성 매치 종목별 횟수 기반 (일반 + 애호가/마스터)
   const earnedTitles = (() => {
     const countByCategory = getCountByCategory(myParticipations, myCreations);
@@ -619,14 +652,30 @@ const MyInfoPage = () => {
       if (typeof window !== 'undefined' && (window as any).daum) {
         new (window as any).daum.Postcode({
           oncomplete: async (data: any) => {
-            const fullAddress = data.address; // 선택한 주소
-            
+            // 다음 API는 roadAddress/jibunAddress 사용. address만 쓰면 비어 있을 수 있음
+            let fullAddress = (data.addressType === 'R')
+              ? (data.roadAddress || data.address || '')
+              : (data.jibunAddress || data.address || '');
+            let extraAddress = '';
+            if (data.addressType === 'R') {
+              if (data.bname && data.bname !== '') extraAddress += data.bname;
+              if (data.buildingName && data.buildingName !== '') {
+                extraAddress += extraAddress ? `, ${data.buildingName}` : data.buildingName;
+              }
+              if (extraAddress) fullAddress += ` (${extraAddress})`;
+            }
+
+            if (!fullAddress.trim()) {
+              await showError('주소를 선택해 주세요.', '주소 선택');
+              return;
+            }
+
             // 주소만 저장
             try {
               setIsSavingLocation(true);
 
               const locationData = {
-                address: fullAddress,
+                address: fullAddress.trim(),
               };
 
               setUserLocation(locationData);
@@ -679,7 +728,7 @@ const MyInfoPage = () => {
   const rankEntries = Object.entries(effectiveRanks);
 
   return (
-    <div className="flex flex-col flex-1 w-full min-h-0 bg-[var(--color-bg-primary)]">
+    <div className="flex flex-col w-full bg-[var(--color-bg-primary)]">
       {/* 히어로 / 상단 (스포츠용품 페이지와 동일 톤) */}
       <header className="flex-shrink-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)]">
         <div className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-12">
@@ -687,15 +736,15 @@ const MyInfoPage = () => {
             내 정보
           </h1>
           <p className="text-[var(--color-text-secondary)] max-w-2xl">
-            프로필과 오운 랭크를 확인하고, 계정을 관리하세요.
+            프로필과 올코트플레이 랭크를 확인하고, 계정을 관리하세요.
           </p>
         </div>
       </header>
 
       <div className="max-w-4xl mx-auto w-full px-4 md:px-6 py-6 space-y-6 pb-12">
-      {/* 프로필 요약 (랭크 매치 참여 시에만 오운 랭크 패널 표시) */}
+      {/* 프로필 요약 (랭크 매치 참여 시에만 올코트플레이 랭크 패널 표시) */}
       <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] overflow-hidden shadow-sm">
-        {/* 오운 랭크 패널: 랭크 티어가 있는 사용자만 표시. 점수 있는 종목 자동 전환, 클릭 시 명예의전당 */}
+        {/* 올코트플레이 랭크 패널: 랭크 티어가 있는 사용자만 표시. 점수 있는 종목 자동 전환, 클릭 시 명예의전당 */}
         {rankEntries.length > 0 && (
           <button
             type="button"
@@ -706,14 +755,14 @@ const MyInfoPage = () => {
               <div className="flex flex-wrap items-center gap-3 min-w-0">
                 <span className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider flex items-center gap-1.5 shrink-0">
                   <TrophyIcon className="w-4 h-4 text-amber-500" />
-                  오운 랭크
+                  올코트플레이 랭크
                 </span>
                 <div className="flex items-center gap-2 min-h-[2.25rem]" key={rankCycleIndex}>
                   {(() => {
                     const [sport, rank] = rankEntries[rankCycleIndex % rankEntries.length];
                     return (
                       <span
-                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold bg-gradient-to-r ${getOhunRankStyle(rank)} shadow-sm animate-[fadeIn_0.3s_ease-out]`}
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold bg-gradient-to-r ${getAllcourtplayRankStyle(rank)} shadow-sm animate-[fadeIn_0.3s_ease-out]`}
                         title={`${sport} ${rank}랭크`}
                       >
                         <TrophyIcon className="w-4 h-4 opacity-90" />
@@ -754,16 +803,17 @@ const MyInfoPage = () => {
               </label>
             </div>
 
-            {/* 닉네임 및 정보 */}
-            <div className="flex-1 w-full md:w-auto text-center md:text-left">
-              <div className="flex items-center justify-center md:justify-start space-x-3 mb-2">
+            {/* 닉네임 및 정보 — 성격별 블록 */}
+            <div className="flex-1 w-full md:w-auto text-center md:text-left space-y-4">
+              {/* 1. 신원: 닉네임 + 태그 + 수정 */}
+              <div>
                 {isEditingNickname ? (
-                  <div className="flex items-center space-x-2 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
                     <input
                       type="text"
                       value={nickname}
                       onChange={(e) => setNickname(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                      className="flex-1 min-w-[120px] px-3 py-2 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
                       autoFocus
                     />
                     <button
@@ -783,158 +833,184 @@ const MyInfoPage = () => {
                     </button>
                   </div>
                 ) : (
-                  <>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center space-x-2 min-w-0">
-                          <h3 className="text-2xl font-bold text-[var(--color-text-primary)] truncate">
-                            {profileData.nickname || '닉네임 없음'}
-                          </h3>
-                          {profileData.tag && (
-                            <span className="text-lg text-[var(--color-text-secondary)] shrink-0">
-                              {profileData.tag}
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (profileData.nicknameChangedAt) {
-                                const threeMonthsAgo = new Date();
-                                threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-                                const lastChange = new Date(profileData.nicknameChangedAt);
-                                if (lastChange > threeMonthsAgo) {
-                                  const daysRemaining = Math.ceil(
-                                    (lastChange.getTime() + 90 * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
-                                  );
-                                  showWarning(
-                                    `닉네임은 3개월에 한 번만 변경할 수 있습니다. ${daysRemaining}일 후에 변경 가능합니다.`,
-                                    '닉네임 변경 제한'
-                                  );
-                                  return;
-                                }
-                              }
-                              setIsEditingNickname(true);
-                            }}
-                            className="p-1.5 text-[var(--color-text-secondary)] hover:text-[var(--color-blue-primary)] hover:bg-[var(--color-bg-secondary)] rounded-lg transition-colors shrink-0"
-                            title={profileData.nicknameChangedAt && (() => {
-                              const lastChange = new Date(profileData.nicknameChangedAt);
-                              const threeMonthsAgo = new Date();
-                              threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-                              if (lastChange > threeMonthsAgo) {
-                                const daysRemaining = Math.ceil(
-                                  (lastChange.getTime() + 90 * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
-                                );
-                                return `${daysRemaining}일 후 변경 가능`;
-                              }
-                              return '닉네임 변경';
-                            })()}
-                          >
-                            <PencilIcon className="w-5 h-5" />
-                          </button>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            setShowPointHistoryModal(true);
-                            setPointHistoryLoading(true);
-                            try {
-                              const list = await api.get<PointHistoryItem[]>('/api/users/my/point-history');
-                              setPointHistory(list);
-                            } catch {
-                              setPointHistory([]);
-                            } finally {
-                              setPointHistoryLoading(false);
-                            }
-                          }}
-                          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] shrink-0 hover:border-amber-500/50 hover:bg-[var(--color-bg-secondary)]/80 transition-colors cursor-pointer text-left"
-                        >
-                          <BanknotesIcon className="w-5 h-5 text-amber-500" />
-                          <span className="text-sm text-[var(--color-text-secondary)]">보유 포인트</span>
-                          <span className="text-lg font-bold text-[var(--color-text-primary)]">
-                            {(profileData.points ?? 0).toLocaleString()} P
-                          </span>
-                        </button>
-                      </div>
-                      {profileData.nicknameChangedAt && (() => {
-                      const lastChange = new Date(profileData.nicknameChangedAt);
-                      const threeMonthsAgo = new Date();
-                      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-                      const canChange = lastChange <= threeMonthsAgo;
-                      const daysRemaining = canChange ? 0 : Math.ceil(
-                        (lastChange.getTime() + 90 * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
-                      );
-                      return (
-                        <p className="text-xs text-[var(--color-text-secondary)] mt-1">
-                          {canChange ? '닉네임 변경 가능' : `${daysRemaining}일 후 변경 가능`}
-                        </p>
-                      );
-                    })()}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-2xl font-bold text-[var(--color-text-primary)] truncate">
+                      {profileData.nickname || '닉네임 없음'}
+                    </h3>
+                    {profileData.tag && (
+                      <span className="text-lg text-[var(--color-text-secondary)] shrink-0">
+                        {profileData.tag}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (profileData.nicknameChangedAt) {
+                          const threeMonthsAgo = new Date();
+                          threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+                          const lastChange = new Date(profileData.nicknameChangedAt);
+                          if (lastChange > threeMonthsAgo) {
+                            const daysRemaining = Math.ceil(
+                              (lastChange.getTime() + 90 * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
+                            );
+                            showWarning(
+                              `닉네임은 3개월에 한 번만 변경할 수 있습니다. ${daysRemaining}일 후에 변경 가능합니다.`,
+                              '닉네임 변경 제한'
+                            );
+                            return;
+                          }
+                        }
+                        setIsEditingNickname(true);
+                      }}
+                      className="p-1.5 text-[var(--color-text-secondary)] hover:text-[var(--color-blue-primary)] hover:bg-[var(--color-bg-secondary)] rounded-lg transition-colors shrink-0"
+                      title={profileData.nicknameChangedAt && (() => {
+                        const lastChange = new Date(profileData.nicknameChangedAt);
+                        const threeMonthsAgo = new Date();
+                        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+                        if (lastChange > threeMonthsAgo) {
+                          const daysRemaining = Math.ceil(
+                            (lastChange.getTime() + 90 * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
+                          );
+                          return `${daysRemaining}일 후 변경 가능`;
+                        }
+                        return '닉네임 변경';
+                      })()}
+                    >
+                      <PencilIcon className="w-5 h-5" />
+                    </button>
                   </div>
-                </>
-              )}
-            </div>
-            {/* 타이틀 뱃지: 활동 기반 획득 타이틀(일반/애호가/마스터) + 비즈니스·선수. 사업자는 '일반' 제외 */}
-            <div className="flex items-center space-x-2 text-sm flex-wrap gap-2 mt-2">
-              {earnedTitles
-                .filter((title) => !profileData.businessNumberVerified || title !== '일반')
-                .map((title) => (
-                  <span
-                    key={title}
-                    className="px-3 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full font-semibold"
-                  >
-                    {title}
-                  </span>
-                ))}
-              {profileData.businessNumberVerified && (
-                <span className="px-3 py-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-full font-semibold flex items-center gap-1">
-                  <BuildingOfficeIcon className="w-4 h-4" />
-                  비즈니스
-                </span>
-              )}
-              {profileData.isAdmin && (
-                <span className="px-3 py-1 bg-gradient-to-r from-slate-600 to-slate-700 text-white rounded-full font-semibold flex items-center gap-1" title="시설·상품 등록, 이벤트매치 개최 등 모든 기능 이용 가능">
-                  <ShieldCheckIcon className="w-4 h-4" />
-                  관리자
-                </span>
-              )}
-              {profileData.athleteVerified && (
-                <span className="px-3 py-1 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-full font-semibold flex items-center gap-1" title={profileData.athleteData?.sport ? `종목: ${profileData.athleteData.sport}` : undefined}>
-                  <TrophyIcon className="w-4 h-4" />
-                  선수
-                  {profileData.athleteData?.sport && (
-                    <span className="opacity-90 text-xs">({profileData.athleteData.sport})</span>
-                  )}
-                </span>
-              )}
-            </div>
+                )}
+                {!isEditingNickname && profileData.nicknameChangedAt && (() => {
+                  const lastChange = new Date(profileData.nicknameChangedAt);
+                  const threeMonthsAgo = new Date();
+                  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+                  const canChange = lastChange <= threeMonthsAgo;
+                  const daysRemaining = canChange ? 0 : Math.ceil(
+                    (lastChange.getTime() + 90 * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
+                  );
+                  return (
+                    <p className="text-xs text-[var(--color-text-secondary)] mt-1">
+                      {canChange ? '닉네임 변경 가능' : `${daysRemaining}일 후 변경 가능`}
+                    </p>
+                  );
+                })()}
+              </div>
 
-            {/* 가입일 및 팔로워/팔로잉 수 */}
-            <div className="mt-3 space-y-2">
-              {joinDate && (
-                <div className="text-sm text-[var(--color-text-secondary)]">
-                  가입일: {new Date(joinDate).toLocaleDateString('ko-KR')}
+              {/* 2. 포인트: 보유 포인트 + 내역 + 충전하기 (한 그룹) */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setShowPointHistoryModal(true);
+                    setPointHistoryLoading(true);
+                    try {
+                      const list = await api.get<PointHistoryItem[]>('/api/users/my/point-history');
+                      setPointHistory(list);
+                    } catch {
+                      setPointHistory([]);
+                    } finally {
+                      setPointHistoryLoading(false);
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] hover:border-amber-500/50 hover:bg-[var(--color-bg-secondary)]/80 transition-colors cursor-pointer"
+                >
+                  <BanknotesIcon className="w-5 h-5 text-amber-500 shrink-0" />
+                  <span className="text-sm text-[var(--color-text-secondary)]">보유 포인트</span>
+                  <span className="text-lg font-bold text-[var(--color-text-primary)]">
+                    {(profileData.points ?? 0).toLocaleString()} P
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isCharging}
+                  onClick={async () => {
+                    setIsCharging(true);
+                    try {
+                      const res = await api.post<{ balance: number; added: number }>('/api/users/my/charge');
+                      setProfileData((prev) => prev ? { ...prev, points: res.balance } : null);
+                      await showSuccess(`${res.added.toLocaleString()} P가 충전되었습니다.`, '포인트 충전');
+                    } catch (e) {
+                      const msg = e instanceof Error ? e.message : '포인트 충전에 실패했습니다.';
+                      await showError(msg, '충전 실패');
+                    } finally {
+                      setIsCharging(false);
+                    }
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+                >
+                  {isCharging ? '충전 중...' : '충전하기'}
+                </button>
+              </div>
+
+              {/* 3. 뱃지: 일반/비즈니스/관리자/선수 */}
+              <div className="flex flex-wrap items-center gap-2">
+                {earnedTitles
+                  .filter((title) => !profileData.businessNumberVerified || title !== '일반')
+                  .map((title) => (
+                    <span
+                      key={title}
+                      className="px-3 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full font-semibold text-sm"
+                    >
+                      {title}
+                    </span>
+                  ))}
+                {profileData.businessNumberVerified && (
+                  <span className="px-3 py-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-full font-semibold text-sm flex items-center gap-1">
+                    <BuildingOfficeIcon className="w-4 h-4" />
+                    비즈니스
+                  </span>
+                )}
+                {profileData.isAdmin && (
+                  <span className="px-3 py-1 bg-gradient-to-r from-slate-600 to-slate-700 text-white rounded-full font-semibold text-sm flex items-center gap-1" title="시설·상품 등록, 이벤트매치 개최 등 모든 기능 이용 가능">
+                    <ShieldCheckIcon className="w-4 h-4" />
+                    관리자
+                  </span>
+                )}
+                {profileData.athleteVerified && (
+                  <span className="px-3 py-1 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-full font-semibold text-sm flex items-center gap-1" title={profileData.athleteData?.sport ? `종목: ${profileData.athleteData.sport}` : undefined}>
+                    <TrophyIcon className="w-4 h-4" />
+                    선수
+                    {profileData.athleteData?.sport && (
+                      <span className="opacity-90 text-xs">({profileData.athleteData.sport})</span>
+                    )}
+                  </span>
+                )}
+              </div>
+
+              {/* 4. 메타: 가입일 + 팔로워/팔로잉 */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                {joinDate && (
+                  <span className="text-[var(--color-text-secondary)]">
+                    가입일: {new Date(joinDate).toLocaleDateString('ko-KR')}
+                  </span>
+                )}
+                <div className="flex items-center gap-4 flex-wrap">
+                  {(() => {
+                    const grade = getFollowerGrade(followStats.followers);
+                    return grade ? (
+                      <span className={`px-2.5 py-0.5 rounded-lg text-xs font-semibold border ${getFollowerGradeBadgeStyle(grade)}`}>
+                        {grade}
+                      </span>
+                    ) : null;
+                  })()}
+                  <button
+                    onClick={() => navigate('/followers')}
+                    className="flex items-center gap-1 text-[var(--color-text-primary)] hover:text-[var(--color-blue-primary)] transition-colors cursor-pointer"
+                  >
+                    <FormatNumber value={followStats.followers} className="font-semibold" />
+                    <span className="text-[var(--color-text-secondary)]">팔로워</span>
+                  </button>
+                  <button
+                    onClick={() => navigate('/followers')}
+                    className="flex items-center gap-1 text-[var(--color-text-primary)] hover:text-[var(--color-blue-primary)] transition-colors cursor-pointer"
+                  >
+                    <FormatNumber value={followStats.following} className="font-semibold" />
+                    <span className="text-[var(--color-text-secondary)]">팔로잉</span>
+                  </button>
                 </div>
-              )}
-              <div className="flex items-center space-x-4 text-sm">
-                <button
-                  onClick={() => navigate('/followers')}
-                  className="flex items-center space-x-1 text-[var(--color-text-primary)] hover:text-[var(--color-blue-primary)] transition-colors cursor-pointer"
-                >
-                  <span className="font-semibold">{followStats.followers}</span>
-                  <span className="text-[var(--color-text-secondary)]">팔로워</span>
-                </button>
-                <span className="text-[var(--color-text-secondary)]">•</span>
-                <button
-                  onClick={() => navigate('/followers')}
-                  className="flex items-center space-x-1 text-[var(--color-text-primary)] hover:text-[var(--color-blue-primary)] transition-colors cursor-pointer"
-                >
-                  <span className="font-semibold">{followStats.following}</span>
-                  <span className="text-[var(--color-text-secondary)]">팔로잉</span>
-                </button>
               </div>
             </div>
           </div>
-        </div>
         </div>
       </section>
 
@@ -1063,23 +1139,23 @@ const MyInfoPage = () => {
       {/* 연락처 정보 */}
       <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">연락처 정보</h2>
-        <div className="space-y-4">
+        <div className="divide-y divide-[var(--color-border-card)]">
           {/* 휴대전화 번호 */}
-          <div className="flex items-center justify-between py-3 border-b border-[var(--color-border-card)]">
-            <div className="flex items-center space-x-3 flex-1">
-              <PhoneIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
+          <div className="flex items-center justify-between gap-4 py-4">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <PhoneIcon className="w-5 h-5 shrink-0 text-[var(--color-text-secondary)]" />
               {isEditingPhone ? (
-                <div className="flex items-center space-x-2 flex-1">
+                <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
                   <input
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                    className="flex-1 min-w-[140px] px-3 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
                     placeholder="010-1234-5678"
                   />
                   <button
                     onClick={handlePhoneSave}
-                    className="px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-xl hover:opacity-90 transition-opacity text-sm font-medium"
+                    className="px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium shrink-0"
                   >
                     저장
                   </button>
@@ -1088,119 +1164,139 @@ const MyInfoPage = () => {
                       setPhone(profileData.phone || '');
                       setIsEditingPhone(false);
                     }}
-                    className="px-4 py-2 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-xl hover:opacity-80 transition-opacity text-sm"
+                    className="px-4 py-2 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-lg hover:opacity-80 transition-opacity text-sm shrink-0"
                   >
                     취소
                   </button>
                 </div>
               ) : (
-                <>
-                  <div>
-                    <div className="text-sm text-[var(--color-text-secondary)]">휴대전화 번호</div>
-                    <div className="text-[var(--color-text-primary)] font-medium">
-                      {profileData.phone || '등록된 전화번호 없음'}
-                    </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm text-[var(--color-text-secondary)]">휴대전화 번호</div>
+                  <div className="text-[var(--color-text-primary)] font-medium truncate">
+                    {profileData.phone || '등록된 전화번호 없음'}
                   </div>
-                  <button
-                    onClick={() => setIsEditingPhone(true)}
-                    className="ml-auto p-1 text-[var(--color-text-secondary)] hover:text-[var(--color-blue-primary)] transition-colors"
-                  >
-                    <PencilIcon className="w-5 h-5" />
-                  </button>
-                </>
+                </div>
               )}
             </div>
-          </div>
-
-          {/* 위치 정보 */}
-          <div className="pt-3 border-t border-[var(--color-border-card)]">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center space-x-3">
-                <MapPinIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-                <span className="text-[var(--color-text-primary)] font-medium">주소</span>
-              </div>
+            {!isEditingPhone && (
               <button
-                onClick={handleSearchAddress}
-                disabled={isSavingLocation}
-                className="px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                type="button"
+                onClick={() => setIsEditingPhone(true)}
+                className="p-2 shrink-0 text-[var(--color-text-secondary)] hover:text-[var(--color-blue-primary)] hover:bg-[var(--color-bg-secondary)] rounded-lg transition-colors"
+                aria-label="휴대전화 번호 수정"
               >
-                {isSavingLocation ? '저장 중...' : '주소 검색'}
+                <PencilIcon className="w-5 h-5" />
               </button>
-            </div>
-            {userLocation && userLocation.address && !userLocation.address.startsWith('위도:') ? (
-              <div className="mt-2 p-3 bg-[var(--color-bg-secondary)] rounded-lg">
-                <div className="text-sm text-[var(--color-text-secondary)] mb-1">저장된 위치</div>
-                <div className="text-[var(--color-text-primary)] font-medium">
-                  {userLocation.address}
-                </div>
-              </div>
-            ) : (
-              <div className="mt-2 text-sm text-[var(--color-text-secondary)]">
-                저장된 주소가 없습니다. '주소 검색' 버튼을 클릭하여 주소를 저장하세요.
-              </div>
             )}
           </div>
 
-          {/* 사업자번호 (사업자 회원, 가입 시 인증 완료된 경우만 표시·읽기 전용) */}
+          {/* 주소 */}
+          <div className="flex items-start justify-between gap-4 py-4">
+            <div className="flex items-start gap-3 min-w-0 flex-1">
+              <MapPinIcon className="w-5 h-5 shrink-0 text-[var(--color-text-secondary)] mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm text-[var(--color-text-secondary)] mb-1">주소</div>
+                {userLocation && userLocation.address && !userLocation.address.startsWith('위도:') ? (
+                  <div className="text-[var(--color-text-primary)] font-medium break-words">
+                    {userLocation.address}
+                  </div>
+                ) : (
+                  <div className="text-sm text-[var(--color-text-secondary)]">
+                    저장된 주소가 없습니다.
+                  </div>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleSearchAddress}
+              disabled={isSavingLocation}
+              className="px-4 py-2 shrink-0 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSavingLocation ? '저장 중...' : '변경'}
+            </button>
+          </div>
+
+          {/* 사업자번호 (사업자 회원만) */}
           {profileData.businessNumber && profileData.businessNumberVerified && (
-            <div className="pt-3 border-t border-[var(--color-border-card)]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <BuildingOfficeIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-                  <div>
-                    <div className="text-sm text-[var(--color-text-secondary)]">사업자번호</div>
-                    <div className="text-xs text-[var(--color-text-secondary)]">
-                      가입 시 인증 완료 · 체육센터/스포츠용품 등록 가능
-                    </div>
+            <div className="py-4">
+              <div className="flex items-start gap-3">
+                <BuildingOfficeIcon className="w-5 h-5 shrink-0 text-[var(--color-text-secondary)] mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm text-[var(--color-text-secondary)] mb-0.5">사업자번호</div>
+                  <div className="text-[var(--color-text-primary)] font-medium">
+                    {profileData.businessNumber}
+                  </div>
+                  <p className="text-xs text-[var(--color-text-secondary)] mt-1">
+                    가입 시 인증 완료 · 체육센터/스포츠용품 등록 가능
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowChangeBusinessNumberModal(true)}
+                      className="text-sm font-medium px-3 py-1.5 rounded-lg border border-[var(--color-border-card)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] transition-colors"
+                    >
+                      사업자번호 변경
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowFacilityRegistrationModal(true)}
+                      className="text-sm text-[var(--color-blue-primary)] hover:underline"
+                    >
+                      시설 등록 방법 보기
+                    </button>
                   </div>
                 </div>
-              </div>
-              <div className="mt-2 text-[var(--color-text-primary)] font-medium">
-                {profileData.businessNumber}
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowChangeBusinessNumberModal(true)}
-                  className="text-sm font-medium px-3 py-1.5 rounded-lg border border-[var(--color-border-card)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] transition-colors"
-                >
-                  사업자번호 변경
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowFacilityRegistrationModal(true)}
-                  className="text-sm text-[var(--color-blue-primary)] hover:underline"
-                >
-                  시설 등록 방법 보기
-                </button>
               </div>
             </div>
           )}
 
-          {/* 수신 동의 */}
-          <div className="pt-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <EnvelopeIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-                <span className="text-[var(--color-text-primary)]">이메일 마케팅 수신 동의</span>
+          {/* 이메일 마케팅 수신 동의 */}
+          <div className="flex items-center justify-between gap-4 py-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <EnvelopeIcon className="w-5 h-5 shrink-0 text-[var(--color-text-secondary)]" />
+              <div>
+                <div className="text-sm text-[var(--color-text-secondary)]">이메일 마케팅 수신 동의</div>
+                <div className="text-xs text-[var(--color-text-secondary)] mt-0.5">이벤트·혜택 소식을 이메일로 받습니다.</div>
               </div>
-              <ToggleSwitch
-                isOn={profileData.marketingEmailConsent}
-                handleToggle={() => handleMarketingConsentChange('email', !profileData.marketingEmailConsent)}
-                label=""
-              />
             </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <PhoneIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-                <span className="text-[var(--color-text-primary)]">SMS 마케팅 수신 동의</span>
+            <ToggleSwitch
+              isOn={profileData.marketingEmailConsent}
+              handleToggle={() => handleMarketingConsentChange('email', !profileData.marketingEmailConsent)}
+              label=""
+            />
+          </div>
+
+          {/* SMS 마케팅 수신 동의 */}
+          <div className="flex items-center justify-between gap-4 py-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <PhoneIcon className="w-5 h-5 shrink-0 text-[var(--color-text-secondary)]" />
+              <div>
+                <div className="text-sm text-[var(--color-text-secondary)]">SMS 마케팅 수신 동의</div>
+                <div className="text-xs text-[var(--color-text-secondary)] mt-0.5">이벤트·혜택 소식을 문자로 받습니다.</div>
               </div>
-              <ToggleSwitch
-                isOn={profileData.marketingSmsConsent}
-                handleToggle={() => handleMarketingConsentChange('sms', !profileData.marketingSmsConsent)}
-                label=""
-              />
             </div>
+            <ToggleSwitch
+              isOn={profileData.marketingSmsConsent}
+              handleToggle={() => handleMarketingConsentChange('sms', !profileData.marketingSmsConsent)}
+              label=""
+            />
+          </div>
+
+          {/* 심판 신청 알림 (내 지역 랭크매치) */}
+          <div className="flex items-center justify-between gap-4 py-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <TrophyIcon className="w-5 h-5 shrink-0 text-[var(--color-text-secondary)]" />
+              <div>
+                <div className="text-sm text-[var(--color-text-secondary)]">심판 신청 알림</div>
+                <div className="text-xs text-[var(--color-text-secondary)] mt-0.5">내가 사는 지역에 랭크매치가 생성되면 알림을 받아 심판 신청을 할 수 있어요.</div>
+              </div>
+            </div>
+            <ToggleSwitch
+              isOn={profileData.notifyRefereeRankMatchInRegion ?? false}
+              handleToggle={() => handleRefereeRankMatchNotifyChange(!(profileData.notifyRefereeRankMatchInRegion ?? false))}
+              label=""
+            />
           </div>
         </div>
       </section>
@@ -1545,7 +1641,7 @@ const MyInfoPage = () => {
 
       {/* 포인트 내역 모달 */}
       {showPointHistoryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowPointHistoryModal(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30" onClick={() => setShowPointHistoryModal(false)}>
           <div className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] shadow-xl max-w-md w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-[var(--color-border-card)]">
               <h3 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">

@@ -83,7 +83,7 @@ const RankerDetail: React.FC<RankerDetailProps> = ({ ranker, onClose }) => {
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm"
       onClick={handleOverlayClick}
     >
       <div 
@@ -118,7 +118,7 @@ const RankerDetail: React.FC<RankerDetailProps> = ({ ranker, onClose }) => {
                   {ranker.sportCategory}
                 </span>
                 <span className="text-lg font-bold">
-                  {ranker.score.toLocaleString()}점
+                  {ranker.score.toLocaleString()} RP
                 </span>
               </div>
             </div>
@@ -242,7 +242,7 @@ const RankerDetail: React.FC<RankerDetailProps> = ({ ranker, onClose }) => {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-[var(--color-text-primary)]">+{activity.score}점</p>
+                    <p className="text-sm font-bold text-[var(--color-text-primary)]">+{activity.score} RP</p>
                   </div>
                 </div>
               ))}

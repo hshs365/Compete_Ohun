@@ -9,6 +9,7 @@ import UserDetailModal from './UserDetailModal';
 import FootballPitch from './FootballPitch';
 import MatchReviewModal from './MatchReviewModal';
 import { showError, showSuccess, showInfo, showConfirm } from '../utils/swal';
+import { extractCityFromAddress, getUserCityForJoin } from '../utils/locationUtils';
 
 interface GroupDetailProps {
   group: SelectedGroup | null;
@@ -57,7 +58,7 @@ interface GroupDetailData {
   meetingTime: string | null;
   participantCount: number;
   creatorId: number;
-  /** 매치 유형: normal 일반매치(매치장 진행), rank 랭크매치(심판 시스템) */
+  /** 매치 유형: normal 일반매치(매치장 진행), rank 랭크 매치(심판 시스템) */
   type?: 'normal' | 'rank' | 'event';
   creator: {
     id: number;
@@ -70,6 +71,8 @@ interface GroupDetailData {
   participants: Participant[];
   isUserParticipant?: boolean;
   isClosed?: boolean;
+  /** 취소된 매치(최소 인원 미달 등)면 false. 취소된 매치에서는 리뷰 모달 미오픈 */
+  isActive?: boolean;
   isCompleted?: boolean;
   maxParticipants?: number | null;
   minParticipants?: number | null;
@@ -99,6 +102,10 @@ interface GroupDetailData {
   }>;
   isUserReferee?: boolean;
   isFavorited?: boolean;
+  /** 예약 대기 등록 여부 */
+  isUserOnWaitlist?: boolean;
+  /** 예약 대기 순서 (1부터) */
+  waitlistPosition?: number | null;
 }
 
 const FOOTBALL_FEE_NORMAL = 10000;
@@ -123,6 +130,50 @@ function getRequiredPoints(feeAmount: number, category: string, meetingDateTime:
   return diffDays >= 1 ? FOOTBALL_FEE_EARLY : FOOTBALL_FEE_NORMAL;
 }
 
+/** 참가·일정 변경 가능 기한(매치 시작 1시간 전)까지 남은 시간 안내 문구 */
+function getChangeDeadlineRemaining(meetingDateTime: string | null): { text: string; isPast: boolean } {
+  if (!meetingDateTime) return { text: '', isPast: true };
+  const start = new Date(meetingDateTime).getTime();
+  const deadline = start - 60 * 60 * 1000; // 서버 규칙: 1시간 전까지 취소/변경 가능
+  const now = Date.now();
+  if (now >= deadline) return { text: '참가·일정 변경 가능 기한이 지났어요.', isPast: true };
+  const diff = deadline - now;
+  const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+  const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  const minutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+  if (days > 0) return { text: `참가·일정 변경 가능 기한까지 ${days}일 ${hours}시간 남음`, isPast: false };
+  if (hours > 0) return { text: `참가·일정 변경 가능 기한까지 ${hours}시간 ${minutes}분 남음`, isPast: false };
+  return { text: `참가·일정 변경 가능 기한까지 ${minutes}분 남음`, isPast: false };
+}
+
+/** 상단 카드용: 날짜·시간 요약 (예: 2/8(수) 18:00) */
+function formatMeetingShort(meetingDateTime: string | null | undefined): string {
+  if (!meetingDateTime) return '';
+  const d = new Date(meetingDateTime);
+  const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const w = weekdays[d.getDay()];
+  const h = d.getHours();
+  const min = d.getMinutes();
+  return `${m}/${day}(${w}) ${h.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+}
+
+/** 준비물 문자열 → 아이콘 라벨 (그리드용) */
+const EQUIPMENT_ICONS: Record<string, string> = {
+  아대: '🥋',
+  축구화: '👟',
+  운동복: '👕',
+  수건: '🧻',
+  골키퍼장갑: '🧤',
+  장갑: '🧤',
+  음료: '🥤',
+  공: '⚽',
+};
+function getEquipmentIcon(name: string): string {
+  return EQUIPMENT_ICONS[name] ?? '✓';
+}
+
 const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipantChange }) => {
   const { user, checkAuth } = useAuth();
   const navigate = useNavigate();
@@ -133,6 +184,8 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
   const [creator, setCreator] = useState<{ id: number; nickname: string; tag?: string; profileImage?: string | null } | null>(null);
   const [creatorId, setCreatorId] = useState<number | null>(null);
   const [isClosed, setIsClosed] = useState(false);
+  /** 취소된 매치(최소 인원 미달 등) 여부. false면 리뷰 모달 자동 오픈 안 함 */
+  const [isActive, setIsActive] = useState(true);
   const [maxParticipants, setMaxParticipants] = useState<number | null>(null);
   const [minParticipants, setMinParticipants] = useState<number | null>(null);
   const [isCreator, setIsCreator] = useState(false);
@@ -149,6 +202,10 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
   const [showPositionModal, setShowPositionModal] = useState(false);
   /** 전술 포지션 모달에서 보는 팀 (한 팀씩 크게 보기) */
   const [positionModalTeam, setPositionModalTeam] = useState<'red' | 'blue'>('red');
+  /** 상세 페이지 인라인 포메이션에서 보는 팀 */
+  const [inlineFormationTeam, setInlineFormationTeam] = useState<'red' | 'blue'>('red');
+  /** 결제 모달에서 결제 후 참가할 포지션 (빈 슬롯 클릭 → 결제 → 해당 포지션으로 참가) */
+  const [pendingJoinPosition, setPendingJoinPosition] = useState<{ positionCode: string; team: 'red' | 'blue' } | null>(null);
   /** 이미 활동이 끝난 매치 여부 (종료된 매치는 수정/삭제/마감 불가) */
   const [isPastMatch, setIsPastMatch] = useState(false);
   const [referees, setReferees] = useState<Array<{ id: number; userId: number; user: { id: number; nickname: string; tag?: string } }>>([]);
@@ -158,6 +215,9 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
   const [isFavoriteLoading, setIsFavoriteLoading] = useState(false);
   /** 매치 유형: normal=일반(매치장 진행), rank=랭크(심판), event=이벤트 */
   const [groupType, setGroupType] = useState<'normal' | 'rank' | 'event'>('normal');
+  /** 예약 대기: 등록 여부 및 대기 순서 */
+  const [isUserOnWaitlist, setIsUserOnWaitlist] = useState(false);
+  const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null);
 
   /** 매치 10분 전 이후면 참가 신청 불가 */
   const isJoinClosedByTime =
@@ -171,12 +231,13 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
     }
   }, [group?.id, user?.id]); // user 변경 시 재요청 (로그인 후 isFavorited 갱신)
 
-  // 매치 종료 후 참가자면 리뷰 모달 자동 오픈
+  // 매치 종료 후 참가자면 리뷰 모달 자동 오픈 (취소된 매치는 제외)
   const hasAutoOpenedReview = React.useRef(false);
   useEffect(() => {
     if (
       user &&
       group &&
+      isActive &&
       isPastMatch &&
       (isParticipant || isCreator) &&
       !showReviewModal &&
@@ -185,7 +246,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
       hasAutoOpenedReview.current = true;
       setShowReviewModal(true);
     }
-  }, [user, group, isPastMatch, isParticipant, isCreator, showReviewModal]);
+  }, [user, group, isActive, isPastMatch, isParticipant, isCreator, showReviewModal]);
 
   // 결제 모달 열릴 때 사용자 포인트 새로고침
   useEffect(() => {
@@ -257,8 +318,9 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
       // 참가자 수는 백엔드의 participantCount를 그대로 사용 (백엔드에서 동기화됨)
       setParticipantCount(groupData.participantCount || (currentCreator ? 1 : 0));
       
-      // 매치 마감 상태 설정
+      // 매치 마감·활성 상태 설정 (취소된 매치: isActive false → 리뷰 모달 미오픈)
       setIsClosed(groupData.isClosed || false);
+      setIsActive((groupData as { isActive?: boolean }).isActive !== false);
       setMaxParticipants(groupData.maxParticipants || null);
       setMinParticipants(groupData.minParticipants ?? null);
       setIsCreator(user?.id === groupData.creatorId);
@@ -269,6 +331,8 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
       setIsUserReferee(groupData.isUserReferee || false);
       setIsFavorited(groupData.isFavorited ?? false);
       setGroupType(groupData.type === 'rank' || groupData.type === 'event' ? groupData.type : 'normal');
+      setIsUserOnWaitlist(groupData.isUserOnWaitlist ?? false);
+      setWaitlistPosition(groupData.waitlistPosition ?? null);
 
       // 이미 활동이 끝난 매치 여부 (종료된 매치는 수정/삭제/마감 불가)
       const ended =
@@ -335,9 +399,29 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
       return;
     }
 
+    // 타 지역 매치 확인: 내 지역(시/도)과 다르면 한 번 더 안내
+    const matchAddress = (group.location || facility?.address || '').trim();
+    if (matchAddress && user) {
+      const matchCity = extractCityFromAddress(matchAddress);
+      const userCity = getUserCityForJoin(user.id, {
+        residenceAddress: user.residenceAddress,
+        residenceSido: user.residenceSido,
+      });
+      if (matchCity && userCity && matchCity !== userCity) {
+        const confirmed = await showConfirm(
+          `${matchCity}의 매치에 참가하시겠습니까?`,
+          '타 지역 매치',
+          '참가하기',
+          '취소'
+        );
+        if (!confirmed) return;
+      }
+    }
+
     // 축구는 항상 포인트로 참가 (10,000P 또는 전일 이전 8,000P)
     const needsPayment = group?.category === '축구' || (hasFee && feeAmount && feeAmount > 0);
     if (needsPayment) {
+      setPendingJoinPosition(null);
       setShowPaymentModal(true);
       return;
     }
@@ -358,6 +442,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
     }
     const needsPayment = group?.category === '축구' || (hasFee && feeAmount && feeAmount > 0);
     if (needsPayment) {
+      setPendingJoinPosition({ positionCode, team });
       setShowPaymentModal(true);
       return false;
     }
@@ -426,8 +511,9 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
       // 참가자 수는 백엔드의 participantCount를 그대로 사용 (백엔드에서 동기화됨)
       setParticipantCount(groupData.participantCount || (currentCreator ? 1 : 0));
       
-      // 매치 마감 상태 설정
+      // 매치 마감·활성 상태 설정
       setIsClosed(groupData.isClosed || false);
+      setIsActive((groupData as { isActive?: boolean }).isActive !== false);
       setMaxParticipants(groupData.maxParticipants || null);
       setMinParticipants(groupData.minParticipants ?? null);
       setReferees(groupData.referees || []);
@@ -467,7 +553,13 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
       await showError(`보유 포인트가 부족합니다. (필요: ${required.toLocaleString()}P, 보유: ${myPoints.toLocaleString()}P)`, '포인트 부족');
       return;
     }
-    await processJoin();
+    const pending = pendingJoinPosition;
+    setPendingJoinPosition(null);
+    if (pending) {
+      await processJoin(pending.positionCode, pending.team);
+    } else {
+      await processJoin();
+    }
   };
 
   const handleLeave = async () => {
@@ -570,6 +662,44 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
     } catch (error: any) {
       const msg = error?.response?.data?.message || error?.message || '심판 신청 취소에 실패했습니다.';
       await showError(msg, '심판 신청 취소 실패');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /** 예약 대기 등록 */
+  const handleAddWaitlist = async () => {
+    if (!group || isLoading || !user) return;
+    setIsLoading(true);
+    try {
+      const res = await api.post<{ position: number }>(`/api/groups/${group.id}/waitlist`);
+      setIsUserOnWaitlist(true);
+      setWaitlistPosition(res.position);
+      await showSuccess(`예약 대기에 등록되었습니다. (대기 순서: ${res.position}번)`, '예약 대기');
+      if (onParticipantChange) onParticipantChange();
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.message || '예약 대기 등록에 실패했습니다.';
+      await showError(msg, '예약 대기 실패');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /** 예약 대기 취소 */
+  const handleRemoveWaitlist = async () => {
+    if (!group || isLoading || !user) return;
+    const confirmed = await showConfirm('예약 대기를 취소하시겠습니까?', '예약 대기 취소');
+    if (!confirmed) return;
+    setIsLoading(true);
+    try {
+      await api.delete(`/api/groups/${group.id}/waitlist`);
+      setIsUserOnWaitlist(false);
+      setWaitlistPosition(null);
+      await showSuccess('예약 대기가 취소되었습니다.', '예약 대기 취소');
+      if (onParticipantChange) onParticipantChange();
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.message || '예약 대기 취소에 실패했습니다.';
+      await showError(msg, '예약 대기 취소 실패');
     } finally {
       setIsLoading(false);
     }
@@ -880,6 +1010,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
     try {
       await api.post(`/api/users/follow/${userId}`);
       await showSuccess('팔로우했습니다.', '팔로우');
+      window.dispatchEvent(new CustomEvent('followStateChanged'));
     } catch (err) {
       console.error('팔로우 실패:', err);
       await showError(err instanceof Error ? err.message : '팔로우에 실패했습니다.', '팔로우 실패');
@@ -890,6 +1021,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
     try {
       await api.delete(`/api/users/follow/${userId}`);
       await showSuccess('언팔로우했습니다.', '언팔로우');
+      window.dispatchEvent(new CustomEvent('followStateChanged'));
     } catch (err) {
       console.error('언팔로우 실패:', err);
       await showError(err instanceof Error ? err.message : '언팔로우에 실패했습니다.', '언팔로우 실패');
@@ -911,11 +1043,16 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
     }
   };
 
+  const meetingShort = formatMeetingShort(groupMeetingDateTime);
+  const displayFee = (group?.category === '축구' || (hasFee && feeAmount && feeAmount > 0))
+    ? (group?.category === '축구' ? getRequiredPoints(FOOTBALL_FEE_NORMAL, '축구', groupMeetingDateTime).toLocaleString() : (feeAmount ?? 0).toLocaleString())
+    : null;
+
   return (
-    <div className="group-detail-panel w-full min-w-0 flex-1 flex flex-col h-full bg-[var(--color-bg-card)] border-l border-[var(--color-border-card)] shadow-xl">
+    <div className="group-detail-panel w-full min-w-0 flex-1 flex flex-col h-full bg-[var(--color-bg-card)] border-l border-[var(--color-border-card)] shadow-xl rounded-r-xl overflow-hidden">
       {/* 헤더 */}
-      <div className="sticky top-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)] p-4 flex items-center justify-between z-10 flex-shrink-0">
-        <h2 className="text-lg md:text-xl font-bold text-[var(--color-text-primary)] truncate flex-1 min-w-0">{group.name}</h2>
+      <div className="sticky top-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)] p-3 flex items-center justify-between z-10 flex-shrink-0">
+        <h2 className="text-base font-bold text-[var(--color-text-primary)] truncate flex-1 min-w-0">{group.name}</h2>
         <div className="flex items-center gap-1 flex-shrink-0">
           {user && (
             <button
@@ -943,15 +1080,15 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
         </div>
       </div>
 
-      {/* 내용 */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
-          {/* 상태 배지 (상단 고정) */}
+      {/* 내용: 스크롤 가능한 상세 (경기 정보 → 시설 → 참가자 순) */}
+      <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-4">
+          {/* 상태 배지 (상단) */}
           {isClosed && (
-            <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-red-500/10 via-red-500/5 to-transparent border border-red-500/20 p-4">
+            <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-red-500/10 via-red-500/5 to-transparent border border-red-500/20 p-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-                    <LockClosedIcon className="w-5 h-5 text-red-500" />
+                <div className="flex items-center gap-2">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center">
+                    <LockClosedIcon className="w-4 h-4 text-red-500" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2 mb-1">
@@ -969,48 +1106,52 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
             </div>
           )}
 
-          {/* 기본 정보 */}
-          <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 mt-0.5">
-              <MapPinIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-              </div>
-              <span className="text-[var(--color-text-primary)] font-medium leading-relaxed">{group.location}</span>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--color-bg-secondary)] rounded-lg">
-                <UsersIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
-                <span className="text-sm text-[var(--color-text-secondary)]">
-                  <span className="font-semibold text-[var(--color-text-primary)]">
-                    {minParticipants != null
-                      ? `${participantCount}/${minParticipants}`
-                      : participantCount + '명'}
-                  </span>
-                  {minParticipants == null && maxParticipants && (
-                    <>
-                      <span className="mx-1 text-[var(--color-text-secondary)]">/</span>
-                      <span className="text-[var(--color-text-secondary)]">{maxParticipants}명</span>
-                    </>
-                  )}
+          {/* 상단 히어로 카드: 제목·날짜·장소·참가비 한눈에 (컴팩트) */}
+          <div className="rounded-xl border border-[var(--color-border-card)] bg-[var(--color-bg-secondary)] p-3 space-y-2 shadow-sm">
+            <h3 className="text-sm font-bold text-[var(--color-text-primary)] leading-tight truncate">{group.name}</h3>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+              {meetingShort && (
+                <span className="flex items-center gap-1 text-[var(--color-text-primary)] font-medium">
+                  <span className="text-[var(--color-text-secondary)]">날짜·시간</span>
+                  <span>{meetingShort}</span>
                 </span>
-              </div>
-              
-              {group.category && (
-                <span className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg shadow-sm">
+              )}
+              <span className="flex items-center gap-1 text-[var(--color-text-primary)] min-w-0">
+                <MapPinIcon className="w-3.5 h-3.5 flex-shrink-0 text-[var(--color-text-secondary)]" />
+                <span className="truncate">{group.location}</span>
+              </span>
+            </div>
+            {(displayFee != null || group.category || participantCount != null) && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-[var(--color-border-card)]">
+                {displayFee != null && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-orange-500/15 text-orange-600 dark:text-orange-400 font-semibold text-xs">
+                    <CurrencyDollarIcon className="w-3.5 h-3.5" />
+                    {displayFee}P
+                  </span>
+                )}
+                {group.category && (
+                  <span className="px-2 py-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-semibold rounded-md">
                     {group.category}
                   </span>
-              )}
-            </div>
+                )}
+                <span className="flex items-center gap-1 px-2 py-1 bg-[var(--color-bg-primary)] rounded-md border border-[var(--color-border-card)] text-xs">
+                  <UsersIcon className="w-3.5 h-3.5 text-[var(--color-text-secondary)]" />
+                  <span className="font-semibold text-[var(--color-text-primary)]">
+                    {minParticipants != null ? `${participantCount}/${minParticipants}` : participantCount + '명'}
+                    {minParticipants == null && maxParticipants ? ` / ${maxParticipants}명` : ''}
+                  </span>
+                </span>
+              </div>
+            )}
           </div>
 
           {/* 상세 정보 */}
-          <div className="border-t border-[var(--color-border-card)] pt-6">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-1 h-5 bg-gradient-to-b from-blue-500 to-blue-600 rounded-full"></div>
-              <h3 className="text-base font-bold text-[var(--color-text-primary)]">상세 정보</h3>
+          <div className="border-t border-[var(--color-border-card)] pt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-gradient-to-b from-blue-500 to-blue-600 rounded-full"></div>
+              <h3 className="text-sm font-bold text-[var(--color-text-primary)]">상세 정보</h3>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2 text-sm">
               {group.description && (
                 <p className="text-[var(--color-text-primary)] leading-relaxed">{group.description}</p>
               )}
@@ -1020,6 +1161,18 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
                   <span className="font-semibold text-[var(--color-text-primary)]">{group.meetingTime}</span>
                 </div>
               )}
+              {groupMeetingDateTime && (() => {
+                const { text, isPast } = getChangeDeadlineRemaining(groupMeetingDateTime);
+                if (!text) return null;
+                return (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-[var(--color-text-secondary)]">변경 가능 기한:</span>
+                    <span className={isPast ? 'text-[var(--color-text-secondary)]' : 'font-medium text-[var(--color-text-primary)]'}>
+                      {text}
+                    </span>
+                  </div>
+                );
+              })()}
               {group.contact && (
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-[var(--color-text-secondary)]">문의:</span>
@@ -1029,32 +1182,103 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
             </div>
           </div>
 
-          {/* 전술 포지션: 랭크/이벤트매치에서만 표시 (일반매치는 자유매치로 매치장 오더 하 진행) */}
-          {groupType !== 'normal' && gameSettings?.gameType === 'team' && group.category === '축구' && (
-            <div className="border-t border-[var(--color-border-card)] pt-6">
-              <h3 className="text-base font-bold text-[var(--color-text-primary)] mb-2">전술 포지션</h3>
-              <p className="text-sm text-[var(--color-text-secondary)] mb-3">
-                포지션 확인 버튼을 누르면 구장을 볼 수 있으며, 빈 자리를 클릭하면 해당 포지션으로 참가할 수 있습니다.
-              </p>
-              <button
-                type="button"
-                onClick={() => setShowPositionModal(true)}
-                className="w-full py-3 px-4 rounded-lg border-2 border-[var(--color-blue-primary)] text-[var(--color-blue-primary)] font-medium hover:bg-[var(--color-blue-primary)]/10 transition-colors flex items-center justify-center gap-2"
-              >
-                <UserGroupIcon className="w-5 h-5" />
-                포지션 확인
-              </button>
-            </div>
-          )}
-
-          {/* 랭크매치 전용: 게임 설정 (포지션 지정 등) */}
-          {groupType === 'rank' && gameSettings && (
-            <div className="border-t border-[var(--color-border-card)] pt-6">
-              <div className="flex items-center gap-2 mb-4">
-                <UserGroupIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-                <h3 className="text-base font-bold text-[var(--color-text-primary)]">게임 설정</h3>
+          {/* 전술 포지션: 랭크/이벤트매치 — 상세에서 포메이션 보기·빈 자리 클릭으로 참가 */}
+          {groupType !== 'normal' && gameSettings?.gameType === 'team' && group.category === '축구' && (() => {
+            const withTeam = participants.map((p) => ({
+              userId: p.userId,
+              nickname: p.user.nickname,
+              tag: p.user.tag,
+              positionCode: p.positionCode ?? null,
+              slotLabel: p.slotLabel ?? null,
+              isCreator: p.userId === creatorId,
+              team: (p.team ?? 'red') as 'red' | 'blue',
+              profileImageUrl: getProfileImage(p.user.id, p.user.profileImage),
+              rankScore: p.user.totalScore ?? null,
+              positionWinRate: null as number | null,
+            }));
+            if (creatorId && creator && !withTeam.some((p) => p.userId === creatorId)) {
+              const creatorScore = (creator as { totalScore?: number }).totalScore ?? participants.find((p) => p.userId === creatorId)?.user?.totalScore ?? null;
+              withTeam.push({
+                userId: creatorId,
+                nickname: creator.nickname,
+                tag: creator.tag,
+                positionCode: null,
+                slotLabel: null,
+                isCreator: true,
+                team: 'red',
+                profileImageUrl: getProfileImage(creatorId, creator.profileImage ?? (creator as { profileImageUrl?: string | null }).profileImageUrl),
+                rankScore: creatorScore,
+                positionWinRate: null as number | null,
+              });
+            }
+            const redList = withTeam.filter((p) => p.team === 'red').map(({ team: _t, ...rest }) => rest);
+            const blueList = withTeam.filter((p) => p.team === 'blue').map(({ team: _t, ...rest }) => rest);
+            const recruitPositions = gameSettings.positions?.length ? gameSettings.positions : ['GK', 'DF', 'MF', 'FW'];
+            const inlineList = inlineFormationTeam === 'red' ? redList : blueList;
+            return (
+              <div className="border-t border-[var(--color-border-card)] pt-4">
+                <h3 className="text-sm font-bold text-[var(--color-text-primary)] mb-1.5">전술 포지션</h3>
+                <p className="text-xs text-[var(--color-text-secondary)] mb-2">
+                  &quot;내 포지션&quot; 칩을 드래그해 빈 자리에 놓거나, 빈 자리를 클릭하면 해당 포지션으로 참가할 수 있습니다. (참가비 결제 후 확정)
+                </p>
+                <div className="flex gap-1 p-1 rounded-lg bg-[var(--color-bg-primary)] w-fit mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setInlineFormationTeam('red')}
+                    className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+                    style={{
+                      background: inlineFormationTeam === 'red' ? 'rgba(199,54,54,0.25)' : 'transparent',
+                      color: inlineFormationTeam === 'red' ? '#fca5a5' : 'var(--color-text-secondary)',
+                    }}
+                  >
+                    레드팀
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInlineFormationTeam('blue')}
+                    className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors"
+                    style={{
+                      background: inlineFormationTeam === 'blue' ? 'rgba(59,108,184,0.25)' : 'transparent',
+                      color: inlineFormationTeam === 'blue' ? '#93c5fd' : 'var(--color-text-secondary)',
+                    }}
+                  >
+                    블루팀
+                  </button>
+                </div>
+                <div className="w-full rounded-lg overflow-visible border border-[var(--color-border-card)] bg-[var(--color-bg-primary)] min-h-[260px] flex items-center justify-center">
+                  <FootballPitch
+                    mode="match"
+                    participants={inlineList}
+                    onSlotClick={(pos, _slotLabel) => handleSlotClickWithConfirm(pos, inlineFormationTeam)}
+                    isUserParticipant={isParticipant}
+                    recruitPositions={recruitPositions}
+                    size="default"
+                    teamAccent={inlineFormationTeam}
+                    enableDragDrop={!isParticipant && !!user}
+                    dragItemLabel="내 포지션"
+                    dragItemImageUrl={user ? getProfileImage(user.id, (user as { profileImage?: string | null }).profileImage ?? (user as { profileImageUrl?: string | null }).profileImageUrl) : null}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPositionModal(true)}
+                  className="mt-2 w-full py-2 px-3 rounded-lg border border-[var(--color-border-card)] text-[var(--color-text-secondary)] text-xs font-medium hover:bg-[var(--color-bg-secondary)] transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <UserGroupIcon className="w-4 h-4" />
+                  크게 보기
+                </button>
               </div>
-              <div className="space-y-3">
+            );
+          })()}
+
+          {/* 랭크 매치 전용: 게임 설정 */}
+          {groupType === 'rank' && gameSettings && (
+            <div className="border-t border-[var(--color-border-card)] pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <UserGroupIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
+                <h3 className="text-sm font-bold text-[var(--color-text-primary)]">게임 설정</h3>
+              </div>
+              <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-[var(--color-text-secondary)]">매치 진행 방식:</span>
                   <span className="font-semibold text-[var(--color-text-primary)]">
@@ -1105,21 +1329,22 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
             </div>
           )}
 
-          {/* 준비물 정보 */}
+          {/* 준비물: 아이콘 그리드 (컴팩트) */}
           {group.equipment && group.equipment.length > 0 && (
-            <div className="border-t border-[var(--color-border-card)] pt-6">
-              <div className="flex items-center gap-2 mb-4">
-                <WrenchScrewdriverIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-                <h3 className="text-base font-bold text-[var(--color-text-primary)]">준비물</h3>
+            <div className="border-t border-[var(--color-border-card)] pt-4">
+              <div className="flex items-center gap-2 mb-2">
+                <WrenchScrewdriverIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
+                <h3 className="text-sm font-bold text-[var(--color-text-primary)]">준비물</h3>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {group.equipment.map((item, index) => (
-                  <span
+                  <div
                     key={index}
-                    className="px-3 py-1.5 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] text-sm font-medium rounded-lg border border-[var(--color-border-card)]"
+                    className="flex flex-col items-center justify-center p-2 rounded-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)]"
                   >
-                    {item}
-                  </span>
+                    <span className="text-lg mb-0.5" aria-hidden>{getEquipmentIcon(item)}</span>
+                    <span className="text-xs font-medium text-[var(--color-text-primary)] text-center truncate w-full">{item}</span>
+                  </div>
                 ))}
               </div>
             </div>
@@ -1127,10 +1352,10 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
 
           {/* 시설 정보 */}
           {(facility || provisionalFacilities.length > 0) && (
-            <div className="border-t border-[var(--color-border-card)] pt-6">
-              <div className="flex items-center gap-2 mb-4">
-                <BuildingOfficeIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-                <h3 className="text-base font-bold text-[var(--color-text-primary)]">시설</h3>
+            <div className="border-t border-[var(--color-border-card)] pt-4">
+              <div className="flex items-center gap-2 mb-2">
+                <BuildingOfficeIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
+                <h3 className="text-sm font-bold text-[var(--color-text-primary)]">시설</h3>
               </div>
               {facility ? (
                 <div className="rounded-xl border border-[var(--color-border-card)] overflow-hidden bg-[var(--color-bg-secondary)]">
@@ -1148,9 +1373,9 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
                       </div>
                     )}
                   </div>
-                  <div className="p-4">
+                  <div className="p-3">
                     <span className="text-xs font-semibold text-green-600 dark:text-green-400">시설 확정</span>
-                    <div className="text-base font-semibold text-[var(--color-text-primary)] mt-0.5">{facility.name}</div>
+                    <div className="text-sm font-semibold text-[var(--color-text-primary)] mt-0.5">{facility.name}</div>
                     <div className="text-sm text-[var(--color-text-secondary)] mt-1">{facility.address}</div>
                     {facility.type && <div className="text-xs text-[var(--color-text-secondary)] mt-0.5">{facility.type}</div>}
                   </div>
@@ -1202,7 +1427,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
                               </>
                             )}
                           </div>
-                          <div className="p-4">
+                          <div className="p-3">
                             <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">가계약 시설 (인원 마감 시 1→2→3순위로 확정)</span>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-bold">{p.priority}순위</span>
@@ -1222,13 +1447,13 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
 
           {/* 참가비 (별도 섹션) */}
           {(group?.category === '축구' || (hasFee && feeAmount && feeAmount > 0)) && (
-            <div className="border-t border-[var(--color-border-card)] pt-6">
-              <div className="flex items-center gap-2 mb-4">
-                <CurrencyDollarIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-                <h3 className="text-base font-bold text-[var(--color-text-primary)]">참가비</h3>
+            <div className="border-t border-[var(--color-border-card)] pt-4">
+              <div className="flex items-center gap-2 mb-2">
+                <CurrencyDollarIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
+                <h3 className="text-sm font-bold text-[var(--color-text-primary)]">참가비</h3>
               </div>
-              <div className="p-3 bg-[var(--color-bg-secondary)] rounded-lg border border-[var(--color-border-card)]">
-                <div className="text-lg text-[var(--color-text-primary)] font-bold">
+              <div className="p-2 bg-[var(--color-bg-secondary)] rounded-lg border border-[var(--color-border-card)]">
+                <div className="text-base text-[var(--color-text-primary)] font-bold">
                   {group?.category === '축구'
                     ? getRequiredPoints(FOOTBALL_FEE_NORMAL, '축구', groupMeetingDateTime).toLocaleString()
                     : (feeAmount ?? 0).toLocaleString()}P
@@ -1242,12 +1467,12 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
             </div>
           )}
 
-          {/* 참가자 목록 (일반매치는 단일 목록, 랭크/이벤트 포지션 매치일 때만 레드/블루 구분) */}
-          <div className="border-t border-[var(--color-border-card)] pt-6">
-            <div className="flex flex-wrap items-center gap-3 mb-4">
-              <div className="flex items-center gap-2">
-                <UsersIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-                <h3 className="text-base font-bold text-[var(--color-text-primary)]">
+          {/* 참가자: 프로필 아이콘 가로 스크롤 + 명단 */}
+          <div className="border-t border-[var(--color-border-card)] pt-4">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <div className="flex items-center gap-1.5">
+                <UsersIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
+                <h3 className="text-sm font-bold text-[var(--color-text-primary)]">
                   참가자
                   {minParticipants != null ? (
                     <span className="text-sm font-normal text-[var(--color-text-secondary)] ml-1">
@@ -1270,11 +1495,64 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
                 </div>
               )}
             </div>
+            {/* 프로필 아이콘 가로 스크롤 (컴팩트) */}
+            <div className="flex gap-2 overflow-x-auto pb-1.5 mb-3 scrollbar-thin">
+              {creator && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const creatorParticipant = participants.find((p) => p.userId === creatorId);
+                    const base = creatorParticipant
+                      ? { ...creatorParticipant, isCreator: true, isRanker: !!(creatorParticipant?.user?.skillLevel === 'advanced'), rank: undefined, score: undefined, sportCategory: group?.category || '전체' }
+                      : { id: 0, userId: creator.id, user: { id: creator.id, nickname: creator.nickname, tag: creator.tag, profileImage: creator.profileImage, totalScore: (creator as { totalScore?: number }).totalScore }, status: '', joinedAt: '', isCreator: true, isRanker: false, sportCategory: group?.category || '전체' } as Participant;
+                    setSelectedParticipant(base);
+                  }}
+                  className="flex-shrink-0 flex flex-col items-center gap-0.5 group"
+                >
+                  <div className="relative">
+                    {getProfileImage(creator.id, creator.profileImage) ? (
+                      <img src={getProfileImage(creator.id, creator.profileImage)!} alt={creator.nickname} className="w-10 h-10 rounded-full object-cover border-2 border-amber-400/60 group-hover:ring-2 group-hover:ring-amber-400/50" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-[var(--color-text-primary)] font-semibold text-sm border-2 border-amber-400/40">{(creator.nickname || '?').charAt(0)}</div>
+                    )}
+                    <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-amber-500 flex items-center justify-center">
+                      <StarIconSolid className="w-2 h-2 text-white" />
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-medium text-[var(--color-text-primary)] truncate max-w-14">매치장</span>
+                </button>
+              )}
+              {participants.filter((p) => p.userId !== creatorId).map((participant) => {
+                const isCreatorP = participant.userId === creatorId;
+                const isRanker = participant.user?.skillLevel === 'advanced';
+                const profileImage = getProfileImage(participant.user.id, participant.user.profileImage);
+                return (
+                  <button
+                    key={participant.id}
+                    type="button"
+                    onClick={() => setSelectedParticipant({ ...participant, isCreator: !!isCreatorP, isRanker: !!isRanker, rank: isRanker ? (participant.userId % 15) + 1 : undefined, score: isRanker ? 5000 + (participant.userId * 100) : undefined, sportCategory: group?.category || '전체' })}
+                    className="flex-shrink-0 flex flex-col items-center gap-0.5 group"
+                  >
+                    <div className="relative">
+                      {profileImage ? (
+                        <img src={profileImage} alt={participant.user.nickname} className="w-10 h-10 rounded-full object-cover border-2 border-[var(--color-border-card)] group-hover:ring-2 group-hover:ring-[var(--color-blue-primary)]/50" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-[var(--color-blue-primary)]/20 flex items-center justify-center text-white font-semibold text-sm border-2 border-[var(--color-border-card)]">{(participant.user.nickname || '?').charAt(0)}</div>
+                      )}
+                      {isRanker && (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-amber-500 flex items-center justify-center text-[8px]">🏆</span>
+                      )}
+                    </div>
+                    <span className="text-[10px] font-medium text-[var(--color-text-primary)] truncate max-w-14">{participant.user.nickname}</span>
+                  </button>
+                );
+              })}
+            </div>
             {groupType !== 'normal' && gameSettings?.gameType === 'team' ? (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {/* 레드팀 */}
                 <div>
-                  <h4 className="text-sm font-semibold text-red-600 dark:text-red-400 mb-2 flex items-center gap-2">
+                  <h4 className="text-xs font-semibold text-red-600 dark:text-red-400 mb-1.5 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-red-500" /> 레드팀
                   </h4>
                   <div className="space-y-2">
@@ -1289,7 +1567,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
                 </div>
                 {/* 블루팀 */}
                 <div>
-                  <h4 className="text-sm font-semibold text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-2">
+                  <h4 className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1.5 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-blue-500" /> 블루팀
                   </h4>
                   <div className="space-y-2">
@@ -1319,18 +1597,18 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
             )}
           </div>
 
-          {/* 랭크매치: 심판 신청 블록 | 일반/이벤트매치: 게임 설정·매치 진행 통합 (자유매치 + 심판 안내) */}
+          {/* 랭크 매치: 심판 | 일반/이벤트: 게임 진행 안내 */}
           {groupType === 'rank' ? (
-            <div className="border-t border-[var(--color-border-card)] pt-6">
-              <div className="flex items-center gap-2 mb-4">
-                <ClipboardDocumentCheckIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-                <h3 className="text-base font-bold text-[var(--color-text-primary)]">심판</h3>
+            <div className="border-t border-[var(--color-border-card)] pt-4">
+              <div className="flex items-center gap-2 mb-2">
+                <ClipboardDocumentCheckIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
+                <h3 className="text-sm font-bold text-[var(--color-text-primary)]">심판</h3>
               </div>
-              <p className="text-sm text-[var(--color-text-secondary)] mb-3">
+              <p className="text-xs text-[var(--color-text-secondary)] mb-2">
                 경기 시작·종료 안내 및 결과 기록을 담당합니다. 심판은 경기에 참가할 수 없으며, 포인트가 지급됩니다.
               </p>
               {referees.length > 0 ? (
-                <div className="space-y-2 mb-4">
+                <div className="space-y-1.5 mb-2">
                   {referees.map((r) => (
                     <div
                       key={r.id}
@@ -1345,7 +1623,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-[var(--color-text-secondary)] py-2 mb-4">아직 심판 신청자가 없습니다.</p>
+                <p className="text-xs text-[var(--color-text-secondary)] py-1 mb-2">아직 심판 신청자가 없습니다.</p>
               )}
               {user && !isParticipant && (
                 isUserReferee ? (
@@ -1373,12 +1651,12 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
               )}
             </div>
           ) : (
-            <div className="border-t border-[var(--color-border-card)] pt-6">
-              <div className="flex items-center gap-2 mb-3">
-                <UserGroupIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-                <h3 className="text-base font-bold text-[var(--color-text-primary)]">게임 설정 · 매치 진행</h3>
+            <div className="border-t border-[var(--color-border-card)] pt-4">
+              <div className="flex items-center gap-2 mb-2">
+                <UserGroupIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
+                <h3 className="text-sm font-bold text-[var(--color-text-primary)]">게임 설정 · 매치 진행</h3>
               </div>
-              <div className="space-y-3 text-sm text-[var(--color-text-secondary)]">
+              <div className="space-y-1.5 text-xs text-[var(--color-text-secondary)]">
                 <p>
                   자유 매칭입니다. 인원이 모이면 매치장의 오더 아래 자유롭게 진행합니다.
                 </p>
@@ -1389,12 +1667,12 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
             </div>
           )}
 
-          {/* 매치장 전용 제어 버튼 (이미 종료된 매치에서는 숨김) */}
+          {/* 매치장 전용 제어 버튼 */}
           {isCreator && (
-            <div className="border-t border-[var(--color-border-card)] pt-6 space-y-3">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-1 h-5 bg-gradient-to-b from-blue-500 to-blue-600 rounded-full"></div>
-                <h3 className="text-base font-bold text-[var(--color-text-primary)]">매치 관리</h3>
+            <div className="border-t border-[var(--color-border-card)] pt-4 space-y-2">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1 h-4 bg-gradient-to-b from-blue-500 to-blue-600 rounded-full"></div>
+                <h3 className="text-sm font-bold text-[var(--color-text-primary)]">매치 관리</h3>
               </div>
               {isPastMatch ? (
                 <p className="text-sm text-[var(--color-text-secondary)] py-2">
@@ -1437,73 +1715,94 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
             </div>
           )}
 
-          {/* 액션 버튼 */}
-          <div className="flex flex-wrap gap-2.5 pt-6 border-t border-[var(--color-border-card)]">
-            {isCreator ? (
-              <>
-                <div className="flex-1 min-w-[120px] px-4 py-3 bg-gradient-to-r from-blue-500/10 to-blue-600/10 border border-blue-500/20 text-blue-500 rounded-lg font-semibold flex items-center justify-center gap-2">
-                  <StarIconSolid className="w-5 h-5" />
-                  <span>매치장</span>
-                </div>
-                {isPastMatch && (
+          {/* 액션 버튼 (스크롤 영역 내 보조) */}
+          <div className="flex flex-wrap gap-2 pt-4 border-t border-[var(--color-border-card)]">
+            {isCreator && (
+              <div className="flex-1 min-w-[80px] px-3 py-2 bg-gradient-to-r from-blue-500/10 to-blue-600/10 border border-blue-500/20 text-blue-500 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5">
+                <StarIconSolid className="w-4 h-4" />
+                <span>매치장</span>
+              </div>
+            )}
+            <button onClick={handleShare} className="px-3 py-2 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-lg text-sm font-semibold hover:bg-[var(--color-bg-card)] transition-colors border border-[var(--color-border-card)]">
+              공유하기
+            </button>
+          </div>
+      </div>
+
+      {/* 하단 스티키: 참가 신청하기 (컴팩트) */}
+      <div className="sticky bottom-0 left-0 right-0 flex-shrink-0 p-3 bg-[var(--color-bg-card)] border-t border-[var(--color-border-card)] rounded-t-xl shadow-[0_-2px_8px_rgba(0,0,0,0.06)] dark:shadow-[0_-2px_8px_rgba(0,0,0,0.2)]">
+        <div className="flex flex-col gap-1.5">
+          {isCreator ? (
+            <>
+              {!isPastMatch && group && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/match-entry/${group.id}`)}
+                  className="w-full py-2.5 px-3 rounded-lg text-sm font-semibold bg-[var(--color-blue-primary)] text-white hover:opacity-90 transition-colors"
+                >
+                  매치 입장하기
+                </button>
+              )}
+              {isPastMatch && (
+                <button type="button" onClick={() => setShowReviewModal(true)} className="w-full py-2.5 px-3 rounded-lg text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-colors flex items-center justify-center gap-1.5">
+                  <PencilSquareIcon className="w-4 h-4" /> 리뷰 작성
+                </button>
+              )}
+            </>
+          ) : isParticipant ? (
+            <>
+              {!isPastMatch && (
+                <>
                   <button
                     type="button"
-                    onClick={() => setShowReviewModal(true)}
-                    className="flex-1 min-w-[120px] px-4 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg font-semibold shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2"
+                    onClick={() => group && navigate(`/match-entry/${group.id}`)}
+                    className="w-full py-2.5 px-3 rounded-lg text-sm font-semibold bg-[var(--color-blue-primary)] text-white hover:opacity-90 transition-colors"
                   >
-                    <PencilSquareIcon className="w-5 h-5" />
-                    리뷰 작성
+                    매치 입장하기
                   </button>
-                )}
-              </>
-            ) : isParticipant ? (
-              <>
-                {!isPastMatch && (
-                  <button
-                    onClick={handleLeave}
-                    disabled={isLoading || isClosed}
-                    className="flex-1 min-w-[120px] px-4 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
+                  <button onClick={handleLeave} disabled={isLoading || isClosed} className="w-full py-2.5 px-3 rounded-lg text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     {isLoading ? '처리 중...' : '매치 나가기'}
                   </button>
-                )}
-                {isPastMatch && (
-                  <button
-                    type="button"
-                    onClick={() => setShowReviewModal(true)}
-                    className="flex-1 min-w-[120px] px-4 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-lg font-semibold shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2"
-                  >
-                    <PencilSquareIcon className="w-5 h-5" />
-                    리뷰 작성
-                  </button>
-                )}
-              </>
-            ) : (
+                </>
+              )}
+              {isPastMatch && (
+                <button type="button" onClick={() => setShowReviewModal(true)} className="w-full py-2.5 px-3 rounded-lg text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-colors flex items-center justify-center gap-1.5">
+                  <PencilSquareIcon className="w-4 h-4" /> 리뷰 작성
+                </button>
+              )}
+            </>
+          ) : (
+            <>
               <button
                 onClick={handleJoin}
                 disabled={isLoading || isClosed || isJoinClosedByTime}
-                className={`flex-1 min-w-[120px] px-4 py-3 rounded-lg font-semibold shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isClosed || isJoinClosedByTime
-                    ? 'bg-gray-400 text-white cursor-not-allowed'
-                    : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:shadow-md'
+                className={`w-full py-2.5 px-3 rounded-lg text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isClosed || isJoinClosedByTime ? 'bg-gray-400 text-white' : 'bg-[var(--color-blue-primary)] text-white hover:opacity-90'
                 }`}
               >
                 {isLoading ? '처리 중...' : isClosed ? '인원 마감' : isJoinClosedByTime ? '참가 마감' : (() => {
                   if (group?.category === '축구' || (hasFee && feeAmount && feeAmount > 0)) {
                     const baseFee = group?.category === '축구' ? FOOTBALL_FEE_NORMAL : (feeAmount ?? 0);
                     const required = getRequiredPoints(baseFee, group?.category || '', groupMeetingDateTime);
-                    return `참가하기 ${required.toLocaleString()}P`;
+                    return `참가 신청하기 ${required.toLocaleString()}P`;
                   }
-                  return '참가하기';
+                  return '참가 신청하기';
                 })()}
               </button>
-            )}
-            <button 
-              onClick={handleShare}
-              className="px-4 py-3 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-lg font-semibold hover:bg-[var(--color-bg-card)] transition-colors border border-[var(--color-border-card)]"
-            >
-              공유하기
-            </button>
+              {user && maxParticipants != null && participantCount >= maxParticipants && !isClosed && !isPastMatch && (
+                <div className="flex gap-1.5">
+                  {isUserOnWaitlist ? (
+                    <>
+                      <span className="flex-1 py-2 px-3 rounded-lg text-xs bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-medium flex items-center justify-center">예약 대기 ({waitlistPosition ?? 1}번째)</span>
+                      <button type="button" onClick={handleRemoveWaitlist} disabled={isLoading} className="px-3 py-2 rounded-lg text-sm font-semibold border border-[var(--color-border-card)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] disabled:opacity-50">취소</button>
+                    </>
+                  ) : (
+                    <button type="button" onClick={handleAddWaitlist} disabled={isLoading} className="flex-1 py-2 px-3 rounded-lg text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50">예약 대기</button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -1543,7 +1842,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
           const canPay = myPoints >= required;
           const isEarlyDiscount = group?.category === '축구' && required === FOOTBALL_FEE_EARLY;
           return (
-            <div className="fixed inset-0 bg-black/50 z-[150] flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/30 z-[150] flex items-center justify-center p-4">
               <div className="bg-[var(--color-bg-card)] rounded-lg shadow-xl max-w-md w-full p-6">
                 <h3 className="text-xl font-bold text-[var(--color-text-primary)] mb-4">참가비 결제 (포인트)</h3>
 
@@ -1575,7 +1874,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
 
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setShowPaymentModal(false)}
+                    onClick={() => { setPendingJoinPosition(null); setShowPaymentModal(false); }}
                     className="flex-1 px-4 py-2 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-lg font-semibold hover:opacity-80 transition-opacity"
                   >
                     취소
@@ -1629,7 +1928,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
         const currentList = positionModalTeam === 'red' ? redList : blueList;
         return (
           <div
-            className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/60"
+            className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/30"
             onClick={() => setShowPositionModal(false)}
             role="dialog"
             aria-modal="true"
@@ -1654,7 +1953,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
                 </button>
               </div>
               <p className="text-xs text-[var(--color-text-secondary)] mb-2">
-                빈 포지션을 클릭하면 해당 팀·포지션으로 참가할 수 있습니다.
+                &quot;내 포지션&quot; 칩을 드래그해 빈 자리에 놓거나, 빈 포지션을 클릭하면 해당 팀·포지션으로 참가할 수 있습니다.
               </p>
               {/* 레드/블루 탭 — 새 매치 만들기와 동일한 스타일 */}
               <div className="flex gap-1 p-1 rounded-lg bg-[var(--color-bg-primary)] w-fit mb-4">
@@ -1691,6 +1990,9 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
                   recruitPositions={recruitPositions}
                   size="modal"
                   teamAccent={positionModalTeam}
+                  enableDragDrop={!isParticipant && !!user}
+                  dragItemLabel="내 포지션"
+                  dragItemImageUrl={user ? getProfileImage(user.id, (user as { profileImage?: string | null }).profileImage ?? (user as { profileImageUrl?: string | null }).profileImageUrl) : null}
                 />
               </div>
             </div>

@@ -159,7 +159,7 @@ const CompleteProfilePage = () => {
             {/* 닉네임 */}
             <div>
               <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                닉네임 <span className="text-red-500">*</span>
+                닉네임 <span className="text-[var(--color-text-secondary)]">(필수)</span>
               </label>
               <input
                 type="text"
@@ -201,7 +201,7 @@ const CompleteProfilePage = () => {
             {/* 성별 */}
             <div>
               <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                성별 <span className="text-red-500">*</span>
+                성별 <span className="text-[var(--color-text-secondary)]">(필수)</span>
               </label>
               <div className="flex gap-4">
                 {(['male', 'female', 'other'] as const).map((gender) => (
@@ -246,7 +246,7 @@ const CompleteProfilePage = () => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                  시/도 <span className="text-red-500">*</span>
+                  시/도 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                 </label>
                 <select
                   value={formData.residenceSido}
@@ -271,7 +271,7 @@ const CompleteProfilePage = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                  시/군/구 <span className="text-red-500">*</span>
+                  시/군/구 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                 </label>
                 <input
                   type="text"
@@ -411,7 +411,7 @@ const CompleteProfilePage = () => {
                   className="mr-2"
                 />
                 <span className="text-[var(--color-text-primary)]">
-                  서비스 이용약관 동의 <span className="text-red-500">*</span>
+                  서비스 이용약관 동의 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                 </span>
               </label>
               {errors.termsServiceAgreed && (
@@ -429,7 +429,7 @@ const CompleteProfilePage = () => {
                   className="mr-2"
                 />
                 <span className="text-[var(--color-text-primary)]">
-                  개인정보 처리방침 동의 <span className="text-red-500">*</span>
+                  개인정보 처리방침 동의 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                 </span>
               </label>
               {errors.termsPrivacyAgreed && (

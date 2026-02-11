@@ -16,6 +16,7 @@ import { CreateReservationDto } from './dto/create-reservation.dto';
 import { CreateProvisionalBulkDto } from './dto/create-provisional-bulk.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { User } from '../users/entities/user.entity';
 import { ReservationStatus } from './entities/facility-reservation.entity';
 
@@ -90,6 +91,23 @@ export class ReservationsController {
     @CurrentUser() user: User,
   ) {
     return this.reservationsService.findByFacility(facilityId, user.id);
+  }
+
+  /**
+   * 시설의 1주일 예약 현황 (상세페이지 캘린더용, 비로그인 조회 가능)
+   */
+  @Public()
+  @Get('facility/:facilityId/calendar')
+  getFacilityCalendar(
+    @Param('facilityId', ParseIntPipe) facilityId: number,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    return this.reservationsService.getReservationsByDateRange(
+      facilityId,
+      startDate || new Date().toISOString().slice(0, 10),
+      endDate || new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    );
   }
 
   /**

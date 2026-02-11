@@ -9,6 +9,7 @@ import { GroupReferee } from './entities/group-referee.entity';
 import { GroupFavorite } from './entities/group-favorite.entity';
 import { MatchReview } from './entities/match-review.entity';
 import { GroupProvisionalFacility } from './entities/group-provisional-facility.entity';
+import { GroupWaitlist } from './entities/group-waitlist.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupQueryDto } from './dto/group-query.dto';
@@ -16,13 +17,35 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
 import { UsersService } from '../users/users.service';
 import { UserScoreService } from '../users/user-score.service';
+import { FollowService } from '../users/follow.service';
 import { FacilitiesService } from '../facilities/facilities.service';
 import { ReservationsService } from '../facilities/reservations.service';
 import { ReservationStatus } from '../facilities/entities/facility-reservation.entity';
 import { PointsService } from '../users/points.service';
 import { PointTransactionType } from '../users/entities/point-transaction.entity';
-import { MATCH_REVIEW_CATEGORIES, REVIEW_COMPLETE_POINTS } from '../constants/match-review';
+import { MATCH_REVIEW_CATEGORIES, OPTIONAL_REVIEW_CATEGORY_KEYS, REVIEW_COMPLETE_POINTS } from '../constants/match-review';
 import { FacilityReviewsService } from '../facilities/facility-reviews.service';
+import {
+  RANK_INITIAL_POINTS,
+  RANK_POINTS_WIN,
+  RANK_POINTS_LOSS,
+  pointsToGrade,
+} from '../constants/rank-grade';
+
+/** 주소/시도 문자열에서 지역 키 추출 (예: 서울, 대전, 경기). 알림 지역 매칭용 */
+const REGION_KEYS = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종', '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
+
+function extractRegionKey(address: string | null | undefined): string | null {
+  if (!address || typeof address !== 'string') return null;
+  const s = address.trim();
+  for (const key of REGION_KEYS) {
+    if (s.includes(key)) return key;
+  }
+  return null;
+}
+
+/** 동시간대 겹침 판단: 같은 날짜 + 시작 시각이 이 시간(ms) 이내면 겹침으로 봄 */
+const SAME_SLOT_WINDOW_MS = 2 * 60 * 60 * 1000; // 2시간
 
 @Injectable()
 export class GroupsService {
@@ -45,14 +68,79 @@ export class GroupsService {
     private matchReviewRepository: Repository<MatchReview>,
     @InjectRepository(GroupProvisionalFacility)
     private provisionalFacilityRepository: Repository<GroupProvisionalFacility>,
+    @InjectRepository(GroupWaitlist)
+    private waitlistRepository: Repository<GroupWaitlist>,
     private notificationsService: NotificationsService,
     private usersService: UsersService,
     private userScoreService: UserScoreService,
+    private followService: FollowService,
     private facilitiesService: FacilitiesService,
     private reservationsService: ReservationsService,
     private pointsService: PointsService,
     private facilityReviewsService: FacilityReviewsService,
   ) {}
+
+  /**
+   * 해당 사용자가 이미 참여 중인(생성자 또는 참가자) 매치 중, 주어진 시각과 동시간대에 겹치는 매치가 있는지 확인.
+   * @returns 겹치는 매치가 있으면 { id: number; name: string } 반환, 없으면 null
+   */
+  private async findOverlappingGroupForUser(
+    userId: number,
+    meetingTime: Date,
+    excludeGroupId?: number,
+  ): Promise<{ id: number; name: string } | null> {
+    const meeting = meetingTime instanceof Date ? meetingTime : new Date(meetingTime);
+
+    // 1) 내가 생성한 매치 중 활성 + meetingDateTime 있음
+    const myCreated = await this.groupRepository.find({
+      where: {
+        creatorId: userId,
+        isActive: true,
+      },
+      select: ['id', 'name', 'meetingDateTime'],
+    });
+
+    // 2) 내가 참가한 매치 (group_participants)
+    const myParticipated = await this.participantRepository
+      .createQueryBuilder('participant')
+      .innerJoin('participant.group', 'group')
+      .where('participant.userId = :userId', { userId })
+      .andWhere('group.meetingDateTime IS NOT NULL')
+      .andWhere('group.isActive = :isActive', { isActive: true })
+      .select(['group.id', 'group.name', 'group.meetingDateTime'])
+      .getRawMany();
+
+    const candidates: Array<{ id: number; name: string; meetingDateTime: Date }> = [];
+
+    for (const g of myCreated) {
+      if (g.meetingDateTime && (!excludeGroupId || g.id !== excludeGroupId)) {
+        candidates.push({
+          id: g.id,
+          name: g.name,
+          meetingDateTime: g.meetingDateTime instanceof Date ? g.meetingDateTime : new Date(g.meetingDateTime),
+        });
+      }
+    }
+    for (const row of myParticipated) {
+      const id = row.group_id;
+      if (excludeGroupId && id === excludeGroupId) continue;
+      const other = new Date(row.group_meetingDateTime);
+      candidates.push({ id, name: row.group_name, meetingDateTime: other });
+    }
+
+    for (const other of candidates) {
+      const isSameDate =
+        meeting.getFullYear() === other.meetingDateTime.getFullYear() &&
+        meeting.getMonth() === other.meetingDateTime.getMonth() &&
+        meeting.getDate() === other.meetingDateTime.getDate();
+      if (!isSameDate) continue;
+      const timeDiff = Math.abs(meeting.getTime() - other.meetingDateTime.getTime());
+      if (timeDiff < SAME_SLOT_WINDOW_MS) {
+        return { id: other.id, name: other.name };
+      }
+    }
+    return null;
+  }
 
   async create(createGroupDto: CreateGroupDto, creatorId: number): Promise<Group> {
     // 현재 지원 종목: 축구만 (추후 종목 추가 예정)
@@ -80,6 +168,17 @@ export class GroupsService {
         meetingDateTime = new Date(createGroupDto.meetingDateTime);
       } else {
         meetingDateTime = createGroupDto.meetingDateTime;
+      }
+    }
+
+    // 동시간대에 이미 생성·참가한 매치가 있으면 생성 불가
+    if (meetingDateTime) {
+      const overlapping = await this.findOverlappingGroupForUser(creatorId, meetingDateTime);
+      if (overlapping) {
+        throw new ConflictException({
+          message: `같은 시간대에 이미 다른 매치가 있습니다. (${overlapping.name}) 한 사람이 동시에 여러 매치를 진행할 수 없습니다.`,
+          overlappingGroupId: overlapping.id,
+        });
       }
     }
 
@@ -165,20 +264,21 @@ export class GroupsService {
         minPlayersPerTeam: gs.minPlayersPerTeam || null,
         balanceByExperience: gs.balanceByExperience || false,
         balanceByRank: gs.balanceByRank || false,
+        minRankGrade: gs.minRankGrade ?? null,
       });
       await this.gameSettingsRepository.save(gameSettings);
 
       // 포지션 지정 매치 + 모임장 포지션/팀 선택 시: 모임장을 참가자·포지션에 등록
-      // positions가 비어 있으면 '모든 포지션 모집'으로 간주하여 모임장만이라도 등록
+      // (팀 포지션 지정 gameType 'team' 또는 랭크 포지션 지정 gameType 'individual')
       const creatorPosAllowed =
         !gs.positions?.length ||
         (gs.creatorPositionCode != null && (gs.positions as string[]).includes(gs.creatorPositionCode));
-      if (
-        gs.gameType === 'team' &&
+      const isPositionMatchWithCreator =
+        (gs.gameType === 'team' || (savedGroup.type === 'rank' && gs.gameType === 'individual')) &&
         gs.creatorPositionCode &&
         gs.creatorTeam &&
-        creatorPosAllowed
-      ) {
+        creatorPosAllowed;
+      if (isPositionMatchWithCreator) {
         await this.participantRepository.save(
           this.participantRepository.create({
             groupId: savedGroup.id,
@@ -194,6 +294,8 @@ export class GroupsService {
             slotLabel: (gs as any).creatorSlotLabel ?? null,
             team: gs.creatorTeam,
             isPreferred: false,
+            positionX: (gs as any).creatorPositionX ?? null,
+            positionY: (gs as any).creatorPositionY ?? null,
           }),
         );
       }
@@ -219,6 +321,50 @@ export class GroupsService {
       console.error('❌ 리더십 점수 업데이트 실패:', error);
     }
 
+    // 랭크매치 생성 시: 내 지역 심판 알림 수신 동의 유저에게 알림
+    if (groupType === 'rank' && savedGroup.location) {
+      try {
+        const groupRegion = extractRegionKey(savedGroup.location);
+        if (groupRegion) {
+          const candidates = await this.usersService.findWithRefereeRankMatchNotification();
+          for (const u of candidates) {
+            if (u.id === creatorId) continue;
+            const userRegion = extractRegionKey(u.residenceSido ?? null) || extractRegionKey(u.residenceAddress ?? null);
+            if (userRegion === groupRegion) {
+              await this.notificationsService.createNotification(
+                u.id,
+                NotificationType.REFEREE_RANK_MATCH_IN_REGION,
+                '내 지역 랭크매치가 생성되었어요',
+                `[${savedGroup.name}] 심판 신청이 가능합니다.`,
+                { groupId: savedGroup.id, groupName: savedGroup.name },
+              );
+            }
+          }
+        }
+      } catch (err) {
+        this.logger.warn('랭크매치 심판 알림 발송 실패:', err);
+      }
+    }
+
+    // 매치장을 팔로우한 사람에게 새 매치 알림 (초대 모달 없이 알림만)
+    try {
+      const creator = await this.usersService.findById(creatorId);
+      const creatorNickname = creator?.nickname ?? '매치장';
+      const followers = await this.followService.getFollowers(creatorId);
+      for (const follower of followers) {
+        if (follower.id === creatorId) continue;
+        await this.notificationsService.createNotification(
+          follower.id,
+          NotificationType.CREATOR_NEW_MATCH,
+          '새 매치가 올라왔어요',
+          `${creatorNickname}님이 새 매치 [${savedGroup.name}]를 만들었습니다.`,
+          { groupId: savedGroup.id, groupName: savedGroup.name, creatorId },
+        );
+      }
+    } catch (err) {
+      this.logger.warn('매치장 팔로워 알림 발송 실패:', err);
+    }
+
     // participants 관계를 undefined로 설정하여 반환 (cascade 문제 방지)
     if (groupWithSettings) {
       (groupWithSettings as any).participants = undefined;
@@ -240,7 +386,22 @@ export class GroupsService {
   }
 
   private async findAllInternal(queryDto: GroupQueryDto): Promise<{ groups: Group[]; total: number }> {
-    const { category, search, page = 1, limit = 20, hideClosed, onlyRanker, gender, includeCompleted, type } = queryDto;
+    const {
+      category,
+      search,
+      page = 1,
+      limit = 20,
+      hideClosed,
+      onlyRanker,
+      gender,
+      includeCompleted,
+      type,
+      meetingDate,
+      meetingTime,
+      latitude,
+      longitude,
+      radiusKm = 3,
+    } = queryDto;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.groupRepository
@@ -248,6 +409,34 @@ export class GroupsService {
       .leftJoinAndSelect('group.creator', 'creator')
       .leftJoinAndSelect('group.gameSettings', 'gameSettings')
       .where('group.isActive = :isActive', { isActive: true });
+
+    // 중복 매치 체크용: 같은 날짜·비슷한 시간(±2시간)·같은 지역
+    if (meetingDate && meetingTime && latitude != null && longitude != null) {
+      const [y, m, d] = meetingDate.split('-').map(Number);
+      const timePart = meetingTime.slice(0, 5).split(':').map(Number);
+      const hh = timePart[0] ?? 0;
+      const mm = timePart[1] ?? 0;
+      const targetStart = new Date(y, (m ?? 1) - 1, d ?? 1, hh, mm, 0);
+      const windowStart = new Date(targetStart.getTime() - 2 * 60 * 60 * 1000);
+      const windowEnd = new Date(targetStart.getTime() + 2 * 60 * 60 * 1000);
+      queryBuilder.andWhere('group.meetingDateTime IS NOT NULL');
+      queryBuilder.andWhere(
+        'group.meetingDateTime >= :dupStart AND group.meetingDateTime <= :dupEnd',
+        { dupStart: windowStart.toISOString(), dupEnd: windowEnd.toISOString() },
+      );
+      // 반경 내: 하버사인 근사 (위도 1도≈111km, 경도 1도≈cos(위도)*111km)
+      const degLat = radiusKm / 111;
+      const degLng = radiusKm / (111 * Math.cos((latitude * Math.PI) / 180));
+      queryBuilder.andWhere(
+        'group.latitude BETWEEN :latMin AND :latMax AND group.longitude BETWEEN :lngMin AND :lngMax',
+        {
+          latMin: latitude - degLat,
+          latMax: latitude + degLat,
+          lngMin: longitude - degLng,
+          lngMax: longitude + degLng,
+        },
+      );
+    }
 
     // 모임 타입 필터
     if (queryDto.type) {
@@ -296,9 +485,10 @@ export class GroupsService {
     }
 
     // 선수출신 경기만 보기 (랭커가 참가한 모임만)
+    // users 테이블 컬럼명: TypeORM 기본이 camelCase이면 "skillLevel", snake면 skill_level
     if (onlyRanker) {
       queryBuilder.andWhere(
-        'EXISTS (SELECT 1 FROM group_participants gp INNER JOIN users u ON gp.user_id = u.id WHERE gp.group_id = group.id AND u.skill_level = :skillLevel)',
+        'EXISTS (SELECT 1 FROM group_participants gp INNER JOIN users u ON gp.user_id = u.id WHERE gp.group_id = group.id AND u."skillLevel" = :skillLevel)',
         { skillLevel: 'advanced' },
       );
     }
@@ -377,16 +567,28 @@ export class GroupsService {
           (p as any).positionCode = pos?.positionCode ?? null;
           (p as any).slotLabel = pos?.slotLabel ?? null;
           (p as any).team = pos?.team ?? 'red';
+          (p as any).positionX = pos?.positionX ?? null;
+          (p as any).positionY = pos?.positionY ?? null;
+        }
+        // 모임장 포지션을 gameSettings에 노출 (상세보기에서 모임장이 참가자 목록에 없을 때 사용)
+        if (group.creatorId && group.gameSettings) {
+          const creatorPos = participantPositions.find((pp) => pp.userId === group.creatorId);
+          if (creatorPos) {
+            (group.gameSettings as any).creatorPositionCode = creatorPos.positionCode;
+            (group.gameSettings as any).creatorSlotLabel = creatorPos.slotLabel ?? null;
+            (group.gameSettings as any).creatorTeam = creatorPos.team ?? 'red';
+            (group.gameSettings as any).creatorPositionX = creatorPos.positionX ?? null;
+            (group.gameSettings as any).creatorPositionY = creatorPos.positionY ?? null;
+          }
         }
       } catch (participantError) {
         console.error('참가자 목록 로드 실패:', participantError);
         group.participants = [];
       }
 
-      // 실제 참가자 수 계산하여 participantCount 동기화 (레코드 존재 = 참가, status 무시)
-      // 모임장도 항상 참가자이므로 +1
+      // 실제 참가자 수 = group_participants 행 수 (모임장이 포지션 매치로 들어가 있으면 이미 포함됨, 아니면 0명이면 1로 간주)
       const actualParticipantCount = group.participants?.length || 0;
-      const syncedCount = Math.max(1, actualParticipantCount + 1); // 최소 1명 (모임장)
+      const syncedCount = Math.max(1, actualParticipantCount);
       
       // participantCount가 실제 참가자 수와 다르면 동기화
       if (group.participantCount !== syncedCount) {
@@ -416,6 +618,21 @@ export class GroupsService {
           where: { userId, groupId: id },
         });
         (group as any).isFavorited = !!favorite;
+        // 예약 대기 여부 및 대기 순서
+        const waitlistEntry = await this.waitlistRepository.findOne({
+          where: { userId, groupId: id },
+        });
+        (group as any).isUserOnWaitlist = !!waitlistEntry;
+        if (waitlistEntry) {
+          const position = await this.waitlistRepository
+            .createQueryBuilder('w')
+            .where('w.groupId = :groupId', { groupId: id })
+            .andWhere('w.createdAt <= :createdAt', { createdAt: waitlistEntry.createdAt })
+            .getCount();
+          (group as any).waitlistPosition = position;
+        } else {
+          (group as any).waitlistPosition = null;
+        }
       }
 
       // 심판 목록 조회
@@ -567,7 +784,7 @@ export class GroupsService {
       .execute();
   }
 
-  async joinGroup(groupId: number, userId: number, positionCode?: string, team?: string): Promise<Group> {
+  async joinGroup(groupId: number, userId: number, positionCode?: string, team?: string, slotLabel?: string): Promise<Group> {
     console.log('🚀 joinGroup 시작:', {
       원본_groupId: groupId,
       원본_userId: userId,
@@ -661,39 +878,15 @@ export class GroupsService {
         }
       }
 
-      // 같은 시간대에 참가한 다른 모임이 있는지 확인
+      // 동시간대에 이미 생성·참가한 매치가 있으면 참가 불가 (생성한 매치 + 참가한 매치 모두 포함)
       if (group.meetingDateTime) {
         const meetingTime = new Date(group.meetingDateTime);
-        const userParticipatedGroups = await this.participantRepository
-          .createQueryBuilder('participant')
-          .innerJoin('participant.group', 'group')
-          .where('participant.userId = :userId', { userId: numericUserId })
-          .andWhere('group.meetingDateTime IS NOT NULL')
-          .andWhere('group.isActive = :isActive', { isActive: true })
-          .select(['group.id', 'group.name', 'group.meetingDateTime'])
-          .getRawMany();
-
-        // 시간 겹침 체크 (같은 날짜, 같은 시간대)
-        for (const participatedGroup of userParticipatedGroups) {
-          const otherMeetingTime = new Date(participatedGroup.group_meetingDateTime);
-          
-          // 같은 날짜인지 확인
-          const isSameDate = 
-            meetingTime.getFullYear() === otherMeetingTime.getFullYear() &&
-            meetingTime.getMonth() === otherMeetingTime.getMonth() &&
-            meetingTime.getDate() === otherMeetingTime.getDate();
-          
-          if (isSameDate) {
-            // 같은 시간대인지 확인 (1시간 이내 차이를 겹치는 것으로 간주)
-            const timeDiff = Math.abs(meetingTime.getTime() - otherMeetingTime.getTime());
-            const oneHourInMs = 60 * 60 * 1000; // 1시간
-            
-            if (timeDiff < oneHourInMs) {
-              throw new ConflictException(
-                `이미 같은 시간대에 참가한 모임이 있습니다. (${participatedGroup.group_name})`
-              );
-            }
-          }
+        const overlapping = await this.findOverlappingGroupForUser(numericUserId, meetingTime, numericGroupId);
+        if (overlapping) {
+          throw new ConflictException({
+            message: `같은 시간대에 이미 다른 매치가 있습니다. (${overlapping.name}) 한 사람이 동시에 여러 매치에 참여할 수 없습니다.`,
+            overlappingGroupId: overlapping.id,
+          });
         }
       }
 
@@ -787,15 +980,20 @@ export class GroupsService {
         if (insertResult && (insertResult.raw?.length > 0 || insertResult.identifiers?.length > 0)) {
           insertSuccess = true;
           console.log('✅ 참가자 레코드 저장 완료 (createQueryBuilder)');
-          // 포지션 지정 매치일 때 포지션 저장
+          // 포지션 지정 매치일 때 포지션 저장 (team 또는 랭크 포지션 지정 개인)
           if (positionCode) {
             const settings = await this.gameSettingsRepository.findOne({ where: { groupId: numericGroupId } });
-            if (settings?.gameType === 'team' && (!settings.positions?.length || settings.positions.includes(positionCode))) {
+            const isPositionMatch =
+              settings &&
+              (!settings.positions?.length || settings.positions.includes(positionCode)) &&
+              (settings.gameType === 'team' || (group.type === 'rank' && settings.gameType === 'individual'));
+            if (isPositionMatch) {
               await this.participantPositionRepository.save(
                 this.participantPositionRepository.create({
                   groupId: numericGroupId,
                   userId: numericUserId,
                   positionCode,
+                  slotLabel: slotLabel ?? null,
                   team: team ?? 'red',
                   isPreferred: false,
                 }),
@@ -849,12 +1047,17 @@ export class GroupsService {
             console.log('✅ 참가자 레코드 저장 완료 (Raw SQL)');
             if (positionCode) {
               const settings = await this.gameSettingsRepository.findOne({ where: { groupId: numericGroupId } });
-              if (settings?.gameType === 'team' && (!settings.positions?.length || settings.positions.includes(positionCode))) {
+              const isPositionMatch =
+                settings &&
+                (!settings.positions?.length || settings.positions.includes(positionCode)) &&
+                (settings.gameType === 'team' || (group.type === 'rank' && settings.gameType === 'individual'));
+              if (isPositionMatch) {
                 await this.participantPositionRepository.save(
                   this.participantPositionRepository.create({
                     groupId: numericGroupId,
                     userId: numericUserId,
                     positionCode,
+                    slotLabel: slotLabel ?? null,
                     team: team ?? 'red',
                     isPreferred: false,
                   }),
@@ -966,11 +1169,9 @@ export class GroupsService {
       const actualParticipantCount = await this.participantRepository.count({
         where: { groupId: group.id },
       });
-      // 모임장도 항상 참가자이므로 +1
-      const newParticipantCount = Math.max(1, actualParticipantCount + 1);
+      const newParticipantCount = Math.max(1, actualParticipantCount);
       
       // participants 관계를 제외하고 participantCount만 업데이트
-      // cascade: true 때문에 participants를 함께 저장하면 group_id가 null이 될 수 있음
       console.log('📊 참가자 수 업데이트:', {
         groupId: group.id,
         previousCount: group.participantCount,
@@ -1039,6 +1240,9 @@ export class GroupsService {
         }
       }
 
+      // 예약 대기 등록했던 사용자는 참가 시 대기열에서 제거
+      await this.waitlistRepository.delete({ groupId: numericGroupId, userId: numericUserId });
+
       // 참가 완료 후 그룹 정보 반환 (에러 처리 강화)
       try {
         return await this.findOne(groupId, userId);
@@ -1066,9 +1270,9 @@ export class GroupsService {
           savedGroup.participants = [];
         }
 
-        // 실제 참가자 수 계산하여 participantCount 동기화
+        // 실제 참가자 수 = group_participants 행 수 (모임장 포함 여부와 무관하게 행 개수만 사용)
         const actualCount = savedGroup.participants?.length || 0;
-        savedGroup.participantCount = Math.max(1, actualCount + 1);
+        savedGroup.participantCount = Math.max(1, actualCount);
 
         // 사용자가 참가했는지 확인
         if (userId) {
@@ -1095,6 +1299,69 @@ export class GroupsService {
       // 그 외의 에러는 InternalServerError로 변환
       throw new InternalServerErrorException(`모임 참가 중 오류가 발생했습니다: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /** 참가자가 자신의 포지션/팀을 변경 (포지션 지정 매치만) */
+  async updateMyPosition(
+    groupId: number,
+    userId: number,
+    positionCode: string,
+    team: 'red' | 'blue',
+    slotLabel?: string | null,
+    positionX?: number | null,
+    positionY?: number | null,
+  ): Promise<Group> {
+    const numericGroupId = Number(groupId);
+    const numericUserId = Number(userId);
+    if (!numericGroupId || isNaN(numericGroupId) || !numericUserId || isNaN(numericUserId)) {
+      throw new BadRequestException('모임 ID 또는 사용자 ID가 유효하지 않습니다.');
+    }
+    const group = await this.groupRepository.findOne({
+      where: { id: numericGroupId },
+      relations: ['gameSettings'],
+    });
+    if (!group) {
+      throw new NotFoundException('모임을 찾을 수 없습니다.');
+    }
+    const participant = await this.participantRepository.findOne({
+      where: { groupId: numericGroupId, userId: numericUserId },
+    });
+    if (!participant) {
+      throw new BadRequestException('참가자만 포지션을 변경할 수 있습니다.');
+    }
+    const settings = group.gameSettings;
+    const isPositionMatch =
+      settings &&
+      (!settings.positions?.length || settings.positions.includes(positionCode)) &&
+      (settings.gameType === 'team' || (group.type === 'rank' && settings.gameType === 'individual'));
+    if (!isPositionMatch) {
+      throw new BadRequestException('이 매치에서는 해당 포지션을 선택할 수 없습니다.');
+    }
+    const existing = await this.participantPositionRepository.findOne({
+      where: { groupId: numericGroupId, userId: numericUserId },
+    });
+    if (existing) {
+      existing.positionCode = positionCode;
+      existing.team = team;
+      existing.slotLabel = slotLabel ?? null;
+      if (positionX !== undefined) existing.positionX = positionX ?? null;
+      if (positionY !== undefined) existing.positionY = positionY ?? null;
+      await this.participantPositionRepository.save(existing);
+    } else {
+      await this.participantPositionRepository.save(
+        this.participantPositionRepository.create({
+          groupId: numericGroupId,
+          userId: numericUserId,
+          positionCode,
+          slotLabel: slotLabel ?? null,
+          team,
+          isPreferred: false,
+          positionX: positionX ?? null,
+          positionY: positionY ?? null,
+        }),
+      );
+    }
+    return this.findOne(numericGroupId, numericUserId);
   }
 
   async leaveGroup(groupId: number, userId: number): Promise<void> {
@@ -1244,9 +1511,7 @@ export class GroupsService {
       const actualParticipantCount = await this.participantRepository.count({
         where: { groupId: numericGroupId },
       });
-      
-      // 모임장도 항상 참가자이므로 +1
-      const newParticipantCount = Math.max(1, actualParticipantCount + 1);
+      const newParticipantCount = Math.max(1, actualParticipantCount);
       
       // participants 관계를 제외하고 participantCount만 업데이트
       // cascade: true 때문에 participants를 함께 저장하면 group_id가 null이 될 수 있음
@@ -1259,6 +1524,29 @@ export class GroupsService {
       
       // group 객체의 participantCount도 업데이트 (로깅용)
       group.participantCount = newParticipantCount;
+
+      // 예약 대기: 빈 자리 생기면 1순위 사용자에게 알림 후 대기열에서 제거
+      if (group.maxParticipants != null && newParticipantCount < group.maxParticipants) {
+        const first = await this.waitlistRepository.findOne({
+          where: { groupId: numericGroupId },
+          order: { createdAt: 'ASC' },
+          relations: ['user'],
+        });
+        if (first) {
+          try {
+            await this.notificationsService.createNotification(
+              first.userId,
+              NotificationType.GROUP_WAITLIST_SPOT_OPEN,
+              '매치 빈 자리 알림',
+              `"${group.name}" 매치에 빈 자리가 생겼습니다. 참가 신청을 해보세요.`,
+              { groupId: numericGroupId, groupName: group.name },
+            );
+            await this.waitlistRepository.delete({ id: first.id });
+          } catch (notifyErr) {
+            this.logger.warn('예약 대기 알림 전송 실패:', notifyErr);
+          }
+        }
+      }
       
       console.log('참가자 수 업데이트 완료:', {
         groupId: numericGroupId,
@@ -1297,6 +1585,55 @@ export class GroupsService {
     return !!participant;
   }
 
+  /** 예약 대기 등록. 인원이 가득 찬 매치에만 가능. 매치 타입 무관. */
+  async addToWaitlist(groupId: number, userId: number): Promise<{ position: number }> {
+    const group = await this.groupRepository.findOne({ where: { id: groupId }, relations: [] });
+    if (!group) {
+      throw new NotFoundException('모임을 찾을 수 없습니다.');
+    }
+    if (!group.maxParticipants || group.participantCount < group.maxParticipants) {
+      throw new BadRequestException('인원이 마감된 매치에만 예약 대기를 할 수 있습니다.');
+    }
+    const isParticipant = await this.participantRepository.findOne({
+      where: { groupId, userId },
+    });
+    if (isParticipant) {
+      throw new ConflictException('이미 참가한 매치에는 예약 대기를 할 수 없습니다.');
+    }
+    const creatorId = group.creatorId;
+    if (userId === creatorId) {
+      throw new BadRequestException('매치장은 예약 대기를 할 수 없습니다.');
+    }
+    const existing = await this.waitlistRepository.findOne({
+      where: { groupId, userId },
+    });
+    if (existing) {
+      const position = await this.waitlistRepository
+        .createQueryBuilder('w')
+        .where('w.groupId = :groupId', { groupId })
+        .andWhere('w.createdAt <= :createdAt', { createdAt: existing.createdAt })
+        .getCount();
+      return { position };
+    }
+    const entry = await this.waitlistRepository.save(
+      this.waitlistRepository.create({ groupId, userId }),
+    );
+    const position = await this.waitlistRepository
+      .createQueryBuilder('w')
+      .where('w.groupId = :groupId', { groupId })
+      .andWhere('w.createdAt <= :createdAt', { createdAt: entry.createdAt })
+      .getCount();
+    return { position };
+  }
+
+  /** 예약 대기 취소 */
+  async removeFromWaitlist(groupId: number, userId: number): Promise<void> {
+    const result = await this.waitlistRepository.delete({ groupId, userId });
+    if (result.affected === 0) {
+      throw new NotFoundException('예약 대기 내역이 없습니다.');
+    }
+  }
+
   /** 내가 생성한 모임 목록 (활성인 것만, 완료 여부 무관). my-groups용 */
   async findMyGroups(creatorId: number): Promise<Group[]> {
     const groups = await this.groupRepository.find({
@@ -1308,7 +1645,8 @@ export class GroupsService {
     return groups;
   }
 
-  /** 활동 기록용: 완료된 매치만 반환. 매치 종료 시각(meetingDateTime)이 지났거나 isCompleted인 경우. my-creations용 */
+  /** 활동 기록용: 완료된 매치만 반환. 매치 종료 시각이 지났거나 isCompleted인 경우.
+   * 인원 모집에 성공한 매치만 포함 (minParticipants 없거나 participantCount >= minParticipants). */
   async findMyCreationsCompleted(creatorId: number): Promise<Group[]> {
     const now = new Date();
     const groups = await this.groupRepository
@@ -1320,6 +1658,9 @@ export class GroupsService {
         '(group.isCompleted = :isCompleted OR (group.meetingDateTime IS NOT NULL AND group.meetingDateTime <= :now))',
         { isCompleted: true, now },
       )
+      .andWhere(
+        '(group.minParticipants IS NULL OR group.participantCount >= group.minParticipants)',
+      )
       .orderBy('group.createdAt', 'DESC')
       .take(50)
       .getMany();
@@ -1327,7 +1668,7 @@ export class GroupsService {
   }
 
   /** 내가 참가한 모임 목록 (다른 사람이 만든 모임에 참가한 것만, 생성한 모임 제외).
-   *  매치 종료 시각(meetingDateTime)이 지난 경우만 집계. 삭제된 모임 제외. 각 그룹에 myPositionCode 부여 */
+   *  매치 종료 시각이 지난 경우만 집계. 인원 모집에 성공한 매치만 포함. 삭제된 모임 제외. 각 그룹에 myPositionCode 부여 */
   async findMyParticipations(userId: number): Promise<Group[]> {
     const participants = await this.participantRepository.find({
       where: { userId },
@@ -1346,6 +1687,9 @@ export class GroupsService {
         g.isCompleted ||
         (g.meetingDateTime != null && new Date(g.meetingDateTime) <= now);
       if (!completed) continue;
+      const recruitmentSucceeded =
+        g.minParticipants == null || (g.participantCount ?? 0) >= (g.minParticipants ?? 0);
+      if (!recruitmentSucceeded) continue;
       if (seen.has(g.id)) continue;
       seen.add(g.id);
       groupIds.push(g.id);
@@ -1492,7 +1836,7 @@ export class GroupsService {
     return group;
   }
 
-  /** 심판 신청: 랭크매치에서만 가능, 참가자는 심판 신청 불가 */
+  /** 심판 신청: 랭크 매치에서만 가능, 참가자는 심판 신청 불가 */
   async applyReferee(groupId: number, userId: number): Promise<{ success: boolean; message: string }> {
     const group = await this.groupRepository.findOne({
       where: { id: groupId },
@@ -1502,7 +1846,7 @@ export class GroupsService {
       throw new NotFoundException('모임을 찾을 수 없습니다.');
     }
     if (group.type !== 'rank') {
-      throw new BadRequestException('심판 시스템은 랭크매치에서만 이용 가능합니다.');
+      throw new BadRequestException('심판 시스템은 랭크 매치에서만 이용 가능합니다.');
     }
     const isParticipant = await this.participantRepository.findOne({
       where: { groupId, userId },
@@ -1529,13 +1873,73 @@ export class GroupsService {
       throw new NotFoundException('모임을 찾을 수 없습니다.');
     }
     if (group.type !== 'rank') {
-      throw new BadRequestException('심판 시스템은 랭크매치에서만 이용 가능합니다.');
+      throw new BadRequestException('심판 시스템은 랭크 매치에서만 이용 가능합니다.');
     }
     const deleted = await this.refereeRepository.delete({ groupId, userId });
     if (deleted.affected === 0) {
       throw new NotFoundException('심판 신청 내역이 없습니다.');
     }
     return { success: true, message: '심판 신청이 취소되었습니다.' };
+  }
+
+  /**
+   * 랭크매치 승패 기록 (심판만). 이긴 팀 +25점·1승, 진 팀 -25점·1패. D급 1000점 시작, 400점 간격 등급.
+   */
+  async recordRankMatchResult(
+    groupId: number,
+    refereeUserId: number,
+    finalScoreRed: number,
+    finalScoreBlue: number,
+  ): Promise<{ success: boolean; message: string }> {
+    const group = await this.groupRepository.findOne({
+      where: { id: groupId },
+      relations: [],
+    });
+    if (!group) {
+      throw new NotFoundException('모임을 찾을 수 없습니다.');
+    }
+    if (group.type !== 'rank') {
+      throw new BadRequestException('랭크 매치에서만 승패를 기록할 수 있습니다.');
+    }
+    const isReferee = await this.refereeRepository.findOne({
+      where: { groupId, userId: refereeUserId },
+    });
+    if (!isReferee) {
+      throw new ForbiddenException('해당 매치의 심판만 승패를 기록할 수 있습니다.');
+    }
+    if (group.finalScoreRed != null || group.finalScoreBlue != null) {
+      throw new BadRequestException('이미 승패가 기록된 매치입니다.');
+    }
+    const category = group.category || '축구';
+    const positions = await this.participantPositionRepository.find({
+      where: { groupId },
+      select: ['userId', 'team'],
+    });
+    if (positions.length === 0) {
+      throw new BadRequestException('참가자 포지션 정보가 없어 승패를 기록할 수 없습니다.');
+    }
+    const redWins = finalScoreRed > finalScoreBlue;
+    for (const pos of positions) {
+      const user = await this.usersService.findById(pos.userId);
+      if (!user) continue;
+      const prev = user.ohunRankPoints?.[category] ?? {
+        points: RANK_INITIAL_POINTS,
+        wins: 0,
+        losses: 0,
+      };
+      const isWinner = (pos.team === 'red' && redWins) || (pos.team === 'blue' && !redWins);
+      const nextPoints = Math.max(0, prev.points + (isWinner ? RANK_POINTS_WIN : RANK_POINTS_LOSS));
+      const nextWins = prev.wins + (isWinner ? 1 : 0);
+      const nextLosses = prev.losses + (isWinner ? 0 : 1);
+      const grade = pointsToGrade(nextPoints);
+      const nextOhunRankPoints = { ...(user.ohunRankPoints || {}), [category]: { points: nextPoints, wins: nextWins, losses: nextLosses } };
+      const nextOhunRanks = { ...(user.ohunRanks || {}), [category]: grade };
+      await this.usersService.updateUser(pos.userId, { ohunRankPoints: nextOhunRankPoints, ohunRanks: nextOhunRanks });
+    }
+    group.finalScoreRed = finalScoreRed;
+    group.finalScoreBlue = finalScoreBlue;
+    await this.groupRepository.save(group);
+    return { success: true, message: '승패가 기록되었습니다. 이긴 팀 +25점, 진 팀 -25점이 반영되었습니다.' };
   }
 
   /**
@@ -1606,10 +2010,13 @@ export class GroupsService {
       };
     }
 
+    const requiredCategoryKeys = categories
+      .filter((c) => !OPTIONAL_REVIEW_CATEGORY_KEYS.includes(c.key))
+      .map((c) => c.key);
     const existingCount = await this.matchReviewRepository.count({
       where: { groupId, reviewerId: userId },
     });
-    const alreadySubmitted = existingCount >= categories.length;
+    const alreadySubmitted = existingCount >= requiredCategoryKeys.length;
 
     const participants = await this.participantRepository.find({
       where: { groupId },
@@ -1679,8 +2086,10 @@ export class GroupsService {
 
     const categories = eligibility.categories;
     const participantIds = eligibility.participants.map((p) => p.id);
+    const optionalKeys = new Set(OPTIONAL_REVIEW_CATEGORY_KEYS);
 
     for (const cat of categories) {
+      if (optionalKeys.has(cat.key)) continue;
       const selectedId = answers[cat.key];
       if (selectedId == null || !Number.isInteger(selectedId)) {
         throw new BadRequestException(`"${cat.label}" 항목을 선택해 주세요.`);
@@ -1691,12 +2100,18 @@ export class GroupsService {
     }
 
     for (const cat of categories) {
+      const selectedId = answers[cat.key];
+      if (optionalKeys.has(cat.key) && (selectedId == null || !Number.isInteger(selectedId))) continue;
+      if (selectedId == null || !participantIds.includes(selectedId)) continue;
+      if (cat.key === '신고' && selectedId === userId) {
+        throw new BadRequestException('본인은 신고할 수 없습니다.');
+      }
       await this.matchReviewRepository.save(
         this.matchReviewRepository.create({
           groupId,
           reviewerId: userId,
           categoryKey: cat.key,
-          selectedUserId: answers[cat.key],
+          selectedUserId: selectedId,
         }),
       );
     }

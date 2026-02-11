@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShoppingBagIcon,
+  ShoppingCartIcon,
   StarIcon,
   MagnifyingGlassIcon,
   Bars3Icon,
@@ -10,6 +11,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
 import { showSuccess } from '../utils/swal';
+import { addToCart, getCartCount } from '../utils/sportsEquipmentCart';
 import { SPORTS_EQUIPMENT_PRODUCTS, type Product } from '../data/sportsEquipmentProducts';
 import { api } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -114,6 +116,7 @@ const SportsEquipmentPage = () => {
   const [apiProducts, setApiProducts] = useState<Product[]>([]);
   const [userProfile, setUserProfile] = useState<{ businessNumberVerified?: boolean; isAdmin?: boolean } | null>(null);
   const [productsRefresh, setProductsRefresh] = useState(0);
+  const [cartCount, setCartCount] = useState(getCartCount);
 
   const navigate = useNavigate();
 
@@ -197,11 +200,13 @@ const SportsEquipmentPage = () => {
   };
 
   const handleAddToCart = async (productId: number) => {
+    addToCart(productId, 1);
+    setCartCount(getCartCount());
     await showSuccess('장바구니에 추가되었습니다.', '장바구니');
   };
 
   return (
-    <div className="flex flex-col flex-1 w-full min-h-0 bg-[var(--color-bg-primary)]">
+    <div className="flex flex-col w-full bg-[var(--color-bg-primary)]">
       {/* 히어로 / 상단 배너 (나이키 스타일) */}
       <header className="flex-shrink-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)]">
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 md:py-12">
@@ -209,16 +214,31 @@ const SportsEquipmentPage = () => {
             <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-text-primary)]">
               스포츠 용품
             </h1>
-            {(userProfile?.businessNumberVerified || userProfile?.isAdmin) && (
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => navigate('/sports-equipment/register')}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl font-semibold transition-all border-2 border-[var(--color-blue-primary)] text-[var(--color-blue-primary)] bg-transparent hover:bg-[var(--color-blue-primary)] hover:text-white"
+                onClick={() => navigate('/sports-equipment/cart')}
+                className="relative flex items-center gap-2 px-4 py-2.5 rounded-2xl font-semibold transition-all border border-[var(--color-border-card)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] hover:border-[var(--color-blue-primary)] hover:text-[var(--color-blue-primary)]"
               >
-                <PlusIcon className="w-5 h-5" />
-                상품 등록
+                <ShoppingCartIcon className="w-5 h-5" />
+                장바구니
+                {cartCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[1.25rem] h-5 px-1 flex items-center justify-center rounded-full bg-[var(--color-blue-primary)] text-white text-xs font-bold">
+                    {cartCount > 99 ? '99+' : cartCount}
+                  </span>
+                )}
               </button>
-            )}
+              {(userProfile?.businessNumberVerified || userProfile?.isAdmin) && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/sports-equipment/register')}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-2xl font-semibold transition-all border-2 border-[var(--color-blue-primary)] text-[var(--color-blue-primary)] bg-transparent hover:bg-[var(--color-blue-primary)] hover:text-white"
+                >
+                  <PlusIcon className="w-5 h-5" />
+                  상품 등록
+                </button>
+              )}
+            </div>
           </div>
           <p className="text-[var(--color-text-secondary)] mb-6 max-w-2xl">
             운동을 더 편하고 즐겁게. 의류, 신발, 용품까지 한곳에서 만나보세요.
@@ -254,8 +274,8 @@ const SportsEquipmentPage = () => {
         </div>
       </header>
 
-      {/* 메인: 좌측 사이드바 + 상품 그리드 */}
-      <div className="flex flex-1 min-h-0 max-w-7xl mx-auto w-full px-4 md:px-6 py-6">
+      {/* 메인: 좌측 사이드바 + 상품 그리드 (전체 스크롤에 맞춤) */}
+      <div className="max-w-7xl mx-auto w-full px-4 md:px-6 py-6 flex flex-row">
         {/* 좌측 필터 사이드바 (나이키 스타일) */}
         <aside
           className={`flex-shrink-0 border-r border-[var(--color-border-card)] pr-6 transition-all duration-200 ${

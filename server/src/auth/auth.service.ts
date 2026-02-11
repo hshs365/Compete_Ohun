@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import type { Express } from 'express';
@@ -9,6 +9,8 @@ import { BusinessRegistrationOcrService } from './services/business-registration
 import type { VerifyBusinessWithDocumentDto } from './dto/verify-business-with-document.dto';
 import { User, UserStatus, SkillLevel } from '../users/entities/user.entity';
 import { SocialAccount, SocialProvider } from '../social-accounts/entities/social-account.entity';
+import { PointsService } from '../users/points.service';
+import { PointTransactionType } from '../users/entities/point-transaction.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
@@ -29,6 +31,9 @@ export interface AuthResponse {
     email?: string;
     nickname?: string;
     isProfileComplete: boolean;
+    residenceSido?: string | null;
+    residenceSigungu?: string | null;
+    residenceAddress?: string | null;
   };
   isNewUser?: boolean;
   providerEmail?: string;
@@ -36,6 +41,9 @@ export interface AuthResponse {
 
 @Injectable()
 export class AuthService {
+  /** 회원가입 축하 포인트 (1회 지급) */
+  private static readonly WELCOME_POINTS = 10000;
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
@@ -43,6 +51,8 @@ export class AuthService {
     private businessNumberVerificationService: BusinessNumberVerificationService,
     private businessRegistrationOcrService: BusinessRegistrationOcrService,
     private configService: ConfigService,
+    @Inject(forwardRef(() => PointsService))
+    private pointsService: PointsService,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<AuthResponse> {
@@ -99,6 +109,7 @@ export class AuthService {
       birthDate: registerDto.birthDate ? new Date(registerDto.birthDate) : null,
       residenceSido: registerDto.residenceSido,
       residenceSigungu: registerDto.residenceSigungu,
+      residenceAddress: registerDto.residenceAddress?.trim() || null,
       interestedSports: registerDto.interestedSports || [],
       skillLevel: registerDto.skillLevel,
       termsServiceAgreed: registerDto.termsServiceAgreed,
@@ -114,6 +125,19 @@ export class AuthService {
       businessNumberVerified: businessNumberVerified,
     });
 
+    // 가입 축하금 포인트 지급 (실패해도 회원가입은 성공 처리)
+    try {
+      await this.pointsService.addTransaction(
+        user.id,
+        AuthService.WELCOME_POINTS,
+        PointTransactionType.EARN,
+        '첫 가입 축하 포인트',
+      );
+    } catch (pointsErr) {
+      console.error('[register] 가입 축하금 포인트 지급 실패:', pointsErr);
+      // 회원가입은 완료되었으므로 500으로 실패시키지 않음
+    }
+
     const token = this.generateToken(user);
 
     return {
@@ -123,6 +147,9 @@ export class AuthService {
         email: user.email || undefined,
         nickname: user.nickname || undefined,
         isProfileComplete: user.isProfileComplete,
+        residenceSido: user.residenceSido || null,
+        residenceSigungu: user.residenceSigungu || null,
+        residenceAddress: user.residenceAddress || null,
       },
     };
   }
@@ -305,6 +332,9 @@ export class AuthService {
         email: user.email || undefined,
         nickname: user.nickname || undefined,
         isProfileComplete: user.isProfileComplete,
+        residenceSido: user.residenceSido || null,
+        residenceSigungu: user.residenceSigungu || null,
+        residenceAddress: user.residenceAddress || null,
       },
     };
   }
@@ -377,6 +407,9 @@ export class AuthService {
         email: user.email || undefined,
         nickname: user.nickname || undefined,
         isProfileComplete: user.isProfileComplete,
+        residenceSido: user.residenceSido || null,
+        residenceSigungu: user.residenceSigungu || null,
+        residenceAddress: user.residenceAddress || null,
       },
       providerEmail: socialUserInfo.email,
     };
@@ -418,13 +451,17 @@ export class AuthService {
         email: updatedUser.email || undefined,
         nickname: updatedUser.nickname,
         isProfileComplete: updatedUser.isProfileComplete,
+        residenceSido: updatedUser.residenceSido || null,
+        residenceSigungu: updatedUser.residenceSigungu || null,
+        residenceAddress: updatedUser.residenceAddress || null,
       },
     };
   }
 
-  async checkNicknameAvailability(nickname: string): Promise<{ available: boolean }> {
+  async checkNicknameAvailability(nickname: string): Promise<{ available: boolean; tag?: string }> {
     const available = await this.usersService.checkNicknameAvailable(nickname);
-    return { available };
+    const tag = available ? await this.usersService.generateTagForNickname(nickname) : undefined;
+    return { available, tag };
   }
 
   async checkEmailAvailability(email: string): Promise<{ available: boolean }> {
@@ -432,7 +469,18 @@ export class AuthService {
     return { available };
   }
 
-  async updateProfile(userId: number, updateData: { nickname?: string; phone?: string; interestedSports?: string[]; sportPositions?: { sport: string; positions: string[] }[]; skillLevel?: SkillLevel }, file?: Express.Multer.File): Promise<User> {
+  async updateProfile(
+    userId: number,
+    updateData: {
+      nickname?: string;
+      phone?: string;
+      interestedSports?: string[];
+      sportPositions?: { sport: string; positions: string[] }[];
+      skillLevel?: SkillLevel;
+      notifyRefereeRankMatchInRegion?: boolean;
+    },
+    file?: Express.Multer.File,
+  ): Promise<User> {
     // 파일이 있으면 프로필 이미지 업로드 처리
     if (file) {
       const profileImageUrl = await this.uploadProfileImage(userId, file);

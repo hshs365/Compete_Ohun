@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 
+/** 사용자 주소 기준 기본 지도 보기 단위 (시≈5km, 구≈2km, 동≈500m) */
+export type MapViewLevel = 'sido' | 'gu' | 'dong';
+
 interface SearchOptionsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -14,7 +17,16 @@ interface SearchOptionsModalProps {
   onGenderChange?: (gender: 'male' | 'female' | null) => void;
   includeCompleted?: boolean;
   onIncludeCompletedChange?: (include: boolean) => void;
+  /** 지도 기본 보기 단위 (사용자 주소 기준) */
+  mapViewLevel?: MapViewLevel;
+  onMapViewLevelChange?: (level: MapViewLevel) => void;
 }
+
+const MAP_VIEW_OPTIONS: { value: MapViewLevel; label: string }[] = [
+  { value: 'sido', label: '시 단위' },
+  { value: 'gu', label: '구 단위' },
+  { value: 'dong', label: '동 단위' },
+];
 
 const SearchOptionsModal: React.FC<SearchOptionsModalProps> = ({
   isOpen,
@@ -29,12 +41,15 @@ const SearchOptionsModal: React.FC<SearchOptionsModalProps> = ({
   onGenderChange,
   includeCompleted = false,
   onIncludeCompletedChange,
+  mapViewLevel = 'sido',
+  onMapViewLevelChange,
 }) => {
   const [localSelectedDays, setLocalSelectedDays] = useState<number[]>(selectedDays);
   const [localHideClosed, setLocalHideClosed] = useState<boolean>(hideClosed);
   const [localOnlyRanker, setLocalOnlyRanker] = useState<boolean>(onlyRanker);
   const [localGender, setLocalGender] = useState<'male' | 'female' | null>(gender);
   const [localIncludeCompleted, setLocalIncludeCompleted] = useState<boolean>(includeCompleted);
+  const [localMapViewLevel, setLocalMapViewLevel] = useState<MapViewLevel>(mapViewLevel);
   const modalMouseDownRef = React.useRef<{ x: number; y: number } | null>(null);
 
   // prop 변경 시 로컬 상태 업데이트
@@ -44,7 +59,8 @@ const SearchOptionsModal: React.FC<SearchOptionsModalProps> = ({
     setLocalOnlyRanker(onlyRanker);
     setLocalGender(gender);
     setLocalIncludeCompleted(includeCompleted);
-  }, [selectedDays, hideClosed, onlyRanker, gender, includeCompleted, isOpen]);
+    setLocalMapViewLevel(mapViewLevel);
+  }, [selectedDays, hideClosed, onlyRanker, gender, includeCompleted, mapViewLevel, isOpen]);
 
   const weekDays = [
     { day: 1, label: '월' },
@@ -78,18 +94,22 @@ const SearchOptionsModal: React.FC<SearchOptionsModalProps> = ({
     if (onIncludeCompletedChange) {
       onIncludeCompletedChange(localIncludeCompleted);
     }
+    if (onMapViewLevelChange) {
+      onMapViewLevelChange(localMapViewLevel);
+    }
     onClose();
   };
 
   const handleReset = () => {
     setLocalSelectedDays([]);
-    setLocalHideClosed(true); // 기본값: 마감된 매치 숨기기
+    setLocalHideClosed(true);
     setLocalOnlyRanker(false);
     setLocalGender(null);
     setLocalIncludeCompleted(false);
+    setLocalMapViewLevel('sido');
     onDaysChange([]);
     if (onHideClosedChange) {
-      onHideClosedChange(true); // 기본값: 마감된 매치 숨기기
+      onHideClosedChange(true);
     }
     if (onOnlyRankerChange) {
       onOnlyRankerChange(false);
@@ -99,6 +119,9 @@ const SearchOptionsModal: React.FC<SearchOptionsModalProps> = ({
     }
     if (onIncludeCompletedChange) {
       onIncludeCompletedChange(false);
+    }
+    if (onMapViewLevelChange) {
+      onMapViewLevelChange('sido');
     }
   };
 
@@ -203,6 +226,32 @@ const SearchOptionsModal: React.FC<SearchOptionsModalProps> = ({
                 />
                 <span className="text-sm text-[var(--color-text-primary)]">종료된 매치 보이기</span>
               </label>
+            </div>
+          </div>
+
+          <div className="border-t border-[var(--color-border-card)] pt-4">
+            <h3 className="text-sm font-medium text-[var(--color-text-primary)] mb-3">지도 기본 보기</h3>
+            <p className="text-xs text-[var(--color-text-secondary)] mb-2">
+              사용자 주소를 기준으로 기본 지도 축척이 설정됩니다.
+            </p>
+            <p className="text-xs text-[var(--color-text-secondary)] mb-3">
+              시·구 단위 선택 시 지역 드롭다운 2개(시/도, 구), 동 단위 선택 시 3개(시/도, 구, 동)가 표시됩니다.
+            </p>
+            <div className="flex gap-2">
+              {MAP_VIEW_OPTIONS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setLocalMapViewLevel(value)}
+                  className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all ${
+                    localMapViewLevel === value
+                      ? 'border-[var(--color-blue-primary)] bg-blue-50 dark:bg-blue-900/20 text-[var(--color-blue-primary)] font-medium'
+                      : 'border-[var(--color-border-card)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] hover:border-[var(--color-blue-primary)]/50'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
 

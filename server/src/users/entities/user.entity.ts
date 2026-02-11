@@ -85,6 +85,10 @@ export class User {
   @Column({ type: 'varchar', length: 255, nullable: true })
   residenceSigungu: string | null; // 시/군/구 (상세 주소 포함 시 길어질 수 있음)
 
+  /** 회원가입/내 정보에 저장한 전체 주소 (도로명/지번 + 상세주소). 내 정보 주소 항목에 표시 */
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  residenceAddress: string | null;
+
   // 위치 정보 (위도, 경도)
   @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
   latitude: number | null;
@@ -218,13 +222,21 @@ export class User {
   @Column({ type: 'jsonb', nullable: true })
   athleteData: { sport?: string; subSport?: string; registeredYear?: number; [key: string]: unknown } | null;
 
-  /** 오운 랭크: 종목별 S,A,B,C,D,E,F. 저장값 없으면 선수=C/일반=F 기본 */
+  /** 올코트플레이 랭크: 종목별 S,A,B,C,D,E,F. 저장값 없으면 선수=C/일반=F 기본 (DB 컬럼 ohunRanks) */
   @Column({ type: 'jsonb', default: () => "'{}'" })
   ohunRanks: Record<string, string>;
+
+  /** 랭크매치 종목별 점수·승패 (D급 1000점 시작, 승 +25 패 -25). { [종목]: { points, wins, losses } } */
+  @Column({ type: 'jsonb', default: () => "'{}'" })
+  ohunRankPoints: Record<string, { points: number; wins: number; losses: number }>;
 
   /** 포인트 (서비스 내 결제/적립/사용용) */
   @Column({ type: 'int', default: 0 })
   points: number;
+
+  /** 내 지역 랭크매치 생성 시 심판 신청 알림 받기 */
+  @Column({ type: 'boolean', default: false })
+  notifyRefereeRankMatchInRegion: boolean;
 
   // 메타 정보
   @CreateDateColumn()

@@ -23,7 +23,7 @@ export const MATCH_TYPE_THEME: Record<MatchType, {
     bg: 'from-amber-900 to-amber-950',
     border: 'border-amber-400 hover:border-amber-300',
     text: 'text-amber-100',
-    label: '랭크매치',
+    label: '랭크 매치',
     accentHex: '#d97706',
     accentRgba: 'rgba(217,119,6,0.15)',
   },
@@ -39,7 +39,7 @@ export const MATCH_TYPE_THEME: Record<MatchType, {
 
 const DESCRIPTIONS: Record<MatchType, string> = {
   general: '누구나 참여할 수 있는 일반 운동 매치',
-  rank: '오운 랭크를 나누는 실력 기반 매치',
+  rank: '올코트플레이 랭크를 나누는 실력 기반 매치',
   event: '경품, 촬영 등 특별한 목적의 이벤트 매치',
 };
 

@@ -17,6 +17,8 @@ interface NaverMapProps {
   markers?: NaverMapMarkerItem[];
   /** true면 중심에 드래그 가능 마커 표시. false면 시설 마커만 표시 */
   showCenterMarker?: boolean;
+  /** true면 우측 하단에 지도 축척(Scale Bar) 표시 */
+  showScaleControl?: boolean;
 }
 
 declare global {
@@ -33,6 +35,7 @@ const NaverMap: React.FC<NaverMapProps> = ({
   style = { height: '100%', width: '100%' },
   markers = [],
   showCenterMarker = true,
+  showScaleControl = false,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -159,6 +162,17 @@ const NaverMap: React.FC<NaverMapProps> = ({
 
         const map = new window.naver.maps.Map(container, options);
         mapRef.current = map;
+
+        if (showScaleControl && typeof window.naver.maps.ScaleControl === 'function') {
+          try {
+            const scaleControl = new window.naver.maps.ScaleControl();
+            if (map.controls && typeof map.controls.add === 'function' && window.naver.maps.Position) {
+              map.controls.add(scaleControl, window.naver.maps.Position.BOTTOM_RIGHT);
+            }
+          } catch (e) {
+            console.warn('ScaleControl 추가 실패:', e);
+          }
+        }
 
         if (showCenterMarker) {
           const markerPosition = new window.naver.maps.LatLng(lat, lng);

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Query, UseGuards, Request, Param, ParseIntPipe, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Query, UseGuards, Request, Param, ParseIntPipe, BadRequestException, NotFoundException, HttpCode, HttpStatus } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UserScoreService } from './user-score.service';
 import { FollowService } from './follow.service';
@@ -10,16 +10,17 @@ import { HallOfFameQueryDto } from './dto/hall-of-fame-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from './entities/user.entity';
+import { PointTransactionType } from './entities/point-transaction.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserSeasonScore } from './entities/user-season-score.entity';
 import { NotificationType } from '../notifications/entities/notification.entity';
 
 /**
- * 오운 랭크: 랭크매치 참여 후 심판이 승패를 기록했을 때만 등급이 부여됨.
+ * 올코트플레이 랭크: 랭크 매치 참여 후 심판이 승패를 기록했을 때만 등급이 부여됨.
  * ohunRanks에 명시적으로 저장된 종목만 반환 (관심/참가 종목에 대한 기본 F/C 부여 없음).
  */
-function getEffectiveOhunRanks(targetUser: User): Record<string, string> {
+function getEffectiveAllcourtplayRanks(targetUser: User): Record<string, string> {
   const stored = targetUser.ohunRanks || {};
   const result: Record<string, string> = {};
   for (const [sport, rank] of Object.entries(stored)) {
@@ -160,12 +161,20 @@ export class UsersController {
   }
 
   /**
-   * 팔로우하기
+   * 팔로우하기 (대상 유저에게 새 팔로워 알림 발송)
    */
   @Post('follow/:userId')
   @UseGuards(JwtAuthGuard)
   async follow(@CurrentUser() user: User, @Param('userId', ParseIntPipe) followingId: number) {
     await this.followService.follow(user.id, followingId);
+    const displayName = `${user.nickname || '회원'}${user.tag || ''}`;
+    await this.notificationsService.createNotification(
+      followingId,
+      NotificationType.NEW_FOLLOWER,
+      '새 팔로워',
+      `${displayName}님이 회원님을 팔로우했습니다.`,
+      { followerId: user.id },
+    );
     return { message: '팔로우했습니다.' };
   }
 
@@ -279,6 +288,23 @@ export class UsersController {
   }
 
   /**
+   * 포인트 충전 (현재: 클릭 시 100,000P 지급. 추후 결제 연동 시 이 엔드포인트에서 결제 검증 후 지급)
+   */
+  @Post('my/charge')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async chargePoints(@CurrentUser() user: User) {
+    const CHARGE_AMOUNT = 100000;
+    const result = await this.pointsService.addTransaction(
+      user.id,
+      CHARGE_AMOUNT,
+      PointTransactionType.EARN,
+      '포인트 충전',
+    );
+    return { balance: result.balance, added: CHARGE_AMOUNT };
+  }
+
+  /**
    * 내 축구 스텟 (매치 리뷰에서 뽑힌 횟수 기반, 레이더차트용 1~10)
    */
   @Get('me/football-stats')
@@ -288,7 +314,7 @@ export class UsersController {
   }
 
   /**
-   * 다른 유저의 프로필 요약 (공개 정보만: 닉네임, 지역, 관심 종목, 오운 랭크, 선수 여부, 가입일, 팔로워/팔로잉 수)
+   * 다른 유저의 프로필 요약 (공개 정보만: 닉네임, 지역, 관심 종목, 올코트플레이 랭크, 선수 여부, 가입일, 팔로워/팔로잉 수)
    */
   @Get(':id/profile-summary')
   @UseGuards(JwtAuthGuard)
@@ -306,12 +332,22 @@ export class UsersController {
       this.followService.isFollowing(currentUser.id, userId),
       this.usersService.getActivitySummaryForProfile(userId),
     ]);
-    const effectiveRanks = getEffectiveOhunRanks(targetUser);
+    const effectiveRanks = getEffectiveAllcourtplayRanks(targetUser);
     const earnedTitles = this.usersService.getEarnedTitlesFromCount(activitySummary.countByCategory);
     const preferredPosition =
       targetUser.sportPositions?.length && targetUser.sportPositions[0].positions?.length
         ? targetUser.sportPositions[0].positions.join(', ')
         : null;
+    const ohunRankPoints = targetUser.ohunRankPoints ?? {};
+    const primarySport =
+      Object.keys(effectiveRanks)[0] ||
+      targetUser.interestedSports?.[0] ||
+      (Object.keys(ohunRankPoints).length ? Object.keys(ohunRankPoints)[0] : null);
+    const primaryStats = primarySport ? ohunRankPoints[primarySport] : null;
+    const totalGames = primaryStats ? primaryStats.wins + primaryStats.losses : 0;
+    const winRate = totalGames > 0 ? Math.round((primaryStats!.wins / totalGames) * 100) : 0;
+    const totalScore =
+      primaryStats != null ? primaryStats.points : targetUser.totalScore ?? 0;
     return {
       id: targetUser.id,
       nickname: targetUser.nickname,
@@ -326,13 +362,17 @@ export class UsersController {
       createdAt: targetUser.createdAt,
       followersCount,
       followingCount,
-      totalScore: targetUser.totalScore,
+      totalScore,
       isFollowing,
       skillLevel: targetUser.skillLevel ?? null,
       mannerScore: targetUser.mannerScore ?? 0,
       preferredPosition: preferredPosition ?? undefined,
       earnedTitles,
       recentCompletedActivities: activitySummary.recentCompleted,
+      rankMatchStats:
+        primaryStats != null
+          ? { totalGames, wins: primaryStats.wins, losses: primaryStats.losses, winRate }
+          : undefined,
     };
   }
 

@@ -31,7 +31,7 @@ const Step2LevelSettings: React.FC<Step2LevelSettingsProps> = ({
       <div className="mb-6">
         <h3 className="text-xl font-bold text-[var(--color-text-primary)] mb-2">경기 레벨 설정</h3>
         <p className="text-sm text-[var(--color-text-secondary)]">
-          자유 매칭에서도 선수 출신·오운 축구 랭커 등을 반영해 팀 밸런스를 맞출 수 있습니다. 팀당 최소 인원도 설정하세요.
+          자유 매칭에서도 선수 출신·올코트플레이 축구 랭커 등을 반영해 팀 밸런스를 맞출 수 있습니다. 팀당 최소 인원도 설정하세요.
         </p>
       </div>
 
@@ -76,7 +76,7 @@ const Step2LevelSettings: React.FC<Step2LevelSettingsProps> = ({
             <div className="flex items-center gap-2 flex-1">
               <StarIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
               <div>
-                <p className="font-medium text-[var(--color-text-primary)]">오운 축구 랭커 여부 고려</p>
+                <p className="font-medium text-[var(--color-text-primary)]">올코트플레이 축구 랭커 여부 고려</p>
                 <p className="text-xs text-[var(--color-text-secondary)]">
                   랭커와 일반 유저를 균등하게 배분합니다.
                 </p>

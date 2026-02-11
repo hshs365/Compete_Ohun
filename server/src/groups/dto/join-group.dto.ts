@@ -12,4 +12,10 @@ export class JoinGroupDto {
   @IsString()
   @IsIn(['red', 'blue'])
   team?: 'red' | 'blue';
+
+  /** 슬롯 라벨 (예: LW, RW, CM). 없으면 포지션 내 기본 슬롯 */
+  @IsOptional()
+  @IsString()
+  @MaxLength(10)
+  slotLabel?: string;
 }

@@ -32,6 +32,7 @@ interface Step5AdditionalInfoProps {
   residenceSido: string;
   residenceSigungu: string;
   selectedAddress: string;
+  detailAddress: string;
   onNicknameChange: (nickname: string) => void;
   onGenderChange: (gender: 'male' | 'female') => void;
   onResidenceChange: (residence: {
@@ -39,6 +40,7 @@ interface Step5AdditionalInfoProps {
     residenceSigungu: string;
     selectedAddress: string;
   }) => void;
+  onDetailAddressChange: (detailAddress: string) => void;
 }
 
 const Step5AdditionalInfo: React.FC<Step5AdditionalInfoProps> = ({
@@ -47,11 +49,14 @@ const Step5AdditionalInfo: React.FC<Step5AdditionalInfoProps> = ({
   residenceSido,
   residenceSigungu,
   selectedAddress,
+  detailAddress,
   onNicknameChange,
   onGenderChange,
   onResidenceChange,
+  onDetailAddressChange,
 }) => {
   const [nicknameAvailable, setNicknameAvailable] = useState<boolean | null>(null);
+  const [assignedTag, setAssignedTag] = useState<string | null>(null);
   const [nicknameChecking, setNicknameChecking] = useState(false);
   const [nicknameCheckError, setNicknameCheckError] = useState<string | null>(null);
 
@@ -59,11 +64,13 @@ const Step5AdditionalInfo: React.FC<Step5AdditionalInfoProps> = ({
     if (nickToCheck.length < 2) return;
     setNicknameChecking(true);
     setNicknameCheckError(null);
+    setAssignedTag(null);
     try {
-      const result = await api.get<{ available: boolean }>(
+      const result = await api.get<{ available: boolean; tag?: string }>(
         `/api/auth/check-nickname?nickname=${encodeURIComponent(nickToCheck)}`
       );
       setNicknameAvailable(result.available);
+      setAssignedTag(result.tag ?? null);
     } catch (error) {
       setNicknameAvailable(null);
       const isNetworkError =
@@ -83,6 +90,7 @@ const Step5AdditionalInfo: React.FC<Step5AdditionalInfoProps> = ({
   React.useEffect(() => {
     if (nickname.length < 2) {
       setNicknameAvailable(null);
+      setAssignedTag(null);
       setNicknameCheckError(null);
       return;
     }
@@ -169,8 +177,8 @@ const Step5AdditionalInfo: React.FC<Step5AdditionalInfoProps> = ({
         {nicknameChecking && (
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">확인 중...</p>
         )}
-        {nicknameAvailable === true && (
-          <p className="mt-1 text-sm text-green-500">사용 가능한 닉네임입니다.</p>
+        {nicknameAvailable === true && assignedTag && (
+          <p className="mt-1 text-sm text-green-500">부여될 태그: <span className="font-medium">{assignedTag}</span></p>
         )}
         {nicknameAvailable === false && nickname.length >= 2 && (
           <p className="mt-1 text-sm text-red-500">이미 사용 중인 닉네임입니다.</p>
@@ -250,6 +258,21 @@ const Step5AdditionalInfo: React.FC<Step5AdditionalInfoProps> = ({
           <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
             선택된 주소: {selectedAddress}
           </p>
+        )}
+        {/* 상세주소 (동·호수 등) */}
+        {selectedAddress && (
+          <div className="mt-3">
+            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">
+              상세주소
+            </label>
+            <input
+              type="text"
+              value={detailAddress}
+              onChange={(e) => onDetailAddressChange(e.target.value)}
+              className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+              placeholder="동, 호수, 상세주소를 입력하세요 (선택)"
+            />
+          </div>
         )}
       </div>
     </div>

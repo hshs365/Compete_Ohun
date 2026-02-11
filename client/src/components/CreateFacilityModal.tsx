@@ -246,8 +246,8 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
                 coordinates: newCoordinates,
                 address: address, // 주소도 함께 업데이트
               }));
-              // 지도 확대 레벨 설정 (주소 선택 시 확대)
-              setMapZoom(3);
+              // 주소 검색 후 ~300m 축척으로 확대
+              setMapZoom(11);
               // 지도 표시
               setShowMap(true);
               // 지도 확대를 위해 key 변경 (NaverMap 컴포넌트 리렌더링)
@@ -283,8 +283,8 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
       coordinates: newCoordinates,
     }));
     
-    // 마커 드래그 시에도 확대 레벨 조정
-    setMapZoom(3);
+    // 마커 드래그 시 이동된 마커 중심으로 ~300m 축척 유지
+    setMapZoom(11);
 
     // 좌표를 주소로 변환 (역지오코딩)
     try {
@@ -478,7 +478,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
           {/* 시설명 */}
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              시설명 <span className="text-red-500">*</span>
+              시설명 <span className="text-[var(--color-text-secondary)]">(필수)</span>
             </label>
             <input
               id="name"
@@ -495,7 +495,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
           <div>
             <label htmlFor="type" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
               <BuildingOfficeIcon className="w-4 h-4 inline mr-1" />
-              시설 종류 <span className="text-red-500">*</span>
+              시설 종류 <span className="text-[var(--color-text-secondary)]">(필수)</span>
             </label>
             <select
               id="type"
@@ -516,7 +516,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
           <div>
             <label htmlFor="address" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
               <MapPinIcon className="w-4 h-4 inline mr-1" />
-              위치 <span className="text-red-500">*</span>
+              위치 <span className="text-[var(--color-text-secondary)]">(필수)</span>
             </label>
             <div className="flex gap-2 mb-2">
               <input

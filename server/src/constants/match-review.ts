@@ -10,8 +10,13 @@ export const MATCH_REVIEW_CATEGORIES: Record<string, { key: string; label: strin
     { key: '멘탈', label: '가장 멘탈이 좋은 선수는 누구였나요?' },
     { key: '수비', label: '가장 수비가 좋은 선수는 누구였나요?' },
     { key: '공격', label: '가장 공격이 좋은 선수는 누구였나요?' },
+    { key: '매너', label: '매너가 좋았던 선수는 누구였나요?' },
+    { key: '신고', label: '불량한 태도나 좋지 않은 성격의 유저를 신고해 주세요.' },
   ],
 };
+
+/** 선수 리뷰에서 선택 항목(해당 없음 가능) */
+export const OPTIONAL_REVIEW_CATEGORY_KEYS = ['신고'];
 
 /** 축구 레이더차트 스텟 키 순서 (FootballStatsRadar와 동일) */
 export const FOOTBALL_STAT_KEYS = [

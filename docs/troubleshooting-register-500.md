@@ -8,7 +8,7 @@ Jenkins 빌드·배포 후 회원가입 시 **500 Internal server error**가 나
 
 ## ⚠️ 진행 방식
 
-- **실행 위치**: 배포된 백엔드가 돌아가는 **웹 서버** (예: ohun.kr 백엔드 호스트). Jenkins로 배포했다면 보통 `/home/webmaster/my-app/server` 같은 경로입니다.
+- **실행 위치**: 배포된 백엔드가 돌아가는 **웹 서버** (예: allcourtplay.com 백엔드 호스트). Jenkins로 배포했다면 보통 `/home/webmaster/my-app/server` 같은 경로입니다.
 - **방법**: 각 단계의 "실행할 명령"을 서버에서 실행 → 터미널 출력을 **그대로 복사** → 개발 PC에서 채팅/문서로 공유하면, 로그·결과를 보고 원인을 좁혀 갈 수 있습니다.
 - **가능하면 Step 0을 가장 먼저** 진행해 주세요. 회원가입 실패 시점의 서버 로그에 실제 에러 메시지가 찍혀 있습니다.
 
@@ -20,7 +20,7 @@ Jenkins 빌드·배포 후 회원가입 시 **500 Internal server error**가 나
 
 | 로그에 보이는 내용 | 원인 | 서버에서 할 조치 |
 |-------------------|------|------------------|
-| **`500 CORS 정책에 의해 차단되었습니다`** | `https://ohun.kr` origin이 CORS에서 거부되어 에러가 500으로 응답됨. 또는 `NODE_ENV`가 production이 아니어서 운영 도메인이 허용되지 않음. | (1) **코드 반영**: 이 저장소의 `server/src/main.ts` CORS 수정본을 배포(ohun.kr 항상 허용, 거부 시 500 대신 CORS 실패로 처리). (2) **환경 확인**: 서버 `.env`에 `NODE_ENV=production` 설정 후 `pm2 restart backend --update-env`. |
+| **`500 CORS 정책에 의해 차단되었습니다`** | `https://allcourtplay.com` origin이 CORS에서 거부되어 에러가 500으로 응답됨. 또는 `NODE_ENV`가 production이 아니어서 운영 도메인이 허용되지 않음. | (1) **코드 반영**: 이 저장소의 `server/src/main.ts` CORS 수정본을 배포(allcourtplay.com 항상 허용, 거부 시 500 대신 CORS 실패로 처리). (2) **환경 확인**: 서버 `.env`에 `NODE_ENV=production` 설정 후 `pm2 restart backend --update-env`. |
 | **`MODULE_NOT_FOUND` / `../notifications/notifications.service`** | 빌드·배포 시 `notifications` 모듈이 `dist`에 없거나, 오래된 배포본만 있어서 모듈을 찾지 못함. | (1) **전체 재빌드·배포**: `cd /home/webmaster/my-app/server` → `rm -rf dist node_modules` → `npm ci` → `npm run build` → `ls dist/notifications` 로 파일 존재 확인. (2) Jenkins라면 빌드 산출물에 `dist/notifications/*.js` 가 포함되도록 풀 배포 후 `pm2 restart backend --update-env`. |
 | **`ENETUNREACH 192.168.132.81:5432`** (GroupsSchedulerService 등) | **웹 서버**에서 **DB 서버**(192.168.132.81:5432)로 네트워크 연결 불가. | (1) **웹 서버**에서 연결 테스트: `nc -zv 192.168.132.81 5432` 또는 `telnet 192.168.132.81 5432`. (2) DB 서버 방화벽에서 웹 서버 IP 허용, PostgreSQL `listen_addresses`·`pg_hba.conf` 확인. (3) DB 서버(192.168.132.81)에서 PostgreSQL 실행 여부 확인. 자세한 DB 점검은 [db-connection-checklist.md](db-connection-checklist.md) 참고. |
 | **`TypeOrmModule Called end on pool more than once`** | DB 연결 실패가 반복되면서 연결 풀 상태가 꼬인 경우. | 위 **ENETUNREACH** 조치로 DB 연결을 먼저 복구한 뒤 `pm2 restart backend --update-env`. |

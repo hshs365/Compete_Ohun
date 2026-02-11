@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { UserGroupIcon, UserPlusIcon, UserMinusIcon, MagnifyingGlassIcon, SparklesIcon } from '@heroicons/react/24/outline';
 import { api } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,6 +25,7 @@ interface User {
 const FollowersPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<'followers' | 'following' | 'played-together'>('followers');
   const [recommended, setRecommended] = useState<User[]>([]);
   const [recommendedLoading, setRecommendedLoading] = useState(true);
@@ -46,6 +47,31 @@ const FollowersPage = () => {
     }
     fetchData();
   }, [activeTab, user, navigate]);
+
+  /** 다른 컴포넌트(GroupDetail 등)에서 팔로우/언팔로우 시 목록 갱신 */
+  useEffect(() => {
+    const onFollowStateChanged = () => fetchData();
+    window.addEventListener('followStateChanged', onFollowStateChanged);
+    return () => window.removeEventListener('followStateChanged', onFollowStateChanged);
+  }, [activeTab, user]);
+
+  /** 탭 전환 등으로 페이지가 다시 보일 때 새 팔로워 반영 */
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user) fetchData();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [activeTab, user]);
+
+  /** 알림에서 "새 팔로워" 클릭 시 state.openUserId로 진입 → 해당 유저 프로필 모달 열기 */
+  useEffect(() => {
+    const openUserId = (location.state as { openUserId?: number })?.openUserId;
+    if (openUserId != null) {
+      setSelectedUser({ id: openUserId, nickname: '', tag: undefined, profileImageUrl: undefined, isFollowing: false } as User);
+      navigate('/followers', { replace: true, state: {} });
+    }
+  }, [location.state, navigate]);
 
   // 추천 유저는 별도 패널용 - 마운트 시 한 번 로드
   useEffect(() => {
@@ -136,18 +162,19 @@ const FollowersPage = () => {
       updateSearchResultFollow(userId, true);
       updateRecommendedFollow(userId, true);
       updateSelectedUserFollow(userId, true);
-      if (activeTab === 'followers') {
-        const data = await api.get<User[]>('/api/users/followers');
-        setFollowers(data);
+      // 즉시 목록에 추가 (추천/검색에서 팔로우한 유저)
+      if (selectedUser && selectedUser.id === userId && !following.some((u) => u.id === userId)) {
+        setFollowing((prev) => [...prev, { ...selectedUser, isFollowing: true }]);
       }
-      if (activeTab === 'following' || searchQuery.trim()) {
-        const data = await api.get<User[]>('/api/users/following');
-        setFollowing(data);
-      }
-      if (activeTab === 'played-together') {
-        const data = await api.get<User[]>('/api/users/played-together');
-        setPlayedTogether(data);
-      }
+      // 팔로워/팔로잉 목록 전체 새로고침
+      const [followersData, followingData, playedData] = await Promise.all([
+        api.get<User[]>('/api/users/followers'),
+        api.get<User[]>('/api/users/following'),
+        api.get<User[]>('/api/users/played-together'),
+      ]);
+      setFollowers(Array.isArray(followersData) ? followersData : []);
+      setFollowing(Array.isArray(followingData) ? followingData : []);
+      setPlayedTogether(Array.isArray(playedData) ? playedData : []);
     } catch (error) {
       console.error('팔로우 실패:', error);
       await showError(error instanceof Error ? error.message : '팔로우에 실패했습니다.', '팔로우 실패');
@@ -161,17 +188,15 @@ const FollowersPage = () => {
       updateSearchResultFollow(userId, false);
       updateRecommendedFollow(userId, false);
       updateSelectedUserFollow(userId, false);
-      if (activeTab === 'followers') {
-        const data = await api.get<User[]>('/api/users/followers');
-        setFollowers(data);
-      }
-      if (activeTab === 'following' || searchQuery.trim()) {
-        setFollowing((prev) => prev.filter((u) => u.id !== userId));
-      }
-      if (activeTab === 'played-together') {
-        const data = await api.get<User[]>('/api/users/played-together');
-        setPlayedTogether(data);
-      }
+      setFollowing((prev) => prev.filter((u) => u.id !== userId));
+      const [followersData, followingData, playedData] = await Promise.all([
+        api.get<User[]>('/api/users/followers'),
+        api.get<User[]>('/api/users/following'),
+        api.get<User[]>('/api/users/played-together'),
+      ]);
+      setFollowers(Array.isArray(followersData) ? followersData : []);
+      setFollowing(Array.isArray(followingData) ? followingData : []);
+      setPlayedTogether(Array.isArray(playedData) ? playedData : []);
     } catch (error) {
       console.error('언팔로우 실패:', error);
       await showError(error instanceof Error ? error.message : '언팔로우에 실패했습니다.', '언팔로우 실패');
@@ -203,8 +228,8 @@ const FollowersPage = () => {
   const showFollowButton = isSearchMode || activeTab !== 'followers'; // 팔로워 탭에서는 목록에 팔로우 버튼 숨김(이미 나를 팔로우한 사람)
 
   return (
-    <div className="flex flex-1 w-full min-h-0 p-4 md:p-6">
-      <div className="flex flex-1 gap-6 max-w-6xl mx-auto w-full min-w-0">
+    <div className="w-full p-4 md:p-6">
+      <div className="flex gap-6 max-w-6xl mx-auto w-full min-w-0">
         {/* 메인: 검색 + 탭 + 유저 목록 */}
         <div className="flex-1 min-w-0 space-y-6">
           <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">팔로워</h1>
@@ -322,7 +347,7 @@ const FollowersPage = () => {
                   {listUser.commonSports && listUser.commonSports.length > 0 && (
                     <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
                       {listUser.commonSports.join(', ')}
-                      {listUser.totalScore != null ? ` · ${listUser.totalScore.toLocaleString()}점` : ''}
+                      {listUser.totalScore != null ? ` · ${listUser.totalScore.toLocaleString()} RP` : ''}
                       {listUser.mutualCount != null && listUser.mutualCount > 0 ? ` · 친구 ${listUser.mutualCount}명` : ''}
                     </p>
                   )}
@@ -366,7 +391,7 @@ const FollowersPage = () => {
               <SparklesIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
               <h2 className="font-semibold text-[var(--color-text-primary)]">함께할 유저 추천</h2>
             </div>
-            <div className="max-h-[calc(100vh-12rem)] overflow-y-auto">
+            <div>
               {recommendedLoading ? (
                 <div className="py-8 text-center text-[var(--color-text-secondary)] text-sm">로딩 중...</div>
               ) : recommended.length === 0 ? (
@@ -400,7 +425,7 @@ const FollowersPage = () => {
                         </div>
                         <p className="text-xs text-[var(--color-text-secondary)] truncate">
                           {recUser.commonSports?.length ? recUser.commonSports.join(', ') : ''}
-                          {recUser.totalScore != null ? ` · ${recUser.totalScore.toLocaleString()}점` : ''}
+                          {recUser.totalScore != null ? ` · ${recUser.totalScore.toLocaleString()} RP` : ''}
                         </p>
                       </div>
                     </div>

@@ -326,13 +326,13 @@ const WelcomeGuide: React.FC<WelcomeGuideProps> = ({ onClose }) => {
                 환영합니다! 🎉
               </h2>
               <p className="text-2xl text-[var(--color-text-secondary)] mb-8">
-                {user?.nickname || '회원'}님, 오운으로 오신 것을 환영합니다!
+                {user?.nickname || '회원'}님, 올코트플레이에 오신 것을 환영합니다!
               </p>
               <div className="max-w-xl mx-auto">
                 <div className="p-6 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-2xl border-2 border-blue-200 dark:border-blue-800 shadow-lg">
                   <p className="text-lg text-[var(--color-text-primary)] leading-relaxed font-medium">
                     간단한 설정을 통해 더 나은 경험을 제공받으세요.<br />
-                    다음 단계에서 오운의 주요 기능들을 안내해드릴게요!
+                    다음 단계에서 올코트플레이의 주요 기능들을 안내해드릴게요!
                   </p>
                 </div>
               </div>
@@ -365,10 +365,10 @@ const WelcomeGuide: React.FC<WelcomeGuideProps> = ({ onClose }) => {
           <div className="space-y-6">
             <div className="text-center mb-8">
               <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-3">
-                오운 콘솔 안내
+                올코트플레이 콘솔 안내
               </h2>
               <p className="text-base text-[var(--color-text-secondary)]">
-                오운의 주요 기능을 간단히 안내해드립니다.
+                올코트플레이의 주요 기능을 간단히 안내해드립니다.
               </p>
             </div>
 
@@ -499,10 +499,10 @@ const WelcomeGuide: React.FC<WelcomeGuideProps> = ({ onClose }) => {
                 <MapPinIcon className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-1">
-                    오운의 매치 목록 안내
+                    올코트플레이의 매치 목록 안내
                   </p>
                   <p className="text-xs text-blue-600 dark:text-blue-400 leading-relaxed">
-                    오운에서는 현재 위치 기준으로 <strong>1주일 이내</strong>의 지역 매치만 볼 수 있어요. 
+                    올코트플레이에서는 현재 위치 기준으로 <strong>1주일 이내</strong>의 지역 매치만 볼 수 있어요. 
                     위치를 등록하시면 더 정확한 매치 추천을 받으실 수 있습니다.
                   </p>
                 </div>

@@ -118,7 +118,7 @@ const Step5BusinessVerification: React.FC<Step5BusinessVerificationProps> = ({
       <div className="max-w-2xl mx-auto space-y-4">
         <div>
           <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-            사업자등록증 이미지 <span className="text-red-500">*</span>
+            사업자등록증 이미지 <span className="text-[var(--color-text-secondary)]">(필수)</span>
           </label>
           <input
             ref={fileInputRef}

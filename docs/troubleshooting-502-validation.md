@@ -18,7 +18,7 @@
 
 ### 1. 백엔드(Node/NestJS) 프로세스가 떠 있지 않음
 
-- 서버(ohun.kr 백엔드가 돌아가는 머신)에서 Node 앱이 종료되었거나 재시작 후 실패한 경우.
+- 서버(allcourtplay.com 백엔드가 돌아가는 머신)에서 Node 앱이 종료되었거나 재시작 후 실패한 경우.
 - **확인:**  
   - PM2 사용 시: `pm2 list`, `pm2 logs`  
   - systemd 사용 시: `systemctl status <서비스명>`  

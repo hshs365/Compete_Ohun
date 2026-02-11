@@ -35,10 +35,10 @@ import { User } from '../users/entities/user.entity';
 import { SocialProvider } from '../social-accounts/entities/social-account.entity';
 
 /**
- * 오운 랭크: 랭크매치 참여 후 심판이 승패를 기록했을 때만 등급이 부여됨.
+ * 올코트플레이 랭크: 랭크 매치 참여 후 심판이 승패를 기록했을 때만 등급이 부여됨.
  * ohunRanks에 명시적으로 저장된 종목만 반환 (관심/참가 종목에 대한 기본 F/C 부여 없음).
  */
-function getEffectiveOhunRanks(user: User): Record<string, string> {
+function getEffectiveAllcourtplayRanks(user: User): Record<string, string> {
   const stored = user.ohunRanks || {};
   const result: Record<string, string> = {};
   for (const [sport, rank] of Object.entries(stored)) {
@@ -257,6 +257,7 @@ export class AuthController {
       birthDate: user.birthDate || null,
       residenceSido: user.residenceSido || null,
       residenceSigungu: user.residenceSigungu || null,
+      residenceAddress: user.residenceAddress || null,
       interestedSports: user.interestedSports || [],
       sportPositions: user.sportPositions || [],
       skillLevel: user.skillLevel || null,
@@ -276,8 +277,9 @@ export class AuthController {
       athleteVerified: user.athleteVerified || false,
       athleteData: user.athleteData || null,
       ohunRanks: user.ohunRanks || {},
-      effectiveRanks: getEffectiveOhunRanks(user),
+      effectiveRanks: getEffectiveAllcourtplayRanks(user),
       points: user.points ?? 0,
+      notifyRefereeRankMatchInRegion: user.notifyRefereeRankMatchInRegion ?? false,
     };
   }
 

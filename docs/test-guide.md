@@ -22,7 +22,7 @@
 
 1. **`server/src/app.controller.spec.ts`**  
    - 기대값을 실제 컨트롤러 응답에 맞춤  
-   - `getHello()`가 `{ message: 'Ohun API Server', status: 'running', api: '/api' }` 를 반환하므로, 이 객체와 일치하도록 `expect` 수정
+   - `getHello()`가 `{ message: 'Allcourtplay API Server', status: 'running', api: '/api' }` 를 반환하므로, 이 객체와 일치하도록 `expect` 수정
 
 2. **`server/test/app.e2e-spec.ts`**  
    - `GET /` 응답을 `'Hello World!'` 문자열이 아니라 JSON 객체로 검증하도록 수정  

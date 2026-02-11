@@ -20,7 +20,7 @@ const Step1Category: React.FC<Step1CategoryProps> = ({ category, onCategoryChang
       <div className="space-y-4">
         <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-3">
           <TagIcon className="w-4 h-4 inline mr-1" />
-          운동 종류 <span className="text-red-500">*</span>
+          운동 종류 <span className="text-[var(--color-text-secondary)]">(필수)</span>
         </label>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {SPORTS_LIST.map((sport) => (

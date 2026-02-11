@@ -41,6 +41,10 @@ export class GroupGameSettings {
   @Column({ type: 'boolean', default: false })
   balanceByRank: boolean; // 랭커 여부 고려
 
+  /** 랭크 매치 포지션 지정 시 참가 가능 최소 랭크 (S,A,B,C,D,E,F). null이면 제한 없음 */
+  @Column({ type: 'varchar', length: 2, nullable: true })
+  minRankGrade: 'S' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | null;
+
   // 메타 정보
   @CreateDateColumn()
   createdAt: Date;

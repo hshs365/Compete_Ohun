@@ -105,7 +105,7 @@ export class Group {
   // 매치 유형 (종목별·유형별 관리)
   @Column({ type: 'varchar', length: 20, default: 'normal' })
   @Index()
-  type: 'normal' | 'rank' | 'event'; // normal: 일반 매치, rank: 랭크매치, event: 이벤트매치
+  type: 'normal' | 'rank' | 'event'; // normal: 일반 매치, rank: 랭크 매치, event: 이벤트매치
 
   // 모임 상태
   @Column({ type: 'boolean', default: true })
@@ -116,6 +116,13 @@ export class Group {
 
   @Column({ type: 'boolean', default: false })
   isCompleted: boolean; // 모임 종료 여부 (meetingDateTime이 지났거나 수동으로 종료 처리)
+
+  /** 랭크매치 최종 스코어 (심판 기록 후). null이면 미기록 */
+  @Column({ type: 'int', nullable: true })
+  finalScoreRed: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  finalScoreBlue: number | null;
 
   // 메타 정보
   @CreateDateColumn()

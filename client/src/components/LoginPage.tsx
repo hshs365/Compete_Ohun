@@ -140,7 +140,7 @@ const LoginPage = () => {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-500 rounded-full mb-4">
             <span className="text-white text-2xl font-bold">O</span>
           </div>
-          <h1 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2">Ohun</h1>
+          <h1 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2">Allcourtplay</h1>
           <p className="text-[var(--color-text-secondary)]">운동 매치 플랫폼에 오신 것을 환영합니다</p>
         </div>
 

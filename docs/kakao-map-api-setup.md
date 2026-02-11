@@ -8,7 +8,7 @@
 ## 1. 카카오 개발자 콘솔
 
 - [카카오 개발자 콘솔](https://developers.kakao.com/) 접속
-- 내 애플리케이션 → 애플리케이션 추가 (예: Ohun)
+- 내 애플리케이션 → 애플리케이션 추가 (예: Allcourtplay)
 - 앱 키 탭에서 **REST API 키** 복사
 
 ## 2. 플랫폼·로컬 API

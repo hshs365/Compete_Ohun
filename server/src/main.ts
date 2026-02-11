@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { createClient, type RedisClientType } from 'redis';
 import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import { join } from 'path';
 import { HttpExceptionLoggerFilter } from './common/filters/http-exception-logger.filter';
 
@@ -26,6 +27,9 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // WebSocket (Socket.io) 어댑터 — 포지션 실시간 반영용
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   // 5xx 등 모든 예외 로그 (배포 환경 500 원인 파악용)
   app.useGlobalFilters(new HttpExceptionLoggerFilter());
@@ -73,10 +77,10 @@ async function bootstrap() {
     allowedOrigins.push(...envOrigins);
   }
   const productionOriginPatterns = [
-    'https://ohun.kr',
-    'https://www.ohun.kr',
-    'http://ohun.kr',
-    'http://www.ohun.kr',
+    'https://allcourtplay.com',
+    'https://www.allcourtplay.com',
+    'http://allcourtplay.com',
+    'http://www.allcourtplay.com',
   ];
 
   app.enableCors({
@@ -84,7 +88,7 @@ async function bootstrap() {
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) return callback(null, true);
       if (productionOriginPatterns.some(allowed => origin.startsWith(allowed))) return callback(null, true);
-      if (origin.includes('ohun.kr')) return callback(null, true);
+      if (origin.includes('allcourtplay.com')) return callback(null, true);
 
       const isDevelopment = process.env.NODE_ENV !== 'production';
       if (isDevelopment) {

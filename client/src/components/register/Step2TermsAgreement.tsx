@@ -164,7 +164,7 @@ const Step2TermsAgreement: React.FC<Step2TermsAgreementProps> = ({
 
       {/* 약관 전문 모달 (간단한 예시) */}
       {showServiceTerms && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
           <div className="bg-[var(--color-bg-card)] rounded-xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
             <h3 className="text-xl font-bold mb-4">서비스 이용 약관</h3>
             <div className="text-sm text-[var(--color-text-secondary)] space-y-4">
@@ -182,7 +182,7 @@ const Step2TermsAgreement: React.FC<Step2TermsAgreementProps> = ({
       )}
 
       {showPrivacyTerms && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
           <div className="bg-[var(--color-bg-card)] rounded-xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
             <h3 className="text-xl font-bold mb-4">개인정보 수집 및 이용 안내</h3>
             <div className="text-sm text-[var(--color-text-secondary)] space-y-4">

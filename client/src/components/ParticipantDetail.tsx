@@ -100,7 +100,7 @@ const ParticipantDetail: React.FC<ParticipantDetailProps> = ({ participant, onCl
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm"
       onClick={handleOverlayClick}
     >
       <div 
@@ -161,7 +161,7 @@ const ParticipantDetail: React.FC<ParticipantDetailProps> = ({ participant, onCl
                 </span>
                 {isRanker && detail.profile.score && (
                   <span className="text-lg font-bold">
-                    {detail.profile.score.toLocaleString()}점
+                    {detail.profile.score.toLocaleString()} RP
                   </span>
                 )}
               </div>
@@ -300,7 +300,7 @@ const ParticipantDetail: React.FC<ParticipantDetailProps> = ({ participant, onCl
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-[var(--color-text-primary)]">+{activity.score}점</p>
+                    <p className="text-sm font-bold text-[var(--color-text-primary)]">+{activity.score} RP</p>
                   </div>
                 </div>
               ))}

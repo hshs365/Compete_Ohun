@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   UserGroupIcon,
   PlusCircleIcon,
-  HeartIcon,
-  CalendarIcon,
+  TrophyIcon,
+  DocumentPlusIcon,
   ChartBarIcon,
   ArrowRightIcon,
   FunnelIcon,
@@ -17,17 +17,21 @@ import SportsStatisticsModal from './SportsStatisticsModal';
 import FootballStatsRadar from './FootballStatsRadar';
 import { getEarnedTitles, getCountByCategory } from '../utils/titles';
 import { MAIN_CATEGORIES } from '../constants/sports';
+import type { MatchType } from './GroupListPanel';
 
 type ActivityItem = {
   id: number;
   name: string;
   category: string;
-  meetingTime: string | null;
+  meetingTime?: string | null;
+  meetingDateTime?: string | null;
   location: string;
   participantCount: number;
   creator?: { nickname: string };
   /** 포지션 지정 매치 참가 시 선택한 포지션 (내 참가 목록에서만) */
   myPositionCode?: string | null;
+  /** normal | rank | event (활동 카드 필터용) */
+  type?: 'normal' | 'rank' | 'event';
 };
 
 const MyActivityPage = () => {
@@ -52,8 +56,9 @@ const MyActivityPage = () => {
   const [footballStatsLoading, setFootballStatsLoading] = useState(false);
   /** 전체 | 축구 | 풋살 | ... (종목별 필터). 축구만 실제 데이터, 나머지는 없음 */
   const [categoryFilter, setCategoryFilter] = useState<string>('전체');
-
-  const [favoriteCount, setFavoriteCount] = useState(0);
+  /** 선택한 활동 카드: 해당 카드 클릭 시 아래 목록에만 표시 */
+  type ActivityCardKey = 'participated_normal' | 'participated_rank' | 'created_normal' | 'created_rank';
+  const [selectedActivityCard, setSelectedActivityCard] = useState<ActivityCardKey>('participated_normal');
 
   useEffect(() => {
     const fetchActivity = async () => {
@@ -63,16 +68,14 @@ const MyActivityPage = () => {
       }
       try {
         setIsLoading(true);
-        const [participations, creations, favRes] = await Promise.all([
+        const [participations, creations] = await Promise.all([
           api.get<ActivityItem[]>('/api/groups/my-participations'),
           api.get<Array<Omit<ActivityItem, 'creator'>>>(
             '/api/groups/my-creations'
           ),
-          api.get<{ count: number }>('/api/groups/my-favorite-count'),
         ]);
         setMyParticipations(Array.isArray(participations) ? participations : []);
         setMyCreations(Array.isArray(creations) ? creations : []);
-        setFavoriteCount(favRes?.count ?? 0);
       } catch (error) {
         console.error('활동 기록 조회 실패:', error);
       } finally {
@@ -106,6 +109,60 @@ const MyActivityPage = () => {
     return myCreations.filter((g) => g.category === categoryFilter);
   }, [myCreations, categoryFilter]);
 
+  /** 카드별 목록: 참여한 일반/랭크, 생성한 일반/랭크 */
+  const participatedNormal = useMemo(
+    () => filteredParticipations.filter((g) => (g.type ?? 'normal') === 'normal'),
+    [filteredParticipations]
+  );
+  const participatedRank = useMemo(
+    () => filteredParticipations.filter((g) => g.type === 'rank'),
+    [filteredParticipations]
+  );
+  const createdNormal = useMemo(
+    () => filteredCreations.filter((g) => (g.type ?? 'normal') === 'normal'),
+    [filteredCreations]
+  );
+  const createdRank = useMemo(
+    () => filteredCreations.filter((g) => g.type === 'rank'),
+    [filteredCreations]
+  );
+
+  /** 선택한 카드에 해당하는 목록 */
+  const listForSelectedCard = useMemo(() => {
+    switch (selectedActivityCard) {
+      case 'participated_normal':
+        return participatedNormal;
+      case 'participated_rank':
+        return participatedRank;
+      case 'created_normal':
+        return createdNormal;
+      case 'created_rank':
+        return createdRank;
+      default:
+        return participatedNormal;
+    }
+  }, [selectedActivityCard, participatedNormal, participatedRank, createdNormal, createdRank]);
+
+  const cardCounts = useMemo(
+    () => ({
+      participated_normal: participatedNormal.length,
+      participated_rank: participatedRank.length,
+      created_normal: createdNormal.length,
+      created_rank: createdRank.length,
+    }),
+    [participatedNormal.length, participatedRank.length, createdNormal.length, createdRank.length]
+  );
+
+  const meetingTimeDisplay = (g: ActivityItem) => {
+    const raw = g.meetingTime ?? (g as any).meetingDateTime;
+    if (!raw) return '일시 미정';
+    if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) {
+      const d = new Date(raw);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+    return String(raw);
+  };
+
   // 내 스텟 보기 클릭 시 API에서 축구 스텟 로드
   useEffect(() => {
     if (!showStatsRadarModal || !authUser) return;
@@ -117,27 +174,6 @@ const MyActivityPage = () => {
       .finally(() => setFootballStatsLoading(false));
   }, [showStatsRadarModal, authUser]);
 
-  const statsForCurrentFilter = useMemo(() => {
-    if (!hasDataForCategory(categoryFilter)) {
-      return {
-        joinedGroups: 0,
-        createdGroups: 0,
-        favoriteGroups: 0,
-        upcomingGroups: 0,
-      };
-    }
-    return {
-      joinedGroups: filteredParticipations.length,
-      createdGroups: filteredCreations.length,
-      favoriteGroups: favoriteCount,
-      upcomingGroups: 0,
-    };
-  }, [
-    categoryFilter,
-    filteredParticipations.length,
-    filteredCreations.length,
-    favoriteCount,
-  ]);
 
   if (!authUser) {
     navigate('/login', { replace: true });
@@ -153,7 +189,7 @@ const MyActivityPage = () => {
   }
 
   return (
-    <div className="flex flex-col flex-1 w-full min-h-0 bg-[var(--color-bg-primary)]">
+    <div className="flex flex-col w-full bg-[var(--color-bg-primary)]">
       {/* 히어로 / 상단 배너 (스포츠용품 페이지와 동일 톤) */}
       <header className="flex-shrink-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)]">
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 md:py-12">
@@ -252,85 +288,89 @@ const MyActivityPage = () => {
               </div>
             ) : (
               <>
-                {/* 통계 카드 그리드 (세련된 카드 스타일) */}
+                {/* 활동 카드 4종: 매치 유형별 정렬(일반 → 랭크), 홈 테마 색상·아이콘 적용 */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                  <div className="group flex flex-col p-5 bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border-card)] hover:shadow-md hover:border-[var(--color-blue-primary)]/20 transition-all">
-                    <UserGroupIcon className="w-9 h-9 text-[var(--color-blue-primary)] mb-3 opacity-90" />
-                    <div className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)] tabular-nums">
-                      {statsForCurrentFilter.joinedGroups}
-                    </div>
-                    <div className="text-sm text-[var(--color-text-secondary)] mt-0.5">
-                      참여한 매치
-                    </div>
-                  </div>
-                  <div className="group flex flex-col p-5 bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border-card)] hover:shadow-md hover:border-[var(--color-blue-primary)]/20 transition-all">
-                    <PlusCircleIcon className="w-9 h-9 text-[var(--color-blue-primary)] mb-3 opacity-90" />
-                    <div className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)] tabular-nums">
-                      {statsForCurrentFilter.createdGroups}
-                    </div>
-                    <div className="text-sm text-[var(--color-text-secondary)] mt-0.5">
-                      생성한 매치
-                    </div>
-                  </div>
-                  <div className="group flex flex-col p-5 bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border-card)] hover:shadow-md hover:border-[var(--color-blue-primary)]/20 transition-all">
-                    <HeartIcon className="w-9 h-9 text-[var(--color-blue-primary)] mb-3 opacity-90" />
-                    <div className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)] tabular-nums">
-                      {statsForCurrentFilter.favoriteGroups}
-                    </div>
-                    <div className="text-sm text-[var(--color-text-secondary)] mt-0.5">
-                      찜한 매치
-                    </div>
-                  </div>
-                  <div className="group flex flex-col p-5 bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border-card)] hover:shadow-md hover:border-[var(--color-blue-primary)]/20 transition-all">
-                    <CalendarIcon className="w-9 h-9 text-[var(--color-blue-primary)] mb-3 opacity-90" />
-                    <div className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)] tabular-nums">
-                      {statsForCurrentFilter.upcomingGroups}
-                    </div>
-                    <div className="text-sm text-[var(--color-text-secondary)] mt-0.5">
-                      참여 예정
-                    </div>
-                  </div>
+                  {(
+                    [
+                      {
+                        key: 'participated_normal' as const,
+                        label: '참여한 일반매치',
+                        icon: UserGroupIcon,
+                        count: cardCounts.participated_normal,
+                        themeKey: 'general' as MatchType,
+                      },
+                      {
+                        key: 'created_normal' as const,
+                        label: '생성한 일반매치',
+                        icon: PlusCircleIcon,
+                        count: cardCounts.created_normal,
+                        themeKey: 'general' as MatchType,
+                      },
+                      {
+                        key: 'participated_rank' as const,
+                        label: '참여한 랭크매치',
+                        icon: TrophyIcon,
+                        count: cardCounts.participated_rank,
+                        themeKey: 'rank' as MatchType,
+                      },
+                      {
+                        key: 'created_rank' as const,
+                        label: '생성한 랭크매치',
+                        icon: DocumentPlusIcon,
+                        count: cardCounts.created_rank,
+                        themeKey: 'rank' as MatchType,
+                      },
+                    ] as const
+                  ).map(({ key, label, icon: Icon, count, themeKey }) => {
+                    const isSelected = selectedActivityCard === key;
+                    const borderClass =
+                      themeKey === 'general'
+                        ? isSelected
+                          ? 'border-blue-400 shadow-md'
+                          : 'border-[var(--color-border-card)] hover:border-blue-400/40'
+                        : isSelected
+                          ? 'border-amber-400 shadow-md'
+                          : 'border-[var(--color-border-card)] hover:border-amber-400/40';
+                    const bgClass =
+                      isSelected
+                        ? themeKey === 'general'
+                          ? 'bg-blue-400/10'
+                          : 'bg-amber-400/10'
+                        : 'bg-[var(--color-bg-primary)]';
+                    const iconClass =
+                      themeKey === 'general'
+                        ? 'text-blue-400'
+                        : 'text-amber-400';
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setSelectedActivityCard(key)}
+                        className={`group flex flex-col p-5 rounded-xl border transition-all text-left ${bgClass} ${borderClass}`}
+                      >
+                        <Icon className={`w-9 h-9 mb-3 opacity-90 ${iconClass}`} />
+                        <div className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)] tabular-nums">
+                          {count}
+                        </div>
+                        <div className="text-sm text-[var(--color-text-secondary)] mt-0.5">
+                          {label}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {/* 참여한 매치 목록 */}
-                {filteredParticipations.length > 0 && (
-                  <div className="mb-8">
-                    <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">
-                      참여한 매치
-                    </h3>
-                    <ul className="space-y-3">
-                      {filteredParticipations.map((g) => (
-                        <li key={g.id}>
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/?group=${g.id}`)}
-                            className="w-full text-left px-5 py-4 bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border-card)] hover:shadow-md hover:border-[var(--color-blue-primary)]/20 transition-all flex items-center justify-between group"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="font-semibold text-[var(--color-text-primary)] group-hover:text-[var(--color-blue-primary)] transition-colors truncate">
-                                {g.name}
-                              </div>
-                              <div className="text-sm text-[var(--color-text-secondary)] mt-1">
-                                {g.category} · {g.meetingTime || '일시 미정'} · {g.participantCount}명
-                                {g.creator?.nickname && ` · 매치장 ${g.creator.nickname}`}
-                              </div>
-                            </div>
-                            <ArrowRightIcon className="w-5 h-5 text-[var(--color-text-secondary)] group-hover:text-[var(--color-blue-primary)] flex-shrink-0 ml-3 transition-colors" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* 생성한 매치 목록 */}
-                {filteredCreations.length > 0 && (
+                {/* 선택한 카드에 해당하는 목록만 표시 */}
+                {listForSelectedCard.length > 0 && (
                   <div>
                     <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">
-                      생성한 매치
+                      {selectedActivityCard === 'participated_normal' && '참여한 일반매치'}
+                      {selectedActivityCard === 'participated_rank' && '참여한 랭크매치'}
+                      {selectedActivityCard === 'created_normal' && '생성한 일반매치'}
+                      {selectedActivityCard === 'created_rank' && '생성한 랭크매치'}
                     </h3>
                     <ul className="space-y-3">
-                      {filteredCreations.map((g) => (
+                      {listForSelectedCard.map((g) => (
                         <li key={g.id}>
                           <button
                             type="button"
@@ -342,7 +382,8 @@ const MyActivityPage = () => {
                                 {g.name}
                               </div>
                               <div className="text-sm text-[var(--color-text-secondary)] mt-1">
-                                {g.category} · {g.meetingTime || '일시 미정'} · {g.participantCount}명
+                                {g.category} · {meetingTimeDisplay(g)} · {g.participantCount}명
+                                {'creator' in g && g.creator?.nickname && ` · 매치장 ${g.creator.nickname}`}
                               </div>
                             </div>
                             <ArrowRightIcon className="w-5 h-5 text-[var(--color-text-secondary)] group-hover:text-[var(--color-blue-primary)] flex-shrink-0 ml-3 transition-colors" />
@@ -353,18 +394,17 @@ const MyActivityPage = () => {
                   </div>
                 )}
 
-                {/* 빈 상태 */}
-                {filteredParticipations.length === 0 &&
-                  filteredCreations.length === 0 &&
-                  hasDataForCategory(categoryFilter) && (
+                {/* 빈 상태: 선택한 카드에 해당하는 목록이 없을 때 */}
+                {listForSelectedCard.length === 0 && hasDataForCategory(categoryFilter) && (
                     <div className="py-16 text-center">
                       <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--color-bg-secondary)] mb-4">
                         <UserGroupIcon className="w-10 h-10 text-[var(--color-text-secondary)] opacity-60" />
                       </div>
                       <p className="text-[var(--color-text-primary)] font-medium">
-                        {categoryFilter === '전체'
-                          ? '아직 참여하거나 생성한 매치가 없습니다.'
-                          : `${categoryFilter} 매치에 참여한 기록이 없습니다.`}
+                        {selectedActivityCard === 'participated_normal' && '참여한 일반매치가 없습니다.'}
+                        {selectedActivityCard === 'participated_rank' && '참여한 랭크매치가 없습니다.'}
+                        {selectedActivityCard === 'created_normal' && '생성한 일반매치가 없습니다.'}
+                        {selectedActivityCard === 'created_rank' && '생성한 랭크매치가 없습니다.'}
                       </p>
                       <p className="text-sm text-[var(--color-text-secondary)] mt-1">
                         매치를 찾아 참가해 보거나, 직접 매치를 만들어 보세요.
@@ -394,7 +434,7 @@ const MyActivityPage = () => {
       {/* 축구: 육각형 스텟(레이더 차트) 모달 */}
       {showStatsRadarModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30"
           onClick={() => setShowStatsRadarModal(false)}
           role="dialog"
           aria-modal="true"

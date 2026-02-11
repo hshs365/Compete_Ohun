@@ -35,11 +35,16 @@ const Sidebar = () => {
     navigate('/');
   };
 
+  const isActive = (item: { path: string; isHome?: boolean }) => {
+    if ((item as { isHome?: boolean }).isHome) return location.pathname === '/';
+    return location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+  };
+
   const mainMenuItems = [
     { name: '홈', icon: HomeIcon, path: '/', isHome: true },
-    { name: '내정보', icon: UserIcon, path: '/my-info' },
+    { name: '내 정보', icon: UserIcon, path: '/my-info' },
     { name: '활동기록', icon: ChartBarIcon, path: '/my-activity' },
-    { name: '내일정', icon: CalendarIcon, path: '/my-schedule' },
+    { name: '내 일정', icon: CalendarIcon, path: '/my-schedule' },
     { name: '시설', icon: BuildingOfficeIcon, path: '/facility-reservation' },
     { name: '명예의전당', icon: TrophyIcon, path: '/hall-of-fame' },
     { name: '스포츠용품', icon: ShoppingBagIcon, path: '/sports-equipment' },
@@ -55,46 +60,54 @@ const Sidebar = () => {
   ];
 
   return (
-    <div className="hidden md:flex flex-col items-center w-16 bg-gray-900 text-white h-screen py-4 flex-shrink-0">
-      <div>
-        <nav className="flex flex-col items-center space-y-6">
-          {mainMenuItems.map((item) => (
-            (item as { isHome?: boolean }).isHome ? (
+    <div className="hidden md:flex flex-col items-center w-16 bg-gray-900 text-white h-screen py-4 shrink-0">
+      <div className="w-full">
+        <nav className="flex flex-col items-center space-y-6 w-full">
+          {mainMenuItems.map((item) => {
+            const active = isActive(item);
+            const baseClass = 'flex flex-col items-center transition-colors duration-200 w-full border-l-2 border-transparent';
+            const activeClass = active ? 'text-white border-l-cyan-400' : 'text-gray-400 hover:text-white';
+            return (item as { isHome?: boolean }).isHome ? (
               <button
                 key={item.name}
                 type="button"
                 onClick={handleHomeClick}
-                className="flex flex-col items-center text-gray-400 hover:text-white transition-colors duration-200 w-full"
+                className={`${baseClass} ${activeClass}`}
               >
                 <item.icon className="h-6 w-6" />
-                <span className="text-xs mt-1">{item.name}</span>
+                <span className="text-xs mt-1 whitespace-nowrap">{item.name}</span>
               </button>
             ) : (
               <Link
                 key={item.name}
                 to={item.path}
-                className="flex flex-col items-center text-gray-400 hover:text-white transition-colors duration-200"
+                className={`${baseClass} ${activeClass}`}
               >
                 <item.icon className="h-6 w-6" />
-                <span className="text-xs mt-1">{item.name}</span>
+                <span className="text-xs mt-1 whitespace-nowrap">{item.name}</span>
               </Link>
-            )
-          ))}
+            );
+          })}
         </nav>
       </div>
 
-      <div className="mt-auto">
-        <nav className="flex flex-col items-center space-y-6">
-          {footerMenuItems.map((item) => (
-            <Link
-              key={item.name}
-              to={item.path}
-              className="flex flex-col items-center text-gray-400 hover:text-white transition-colors duration-200"
-            >
-              <item.icon className="h-6 w-6" />
-              <span className="text-xs mt-1">{item.name}</span>
-            </Link>
-          ))}
+      <div className="mt-auto w-full">
+        <nav className="flex flex-col items-center space-y-6 w-full">
+          {footerMenuItems.map((item) => {
+            const active = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+            const baseClass = 'flex flex-col items-center transition-colors duration-200 w-full border-l-2 border-transparent';
+            const activeClass = active ? 'text-white border-l-cyan-400' : 'text-gray-400 hover:text-white';
+            return (
+              <Link
+                key={item.name}
+                to={item.path}
+                className={`${baseClass} ${activeClass}`}
+              >
+                <item.icon className="h-6 w-6" />
+                <span className="text-xs mt-1 whitespace-nowrap">{item.name}</span>
+              </Link>
+            );
+          })}
         </nav>
       </div>
     </div>

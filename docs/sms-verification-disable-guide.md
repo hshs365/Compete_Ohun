@@ -94,7 +94,7 @@ console.log(import.meta.env.VITE_SMS_VERIFICATION_ENABLED)
 
 ### 3. 회원가입 테스트
 
-1. `http://ohun.kr/register` 또는 `http://192.168.132.185:5173/register` 접속
+1. `http://allcourtplay.com/register` 또는 `http://192.168.132.185:5173/register` 접속
 2. 회원가입 진행
 3. 전화번호 입력 단계에서:
    - SMS 인증이 비활성화된 경우: 전화번호만 입력하면 자동으로 인증 완료

@@ -571,48 +571,11 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
 
         {/* 폼 내용 */}
         <form onSubmit={handleSubmit} className="p-4 md:p-6 space-y-6">
-          {/* 매치 이름 */}
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              매치 이름 <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="name"
-              type="text"
-              required
-              value={formData.name}
-              onChange={(e) => handleChange('name', e.target.value)}
-              className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-              placeholder="매치명을 입력해주세요"
-            />
-          </div>
-
-          {/* 카테고리 */}
-          <div>
-            <label htmlFor="category" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              <TagIcon className="w-4 h-4 inline mr-1" />
-              카테고리 <span className="text-red-500">*</span>
-            </label>
-            <select
-              id="category"
-              required
-              value={formData.category}
-              onChange={(e) => handleChange('category', e.target.value)}
-              className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-            >
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 위치 */}
+          {/* 위치 — 지역/장소를 맨 앞 단계로 */}
           <div>
             <label htmlFor="location" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
               <MapPinIcon className="w-4 h-4 inline mr-1" />
-              위치 <span className="text-red-500">*</span>
+              위치 <span className="text-[var(--color-text-secondary)]">(필수)</span>
             </label>
             <div className="flex gap-2 mb-2">
               <input
@@ -659,38 +622,80 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
             )}
           </div>
 
+          {/* 매치 이름 */}
+          <div>
+            <label htmlFor="name" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+              매치 이름 <span className="text-[var(--color-text-secondary)]">(필수)</span>
+            </label>
+            <input
+              id="name"
+              type="text"
+              required
+              value={formData.name}
+              onChange={(e) => handleChange('name', e.target.value)}
+              className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+              placeholder="매치명을 입력해주세요"
+            />
+          </div>
+
+          {/* 카테고리 */}
+          <div>
+            <label htmlFor="category" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+              <TagIcon className="w-4 h-4 inline mr-1" />
+              카테고리 <span className="text-[var(--color-text-secondary)]">(필수)</span>
+            </label>
+            <select
+              id="category"
+              required
+              value={formData.category}
+              onChange={(e) => handleChange('category', e.target.value)}
+              className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+            >
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* 매치 일정 */}
           <div>
             <label htmlFor="meetingDateTime" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
               <CalendarIcon className="w-4 h-4 inline mr-1" />
               매치 일정 <span className="text-xs text-[var(--color-text-secondary)] font-normal">(선택사항)</span>
             </label>
-            <input
-              id="meetingDateTime"
-              type="datetime-local"
-              value={formData.meetingDate && formData.meetingTime 
-                ? `${formData.meetingDate}T${formData.meetingTime}` 
-                : ''}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value) {
-                  const [date, time] = value.split('T');
-                  setFormData((prev) => ({
-                    ...prev,
-                    meetingDate: date || '',
-                    meetingTime: time || '',
-                  }));
-                } else {
-                  setFormData((prev) => ({
-                    ...prev,
-                    meetingDate: '',
-                    meetingTime: '',
-                  }));
-                }
-              }}
-              min={new Date().toISOString().slice(0, 16)} // 현재 시간 이후만 선택 가능
-              className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
-            />
+            <div className="relative">
+              <input
+                id="meetingDateTime"
+                type="datetime-local"
+                value={formData.meetingDate && formData.meetingTime 
+                  ? `${formData.meetingDate}T${formData.meetingTime}` 
+                  : ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value) {
+                    const [date, time] = value.split('T');
+                    setFormData((prev) => ({
+                      ...prev,
+                      meetingDate: date || '',
+                      meetingTime: time || '',
+                    }));
+                  } else {
+                    setFormData((prev) => ({
+                      ...prev,
+                      meetingDate: '',
+                      meetingTime: '',
+                    }));
+                  }
+                }}
+                min={new Date().toISOString().slice(0, 16)} // 현재 시간 이후만 선택 가능
+                className="w-full pl-4 pr-10 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark date-input-with-icon"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
+                <CalendarIcon className="w-5 h-5" />
+              </span>
+            </div>
             <p className="text-xs text-[var(--color-text-secondary)] mt-2">
               📅 날짜와 시간을 한 번에 선택할 수 있습니다. 매치 일정이 없으면 비워두세요.
             </p>

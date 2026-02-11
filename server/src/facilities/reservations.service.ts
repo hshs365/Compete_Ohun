@@ -332,6 +332,29 @@ export class ReservationsService {
   }
 
   /**
+   * 시설의 기간별 예약 현황 (상세페이지 예약현황 캘린더용, 비로그인 조회 가능)
+   * PENDING/CONFIRMED/PROVISIONAL만 포함 (취소·노쇼 제외)
+   */
+  async getReservationsByDateRange(
+    facilityId: number,
+    startDate: string,
+    endDate: string,
+  ): Promise<FacilityReservation[]> {
+    return this.reservationRepository.find({
+      where: {
+        facilityId,
+        reservationDate: Between(startDate, endDate),
+        status: In([
+          ReservationStatus.PENDING,
+          ReservationStatus.CONFIRMED,
+          ReservationStatus.PROVISIONAL,
+        ]),
+      },
+      order: { reservationDate: 'ASC', startTime: 'ASC' },
+    });
+  }
+
+  /**
    * 시설의 특정 날짜 예약 가능 시간대 조회 (매치 생성 시 시설 예약용)
    * 운영시간 기준 2시간 단위 슬롯 중, 기존 예약(PENDING/CONFIRMED)과 겹치지 않는 구간 반환
    */

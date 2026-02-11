@@ -41,7 +41,7 @@ DB_USERNAME=ohun_admin
 DB_PASSWORD=강력한_비밀번호
 DB_NAME=ohun
 PORT=3000
-FRONTEND_URL=https://ohun.kr,https://www.ohun.kr
+FRONTEND_URL=https://allcourtplay.com,https://www.allcourtplay.com
 UPLOAD_DIR=/mnt/shared/uploads
 
 # SMS (NCP SENS)
@@ -68,7 +68,7 @@ NCP_SMS_SENDER=01012345678
 |------|------|------|
 | **NODE_ENV** | `development` | `production` |
 | **SMS 인증** | 비활성화 | 활성화 |
-| **CORS** | 192.168.x.x 허용 | ohun.kr 등 지정 도메인만 |
+| **CORS** | 192.168.x.x 허용 | allcourtplay.com 등 지정 도메인만 |
 | **회원가입** | SMS 없이 가능 | SMS 인증 필수 |
 
 ---

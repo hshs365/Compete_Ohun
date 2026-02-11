@@ -25,7 +25,7 @@ describe('AppController (e2e)', () => {
       .expect(200)
       .expect((res) => {
         expect(res.body).toMatchObject({
-          message: 'Ohun API Server',
+          message: 'Allcourtplay API Server',
           status: 'running',
           api: '/api',
         });

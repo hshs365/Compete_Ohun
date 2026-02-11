@@ -13,7 +13,9 @@ import {
 } from '@heroicons/react/24/outline';
 import { TrophyIcon as TrophySolidIcon } from '@heroicons/react/24/solid';
 import { api } from '../utils/api';
-import { getOhunRankStyle } from '../constants/ohunRank';
+import { getAllcourtplayRankStyle } from '../constants/allcourtplayRank';
+import { getFollowerGrade, getFollowerGradeBadgeStyle } from '../constants/followerGrade';
+import FormatNumber from './FormatNumber';
 
 interface User {
   id: number;
@@ -58,6 +60,8 @@ interface ProfileSummary {
     category: string;
     date: string;
   }>;
+  /** 랭크매치 실적 (승패 기록 시 반영) */
+  rankMatchStats?: { totalGames: number; wins: number; losses: number; winRate: number };
 }
 
 interface UserDetailModalProps {
@@ -69,12 +73,13 @@ interface UserDetailModalProps {
   onMatchInvite?: (userId: number) => Promise<void>;
 }
 
-/** 프로필 정보·랭크매치 통계·주요 업적용 데이터 (API + 보조 데이터) */
+/** 프로필 정보·랭크 매치 통계·주요 업적용 데이터 (API + 보조 데이터) */
 function getDetailFromProfile(summary: ProfileSummary | null, user: User) {
   const seed = user.id;
   const score = summary?.totalScore ?? user.totalScore ?? 0;
   const isHighScore = score > 100;
   const location = [summary?.residenceSido, summary?.residenceSigungu].filter(Boolean).join(' ') || user.residenceSido || user.residenceSigungu || '-';
+  const rankStats = summary?.rankMatchStats;
   return {
     profile: {
       joinDate: summary?.createdAt ? new Date(summary.createdAt).toLocaleDateString('ko-KR') : '-',
@@ -84,8 +89,8 @@ function getDetailFromProfile(summary: ProfileSummary | null, user: User) {
       followingCount: summary?.followingCount ?? 0,
     },
     stats: {
-      totalMeetings: isHighScore ? 20 + (seed % 30) : 5 + (seed % 15),
-      winRate: 40 + (seed % 35),
+      totalMeetings: rankStats ? rankStats.totalGames : (isHighScore ? 20 + (seed % 30) : 5 + (seed % 15)),
+      winRate: rankStats ? rankStats.winRate : (40 + (seed % 35)),
       consecutiveWins: 1 + (seed % 5),
       favoriteTime: ['오전', '오후', '저녁'][seed % 3],
       mannerScore: summary?.mannerScore ?? 0,
@@ -175,7 +180,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
       onClick={handleOverlayClick}
     >
       <div
@@ -221,8 +226,16 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
                   </div>
                   <div className="flex items-center gap-3 text-white/90 flex-wrap">
                     <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold">{sportCategory}</span>
-                    {(profileSummary?.totalScore ?? user.totalScore) != null && (profileSummary?.totalScore ?? user.totalScore) > 0 && (
-                      <span className="text-lg font-bold">{(profileSummary?.totalScore ?? user.totalScore)?.toLocaleString()}점</span>
+                    {(() => {
+                      const grade = getFollowerGrade(detail.profile.followersCount);
+                      return grade ? (
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getFollowerGradeBadgeStyle(grade)}`}>
+                          {grade}
+                        </span>
+                      ) : null;
+                    })()}
+                    {(profileSummary?.totalScore ?? user.totalScore) != null && (profileSummary?.totalScore ?? user.totalScore) >= 0 && (
+                      <span className="text-lg font-bold">{(profileSummary?.totalScore ?? user.totalScore)?.toLocaleString()} RP</span>
                     )}
                   </div>
                 </div>
@@ -256,17 +269,17 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
                   <div>
                     <p className="text-xs text-[var(--color-text-secondary)] mb-1">팔로워 / 팔로잉</p>
                     <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-                      {detail.profile.followersCount} / {detail.profile.followingCount}
+                      <FormatNumber value={detail.profile.followersCount} /> / <FormatNumber value={detail.profile.followingCount} />
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* 랭크매치 통계 (총 참가자·평균점수 제거, 매너점수·선호 포지션 추가) */}
+              {/* 랭크 매치 통계 (총 참가자·평균점수 제거, 매너점수·선호 포지션 추가) */}
               <div className="bg-[var(--color-bg-primary)] rounded-xl p-4 mb-4 border border-[var(--color-border-card)]">
                 <h3 className="text-lg font-bold text-[var(--color-text-primary)] mb-3 flex items-center gap-2">
                   <ChartBarIcon className="w-5 h-5 text-blue-500" />
-                  랭크매치 통계
+                  랭크 매치 통계
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <div className="p-3 rounded-lg bg-[var(--color-bg-card)]">
@@ -317,14 +330,14 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* 보유 뱃지 (오운 랭크 + 선수 + 타이틀 뱃지) */}
+              {/* 보유 뱃지 (올코트플레이 랭크 + 선수 + 타이틀 뱃지) */}
               <div className="bg-[var(--color-bg-primary)] rounded-xl p-4 mb-4 border border-[var(--color-border-card)]">
                 <h3 className="text-lg font-bold text-[var(--color-text-primary)] mb-3">보유 뱃지</h3>
                 <div className="flex flex-wrap gap-2">
                   {rankEntries.map(([sport, rank]) => (
                     <span
                       key={sport}
-                      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r ${getOhunRankStyle(rank)}`}
+                      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r ${getAllcourtplayRankStyle(rank)}`}
                     >
                       {sport} {rank}
                     </span>
@@ -374,25 +387,8 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
               )}
             </div>
 
-            {/* 액션 버튼 */}
+            {/* 액션 버튼 (채팅 미지원으로 함께 매치하고 싶어요 버튼 제거) */}
             <div className="px-6 pb-6 pt-2 space-y-3 border-t border-[var(--color-border-card)]">
-              {onMatchInvite && (
-                <button
-                  type="button"
-                  onClick={handleMatchInviteClick}
-                  disabled={inviteLoading}
-                  className="w-full py-3 rounded-xl font-medium bg-[var(--color-blue-primary)] text-white hover:opacity-90 transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
-                >
-                  {inviteLoading ? (
-                    <span className="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <EnvelopeIcon className="w-5 h-5" />
-                      함께 매치하고 싶어요
-                    </>
-                  )}
-                </button>
-              )}
               {showFollowButton && (
                 <button
                   type="button"

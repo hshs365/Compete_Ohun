@@ -1,7 +1,7 @@
 import React from 'react';
 import FootballStatsRadar from './FootballStatsRadar';
 
-const APP_NAME = '오운';
+const APP_NAME = '올코트플레이';
 
 /** 이미지 캡처 삽입용 플레이스홀더 */
 const ImagePlaceholder: React.FC<{
@@ -53,7 +53,7 @@ const GuidePage = () => {
             당신은 어떤 유형의 선수인가요?
           </h2>
           <p className="text-[var(--color-text-secondary)]">
-            오운은 동료들의 리뷰로만 스텟이 쌓여요. 본인 입력 불가 = 진짜 실력.
+            올코트플레이에서는 동료들의 리뷰로만 스텟이 쌓여요. 본인 입력 불가 = 진짜 실력.
           </p>
         </div>
         <div className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 md:p-8 flex flex-col items-center">
@@ -98,13 +98,13 @@ const GuidePage = () => {
             <div className="p-4 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)]">
               <h3 className="font-bold text-[var(--color-text-primary)] mb-2">일반매치 · 교류</h3>
               <p className="text-sm text-[var(--color-text-secondary)]">
-                편하게 만나서 즐기는 운동. 매치장이 진행하고, 실력 증명보다는 즐김에 집중. 처음 오운에 왔다면 여기서 스타트!
+                편하게 만나서 즐기는 운동. 매치장이 진행하고, 실력 증명보다는 즐김에 집중. 처음 올코트플레이에 왔다면 여기서 스타트!
               </p>
             </div>
             <div className="p-4 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)]">
-              <h3 className="font-bold text-[var(--color-text-primary)] mb-2">랭크매치 · 증명</h3>
+              <h3 className="font-bold text-[var(--color-text-primary)] mb-2">랭크 매치 · 증명</h3>
               <p className="text-sm text-[var(--color-text-secondary)]">
-                심판이 승패를 기록하고, 오운 랭크 점수가 올라가는 진지한 경기. 여기서 점수를 쌓아야 명예의 전당에 이름을 올릴 수 있어요.
+                심판이 승패를 기록하고, 올코트플레이 랭크 점수가 올라가는 진지한 경기. 여기서 점수를 쌓아야 명예의 전당에 이름을 올릴 수 있어요.
               </p>
             </div>
             <div className="p-4 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)]">
@@ -167,7 +167,7 @@ const GuidePage = () => {
         </div>
         <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border-card)] p-6 space-y-6">
           <p className="text-[var(--color-text-primary)] leading-relaxed">
-            랭크매치에서 승리하면 점수를 얻고, 종목별로 순위가 매겨져요. 매년 갱신되는 명예의 전당에 이름을 올리고 싶다면, 랭크매치에 도전하세요. 레이더 차트 스텟은 <strong>동료들이 리뷰로 뽑아준 항목</strong>만 반영돼요. 본인은 입력 못 함 = 신뢰할 수 있는 데이터.
+            랭크 매치에서 승리하면 점수를 얻고, 종목별로 순위가 매겨져요. 매년 갱신되는 명예의 전당에 이름을 올리고 싶다면, 랭크 매치에 도전하세요. 레이더 차트 스텟은 <strong>동료들이 리뷰로 뽑아준 항목</strong>만 반영돼요. 본인은 입력 못 함 = 신뢰할 수 있는 데이터.
           </p>
           <ImagePlaceholder
             caption="명예의 전당 프리뷰: 1위 유저 황금 배지 프로필 예시"
@@ -264,7 +264,7 @@ const GuidePage = () => {
           <div className="p-4 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)]">
             <h4 className="font-bold text-[var(--color-text-primary)] mb-2">팔로우로 나만의 팀 만들기</h4>
             <p className="text-sm text-[var(--color-text-secondary)]">
-              마음에 드는 선수를 팔로우하고, 함께한 사람들과 소통하세요. 나만의 라이벌, 파트너를 찾으면 오운이 더 재밌어져요.
+              마음에 드는 선수를 팔로우하고, 함께한 사람들과 소통하세요. 나만의 라이벌, 파트너를 찾으면 올코트플레이가 더 재밌어져요.
             </p>
           </div>
         </div>

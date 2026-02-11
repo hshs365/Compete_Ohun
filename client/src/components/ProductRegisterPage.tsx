@@ -285,7 +285,7 @@ const ProductRegisterPage = () => {
   ];
 
   return (
-    <div className="flex flex-col flex-1 w-full min-h-0 bg-[var(--color-bg-primary)]">
+    <div className="flex flex-col w-full bg-[var(--color-bg-primary)]">
       <header className="flex-shrink-0 border-b border-[var(--color-border-card)] bg-[var(--color-bg-card)]">
         <div className="max-w-4xl mx-auto px-4 md:px-6 py-4">
           <Link
@@ -319,7 +319,7 @@ const ProductRegisterPage = () => {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto max-w-4xl mx-auto w-full px-4 md:px-6 py-6">
+      <main className="max-w-4xl mx-auto w-full px-4 md:px-6 py-6">
         {tab === 'single' && (
           <form onSubmit={handleSingleSubmit} className="space-y-6">
             <div className="bg-[var(--color-bg-card)] border border-[var(--color-border-card)] rounded-2xl p-6">

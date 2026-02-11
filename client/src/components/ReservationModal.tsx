@@ -7,7 +7,7 @@ import { showError, showSuccess } from '../utils/swal';
 const SPORT_OPTIONS = ['축구', '풋살', '농구', '배드민턴', '테니스', '수영', '골프', '탁구', '배구', '기타'] as const;
 const MATCH_TYPE_OPTIONS: { value: 'general' | 'rank' | 'event'; label: string }[] = [
   { value: 'general', label: '일반 매치' },
-  { value: 'rank', label: '랭크매치' },
+  { value: 'rank', label: '랭크 매치' },
   { value: 'event', label: '이벤트매치' },
 ];
 
@@ -201,16 +201,21 @@ const ReservationModal: React.FC<ReservationModalProps> = ({
           <div>
             <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
               <CalendarDaysIcon className="w-4 h-4 inline mr-1" />
-              예약 날짜 <span className="text-red-500">*</span>
+              예약 날짜 <span className="text-[var(--color-text-secondary)]">(필수)</span>
             </label>
-            <input
-              type="date"
-              required
-              min={todayStr}
-              value={formData.reservationDate}
-              onChange={(e) => setFormData({ ...formData, reservationDate: e.target.value })}
-              className="w-full px-4 py-2.5 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-            />
+            <div className="relative">
+              <input
+                type="date"
+                required
+                min={todayStr}
+                value={formData.reservationDate}
+                onChange={(e) => setFormData({ ...formData, reservationDate: e.target.value })}
+                className="w-full pl-4 pr-10 py-2.5 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark date-input-with-icon"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
+                <CalendarDaysIcon className="w-5 h-5" />
+              </span>
+            </div>
           </div>
 
           {/* 예약 시간 */}
@@ -218,7 +223,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({
             <div>
               <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
                 <ClockIcon className="w-4 h-4 inline mr-1" />
-                시작 시간 <span className="text-red-500">*</span>
+                시작 시간 <span className="text-[var(--color-text-secondary)]">(필수)</span>
               </label>
               <select
                 required
@@ -233,7 +238,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({
             </div>
             <div>
               <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                종료 시간 <span className="text-red-500">*</span>
+                종료 시간 <span className="text-[var(--color-text-secondary)]">(필수)</span>
               </label>
               <select
                 required

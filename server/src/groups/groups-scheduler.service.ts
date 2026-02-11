@@ -56,10 +56,11 @@ export class GroupsSchedulerService {
         return;
       }
 
-      const participantCount = await this.participantRepository.count({
+      const rowCount = await this.participantRepository.count({
         where: { groupId: group.id },
       });
-      const actualParticipantCount = participantCount + 1;
+      // group_participants에 모임장이 없을 수 있음(일반 매치) → 최소 1명(모임장)으로 간주
+      const actualParticipantCount = Math.max(1, rowCount);
 
       this.logger.log(
         `모임 ${group.id}: 현재 참가자 수 ${actualParticipantCount}, 최소 인원 ${group.minParticipants}`,

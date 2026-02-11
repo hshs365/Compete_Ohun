@@ -19,6 +19,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { FacilitiesService } from './facilities.service';
 import { CreateFacilityDto } from './dto/create-facility.dto';
 import { FacilityQueryDto } from './dto/facility-query.dto';
+import { PublicFacilityQueryDto } from './dto/public-facility-query.dto';
+import { PublicFacilitiesService } from './public-facilities.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
@@ -26,7 +28,17 @@ import { User } from '../users/entities/user.entity';
 
 @Controller('api/facilities')
 export class FacilitiesController {
-  constructor(private readonly facilitiesService: FacilitiesService) {}
+  constructor(
+    private readonly facilitiesService: FacilitiesService,
+    private readonly publicFacilitiesService: PublicFacilitiesService,
+  ) {}
+
+  /** 공공데이터포털 전국 체육시설 정보 API 연동 (시설명·종목·시설종류·지역·페이지) */
+  @Public()
+  @Get('public')
+  getPublicList(@Query() queryDto: PublicFacilityQueryDto) {
+    return this.publicFacilitiesService.getList(queryDto);
+  }
 
   @Public()
   @Get()

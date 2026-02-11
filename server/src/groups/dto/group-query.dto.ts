@@ -43,6 +43,32 @@ export class GroupQueryDto {
   @IsString()
   @IsIn(['normal', 'rank', 'event'])
   type?: 'normal' | 'rank' | 'event'; // 매치 유형 필터 (일반/랭크/이벤트)
+
+  /** 중복 매치 체크용: YYYY-MM-DD */
+  @IsOptional()
+  @IsString()
+  meetingDate?: string;
+
+  /** 중복 매치 체크용: HH:mm */
+  @IsOptional()
+  @IsString()
+  meetingTime?: string;
+
+  /** 중복 매치 체크용: 위도 */
+  @IsOptional()
+  @Type(() => Number)
+  latitude?: number;
+
+  /** 중복 매치 체크용: 경도 */
+  @IsOptional()
+  @Type(() => Number)
+  longitude?: number;
+
+  /** 중복 매치 체크용: 반경(km), 기본 3 */
+  @IsOptional()
+  @Type(() => Number)
+  @Min(0.1)
+  radiusKm?: number = 3;
 }
 
 

@@ -93,29 +93,139 @@ export const extractCityFromAddress = (address: string): KoreanCity | null => {
 };
 
 
+export type ResidenceInput = { residenceAddress?: string | null; residenceSido?: string | null };
+
 /**
- * 사용자의 현재 위치에서 도시를 가져옵니다.
- * @param userId 로그인 사용자 ID (제공 시 사용자별 주소 사용, 계정 전환 시 올바른 지역 표시)
+ * 사용자의 현재 위치/거주지에서 도시를 가져옵니다.
+ * userId와 apiResidence가 주어지면 회원 거주지 기준, 없으면 localStorage 기준.
  * @returns 도시명 또는 null
  */
-export const getUserCity = (userId?: number): KoreanCity | null => {
+export function getUserCity(): KoreanCity | null;
+export function getUserCity(userId: number, apiResidence?: ResidenceInput): KoreanCity | null;
+export function getUserCity(userId?: number, apiResidence?: ResidenceInput): KoreanCity | null {
+  if (userId !== undefined && (apiResidence?.residenceAddress || apiResidence?.residenceSido)) {
+    return getUserCityForJoin(userId, apiResidence);
+  }
+  if (userId !== undefined) {
+    return getUserCityForJoin(userId, undefined);
+  }
   try {
-    const locationKey = userId ? `userLocation_${userId}` : 'userLocation';
-    const savedLocation = localStorage.getItem(locationKey);
+    const savedLocation = localStorage.getItem('userLocation');
     if (savedLocation) {
       const location = JSON.parse(savedLocation);
-      
-      // 주소가 있으면 주소에서 도시 추출
-      if (location.address) {
+      if (location?.address) {
         const city = extractCityFromAddress(location.address);
         if (city) return city;
       }
-      
     }
   } catch (e) {
     console.error('사용자 위치 정보 파싱 실패:', e);
   }
-  
   return null;
+}
+
+/** 타 지역 매치 참가 확인용: 사용자 지역(시/도) — localStorage 또는 회원 거주지 */
+export function getUserCityForJoin(
+  userId?: number,
+  apiResidence?: { residenceAddress?: string | null; residenceSido?: string | null }
+): KoreanCity | null {
+  try {
+    const locationKey = userId ? `userLocation_${userId}` : 'userLocation';
+    const saved = localStorage.getItem(locationKey);
+    if (saved) {
+      const loc = JSON.parse(saved);
+      if (loc?.address && typeof loc.address === 'string') {
+        const city = extractCityFromAddress(loc.address);
+        if (city) return city;
+      }
+    }
+  } catch (_) {}
+  if (apiResidence?.residenceAddress && apiResidence.residenceAddress.trim()) {
+    const city = extractCityFromAddress(apiResidence.residenceAddress.trim());
+    if (city) return city;
+  }
+  if (apiResidence?.residenceSido && apiResidence.residenceSido.trim()) {
+    const s = apiResidence.residenceSido.trim();
+    for (const city of KOREAN_CITIES) {
+      if (city === '전체') continue;
+      const short = city.replace('광역시', '').replace('특별시', '').replace('특별자치시', '').replace('도', '');
+      if (s === city || s === short) return city;
+    }
+  }
+  return null;
+}
+
+/**
+ * 두 좌표 간 거리(km)를 Haversine 공식으로 계산합니다.
+ */
+export const getDistanceKm = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number => {
+  const R = 6371; // 지구 반경(km)
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 };
+
+/** 선택 지역 문자열을 시/구/동 계층으로 파싱 (예: "서울특별시 강남구" → { sido: "서울특별시", gu: "강남구" }) */
+export function parseRegionToHierarchy(selectedRegion: string): { sido?: string; gu?: string; dong?: string } {
+  if (!selectedRegion || selectedRegion === '전체') return {};
+  const parts = selectedRegion.trim().split(/\s+/);
+  return {
+    sido: parts[0] || undefined,
+    gu: parts[1] || undefined,
+    dong: parts[2] || undefined,
+  };
+}
+
+/** 특정 지역(시/도 또는 구)의 하위 지역 목록. 실제 데이터 없으면 빈 배열 (드롭다운용) */
+export function getRegionChildren(regionName: string): string[] {
+  if (!regionName || regionName === '전체') return [];
+  // 계층 데이터가 없으면 빈 배열 반환 (UI는 동작하고, 구/동 선택만 비어 있음)
+  return [];
+}
+
+/** 지역명(시/도·구·동)에 해당하는 대표 좌표. 시/도만 있으면 시청 좌표 사용 */
+export function getRegionCoordinates(regionName: string): [number, number] | null {
+  if (!regionName || regionName === '전체') return null;
+  const city = (regionName.split(/\s+/)[0] || regionName) as string;
+  return getCityCoordinates(city as KoreanCity) ?? null;
+}
+
+/** 지도 줌 레벨: 시/도 넓게, 구·동일수록 확대 (숫자 작을수록 확대) */
+export function getRegionZoomLevel(regionName: string): number | null {
+  if (!regionName || regionName === '전체') return null;
+  const parts = regionName.trim().split(/\s+/).length;
+  if (parts >= 3) return 14;   // 동
+  if (parts >= 2) return 12;   // 구
+  return 10;                   // 시/도
+}
+
+/** 거주지 정보에서 도시 추출 (NaverMapPanel 등용) */
+export function getCityFromResidence(residence?: ResidenceInput | null): KoreanCity | null {
+  if (!residence) return null;
+  if (residence.residenceAddress?.trim()) {
+    const c = extractCityFromAddress(residence.residenceAddress.trim());
+    if (c) return c;
+  }
+  if (residence.residenceSido?.trim()) {
+    const s = residence.residenceSido.trim();
+    for (const city of KOREAN_CITIES) {
+      if (city === '전체') continue;
+      const short = city.replace('광역시', '').replace('특별시', '').replace('특별자치시', '').replace('도', '');
+      if (s === city || s === short) return city;
+    }
+  }
+  return null;
+}
 

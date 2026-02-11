@@ -42,6 +42,14 @@ export class GroupParticipantPosition {
   @Column({ type: 'varchar', length: 10, nullable: true })
   slotLabel: string | null;
 
+  /** 전술판 좌표 X (0–100, 왼쪽=0, 오른쪽=100). null이면 positionCode/slotLabel로 기본 위치 계산 */
+  @Column({ type: 'float', nullable: true })
+  positionX: number | null;
+
+  /** 전술판 좌표 Y (0–100, 우리 골대=0, 상대 골대=100). null이면 positionCode/slotLabel로 기본 위치 계산 */
+  @Column({ type: 'float', nullable: true })
+  positionY: number | null;
+
   // 팀 구분 (레드 vs 블루). 'red' | 'blue', 기본값 'red'
   @Column({ type: 'varchar', length: 10, default: 'red' })
   team: string;

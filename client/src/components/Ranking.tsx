@@ -22,7 +22,7 @@ const Ranking = () => {
               <span className="px-2 py-1 bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] text-xs font-semibold rounded-full mr-2">{player.rank}위</span>
               <span className="text-[var(--color-text-primary)]">{player.name}</span>
             </div>
-            <span className="px-2 py-1 bg-[var(--color-blue-primary)] text-white text-xs font-semibold rounded-full">{player.score} 점</span>
+            <span className="px-2 py-1 bg-[var(--color-blue-primary)] text-white text-xs font-semibold rounded-full">{player.score} RP</span>
           </li>
         ))}
       </ul>

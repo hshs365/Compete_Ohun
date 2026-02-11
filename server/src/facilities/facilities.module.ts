@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FacilitiesService } from './facilities.service';
+import { PublicFacilitiesService } from './public-facilities.service';
 import { FacilitiesController } from './facilities.controller';
 import { ReservationsService } from './reservations.service';
 import { ReservationsController } from './reservations.controller';
@@ -18,7 +19,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     NotificationsModule,
   ],
   controllers: [FacilitiesController, ReservationsController],
-  providers: [FacilitiesService, ReservationsService, FacilityReviewsService],
+  providers: [FacilitiesService, PublicFacilitiesService, ReservationsService, FacilityReviewsService],
   exports: [FacilitiesService, ReservationsService, FacilityReviewsService],
 })
 export class FacilitiesModule {}

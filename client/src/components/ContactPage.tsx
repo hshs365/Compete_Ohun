@@ -102,7 +102,7 @@ const ContactPage = () => {
           {/* 이메일 (로그인 시 계정 이메일로 자동 채움) */}
           <div>
             <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              접수 이메일 <span className="text-red-500">*</span>
+              접수 이메일 <span className="text-[var(--color-text-secondary)]">(필수)</span>
             </label>
             <input
               type="email"
@@ -123,7 +123,7 @@ const ContactPage = () => {
           {/* 제목 */}
           <div>
             <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              제목 <span className="text-red-500">*</span>
+              제목 <span className="text-[var(--color-text-secondary)]">(필수)</span>
             </label>
             <input
               type="text"
@@ -138,7 +138,7 @@ const ContactPage = () => {
           {/* 내용 */}
           <div>
             <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              내용 <span className="text-red-500">*</span>
+              내용 <span className="text-[var(--color-text-secondary)]">(필수)</span>
             </label>
             <textarea
               rows={6}

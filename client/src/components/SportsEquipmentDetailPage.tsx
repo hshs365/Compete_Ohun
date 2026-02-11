@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ShoppingBagIcon, StarIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { ShoppingBagIcon, ShoppingCartIcon, StarIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
 import { getProductById, SPORTS_EQUIPMENT_PRODUCTS, type Product } from '../data/sportsEquipmentProducts';
 import { api } from '../utils/api';
 import { showSuccess } from '../utils/swal';
+import { addToCart } from '../utils/sportsEquipmentCart';
 
 const RECOMMEND_LIMIT = 6;
 
@@ -101,6 +102,7 @@ const SportsEquipmentDetailPage = () => {
 
   const handleAddToCart = async () => {
     if (!product) return;
+    addToCart(product.id, 1);
     await showSuccess('장바구니에 추가되었습니다.', '장바구니');
   };
 
@@ -131,13 +133,22 @@ const SportsEquipmentDetailPage = () => {
   return (
     <div className="flex flex-col flex-1 w-full min-h-0 bg-[var(--color-bg-primary)]">
       <div className="max-w-4xl mx-auto w-full px-4 md:px-6 py-6">
-        <Link
-          to="/sports-equipment"
-          className="inline-flex items-center gap-2 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-blue-primary)] mb-6"
-        >
-          <ArrowLeftIcon className="w-4 h-4" />
-          스포츠 용품 목록으로
-        </Link>
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <Link
+            to="/sports-equipment"
+            className="inline-flex items-center gap-2 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-blue-primary)]"
+          >
+            <ArrowLeftIcon className="w-4 h-4" />
+            스포츠 용품 목록으로
+          </Link>
+          <Link
+            to="/sports-equipment/cart"
+            className="inline-flex items-center gap-2 text-sm font-medium text-[var(--color-text-primary)] hover:text-[var(--color-blue-primary)] px-3 py-2 rounded-lg border border-[var(--color-border-card)] hover:border-[var(--color-blue-primary)] bg-[var(--color-bg-card)]"
+          >
+            <ShoppingCartIcon className="w-5 h-5" />
+            장바구니
+          </Link>
+        </div>
 
         <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border-card)] overflow-hidden">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-0">

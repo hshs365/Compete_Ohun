@@ -42,7 +42,7 @@ const StepParticipants: React.FC<StepParticipantsProps> = ({
         <div>
           <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
             <UsersIcon className="w-4 h-4 inline mr-1" />
-            최소 참여자 수 <span className="text-red-500">*</span>
+            최소 참여자 수 <span className="text-[var(--color-text-secondary)]">(필수)</span>
           </label>
           <input
             type="number"

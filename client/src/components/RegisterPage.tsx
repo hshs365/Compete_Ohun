@@ -290,7 +290,7 @@ const RegisterPage = () => {
             {/* 이메일 */}
             <div>
               <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                이메일 <span className="text-red-500">*</span>
+                이메일 <span className="text-[var(--color-text-secondary)]">(필수)</span>
               </label>
               <input
                 type="email"
@@ -310,7 +310,7 @@ const RegisterPage = () => {
             {/* 비밀번호 */}
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                비밀번호 <span className="text-red-500">*</span>
+                비밀번호 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                 <Tooltip
                   content={
                     <div className="space-y-1">
@@ -398,7 +398,7 @@ const RegisterPage = () => {
             {/* 비밀번호 확인 */}
             <div>
               <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                비밀번호 확인 <span className="text-red-500">*</span>
+                비밀번호 확인 <span className="text-[var(--color-text-secondary)]">(필수)</span>
               </label>
               <input
                 type="password"
@@ -426,7 +426,7 @@ const RegisterPage = () => {
               )}
               <div>
                 <label className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                  연락처 <span className="text-red-500">*</span>
+                  연락처 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                   <Tooltip content="전화번호는 자동으로 하이픈(-)이 추가됩니다. 숫자만 입력해주세요." />
                 </label>
                 <div className="flex gap-2">
@@ -475,7 +475,7 @@ const RegisterPage = () => {
               {!isPhoneVerifiedEffective && (
                 <div>
                   <label className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                    인증번호 <span className="text-red-500">*</span>
+                    인증번호 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                     <Tooltip content="인증번호는 6자리 숫자입니다. SMS로 발송된 인증번호를 입력해주세요." />
                   </label>
                   <div className="flex gap-2">
@@ -551,7 +551,7 @@ const RegisterPage = () => {
               <div>
                 <label className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-primary)] mb-2">
                   <UserIcon className="w-4 h-4" />
-                  실명 <span className="text-red-500">*</span>
+                  실명 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                   <Tooltip content="본인인증 완료 후 실명을 입력해주세요. 한글 또는 영문만 입력 가능합니다." />
                 </label>
                 <input
@@ -590,7 +590,7 @@ const RegisterPage = () => {
             {/* 닉네임 */}
             <div>
               <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                닉네임 <span className="text-red-500">*</span>
+                닉네임 <span className="text-[var(--color-text-secondary)]">(필수)</span>
               </label>
               <input
                 type="text"
@@ -610,7 +610,7 @@ const RegisterPage = () => {
             {/* 성별 */}
             <div>
               <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                성별 <span className="text-red-500">*</span>
+                성별 <span className="text-[var(--color-text-secondary)]">(필수)</span>
               </label>
               <div className="flex gap-4">
                 {(['male', 'female', 'other'] as const).map((gender) => (
@@ -639,7 +639,7 @@ const RegisterPage = () => {
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-primary)] mb-2">
                 <MapPinIcon className="w-4 h-4" />
-                거주 지역 <span className="text-red-500">*</span>
+                거주 지역 <span className="text-[var(--color-text-secondary)]">(필수)</span>
               </label>
               <div className="flex gap-2">
                 <input
@@ -712,7 +712,7 @@ const RegisterPage = () => {
                     className="w-4 h-4 shrink-0"
                   />
                   <span className="text-[var(--color-text-primary)]">
-                    서비스 이용약관 동의 <span className="text-red-500">*</span>
+                    서비스 이용약관 동의 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                   </span>
                 </label>
                 {errors.termsServiceAgreed && (
@@ -730,7 +730,7 @@ const RegisterPage = () => {
                     className="w-4 h-4 shrink-0"
                   />
                   <span className="text-[var(--color-text-primary)]">
-                    개인정보 처리방침 동의 <span className="text-red-500">*</span>
+                    개인정보 처리방침 동의 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                   </span>
                 </label>
                 {errors.termsPrivacyAgreed && (

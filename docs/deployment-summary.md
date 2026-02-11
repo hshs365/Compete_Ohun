@@ -19,7 +19,7 @@
 
 ## 4) 프론트 Vite 호스트 허용
 - `client/vite.config.ts`
-  - `allowedHosts: ['ohun.kr', 'www.ohun.kr']`
+  - `allowedHosts: ['allcourtplay.com', 'www.allcourtplay.com']`
 
 ## 5) LB Nginx 라우팅 분리
 - `/api/` → 백엔드(3000)
@@ -42,7 +42,7 @@ upstream backend_cluster {
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
-    server_name ohun.kr www.ohun.kr;
+    server_name allcourtplay.com www.allcourtplay.com;
 
     location /api/ {
         proxy_pass http://backend_cluster;
@@ -65,8 +65,8 @@ server {
 ## 6) Cloudflare Tunnel (LB 전용)
 - 신규 터널: `compete-ohun-tunnel` (LB에서만 실행)
 - 라우트:
-  - `www.ohun.kr` → `http://localhost:80`
-  - `ohun.kr` → `http://localhost:80`
+  - `www.allcourtplay.com` → `http://localhost:80`
+  - `allcourtplay.com` → `http://localhost:80`
 - 서비스 등록:
 ```
 sudo cloudflared service install <TOKEN>
@@ -75,7 +75,7 @@ sudo systemctl start cloudflared
 ```
 
 ## 7) DNS 정리
-- `ohun.kr` / `www` 기존 A/AAAA/CNAME 정리 후
+- `allcourtplay.com` / `www` 기존 A/AAAA/CNAME 정리 후
 - Tunnel CNAME만 유지
 
 ## 8) 로컬 DNS 이슈 해결 (LB)
@@ -87,8 +87,8 @@ sudo resolvectl flush-caches
 
 ## 9) 현재 상태 확인 명령
 ```
-curl -I https://ohun.kr
-curl -I https://www.ohun.kr
+curl -I https://allcourtplay.com
+curl -I https://www.allcourtplay.com
 sudo systemctl status cloudflared
 sudo nginx -t && sudo systemctl reload nginx
 ```

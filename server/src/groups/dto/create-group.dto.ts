@@ -55,6 +55,21 @@ export class GameSettingsDto {
   @IsString()
   @IsIn(['red', 'blue'])
   creatorTeam?: 'red' | 'blue';
+
+  /** 모임장 전술판 좌표 X (0–100). 좌표 기반 배치 시 사용 */
+  @IsOptional()
+  @IsNumber()
+  creatorPositionX?: number;
+
+  /** 모임장 전술판 좌표 Y (0–100). 좌표 기반 배치 시 사용 */
+  @IsOptional()
+  @IsNumber()
+  creatorPositionY?: number;
+
+  /** 랭크 매치 포지션 지정 시 참가 가능 최소 랭크 (S,A,B,C,D,E,F). 미설정 시 제한 없음 */
+  @IsOptional()
+  @IsIn(['S', 'A', 'B', 'C', 'D', 'E', 'F'])
+  minRankGrade?: 'S' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 }
 
 export class CreateGroupDto {

@@ -25,6 +25,7 @@ import { GroupReferee } from './groups/entities/group-referee.entity';
 import { GroupFavorite } from './groups/entities/group-favorite.entity';
 import { MatchReview } from './groups/entities/match-review.entity';
 import { GroupProvisionalFacility } from './groups/entities/group-provisional-facility.entity';
+import { GroupWaitlist } from './groups/entities/group-waitlist.entity';
 import { Facility } from './facilities/entities/facility.entity';
 import { FacilityReservation } from './facilities/entities/facility-reservation.entity';
 import { FacilityReview } from './facilities/entities/facility-review.entity';
@@ -35,6 +36,7 @@ import { UserActivityLog } from './users/entities/user-activity-log.entity';
 import { UserSportParticipation } from './users/entities/user-sport-participation.entity';
 import { UserSeasonScore } from './users/entities/user-season-score.entity';
 import { Follow } from './users/entities/follow.entity';
+import { PointTransaction } from './users/entities/point-transaction.entity';
 import { Contact } from './contact/entities/contact.entity';
 import { Product } from './products/entities/product.entity';
 import { NoticesModule } from './notices/notices.module';
@@ -71,6 +73,7 @@ ConfigModule.forRoot({
           GroupFavorite,
           MatchReview,
           GroupProvisionalFacility,
+          GroupWaitlist,
           Facility,
           FacilityReservation,
           FacilityReview,
@@ -81,6 +84,7 @@ ConfigModule.forRoot({
           UserSportParticipation,
           UserSeasonScore,
           Follow,
+          PointTransaction,
           Contact,
           Product,
           Notice,

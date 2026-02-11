@@ -146,7 +146,7 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60" onClick={handleClose} aria-hidden />
+      <div className="absolute inset-0 bg-black/30" onClick={handleClose} aria-hidden />
       <div
         className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-[var(--color-bg-primary)] rounded-2xl border border-[var(--color-border-card)] shadow-xl"
         role="dialog"
@@ -168,6 +168,23 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          {/* 팀 소재지(지역) — 맨 앞 단계 */}
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+              팀 소재지 <span className="text-[var(--color-text-secondary)]">(필수)</span>
+            </label>
+            <select
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+              className="w-full px-4 py-2.5 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-card)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+            >
+              <option value="">지역 선택</option>
+              {regionOptions.map((c) => (
+                <option key={c} value={c}>{getRegionDisplayName(c)}</option>
+              ))}
+            </select>
+          </div>
+
           {/* 팀 로고 */}
           <div>
             <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">팀 로고</label>
@@ -189,7 +206,7 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
 
           <div>
             <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              팀명 <span className="text-red-500">*</span>
+              팀명 <span className="text-[var(--color-text-secondary)]">(필수)</span>
             </label>
             <input
               type="text"
@@ -203,7 +220,7 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
 
           <div>
             <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              종목 <span className="text-red-500">*</span>
+              종목 <span className="text-[var(--color-text-secondary)]">(필수)</span>
             </label>
             <select
               value={sport}
@@ -212,22 +229,6 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
             >
               {TEAM_PAGE_SPORTS.map((s) => (
                 <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              팀 소재지 <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={region}
-              onChange={(e) => setRegion(e.target.value)}
-              className="w-full px-4 py-2.5 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-card)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-            >
-              <option value="">지역 선택</option>
-              {regionOptions.map((c) => (
-                <option key={c} value={c}>{getRegionDisplayName(c)}</option>
               ))}
             </select>
           </div>

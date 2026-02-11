@@ -195,7 +195,7 @@ export class FacilitiesService {
     // 페이지네이션
     let [facilities, total] = await queryBuilder.skip(skip).take(limit).getManyAndCount();
 
-    // 운영시간 필터: 예약 불가능한 시설(운영시간 미달) 제외
+    // 매치 일정(availableDate/Time)이 있으면 운영시간에 맞는 시설만 노출 — 해당 시간대를 수용하지 않는 시설 제외
     if (availableDate && availableTime && facilities.length > 0) {
       const [sh, sm] = availableTime.slice(0, 5).split(':').map(Number);
       const matchStartM = (sh ?? 0) * 60 + (sm ?? 0);
@@ -204,7 +204,7 @@ export class FacilitiesService {
         const [eh, em] = availableEndTime.slice(0, 5).split(':').map(Number);
         matchEndM = (eh ?? 0) * 60 + (em ?? 0);
         if (availableEndDate && availableEndDate !== availableDate) {
-          matchEndM += 24 * 60; // 야간(익일): 00:00을 24:00으로
+          matchEndM += 24 * 60; // 야간(익일) 종료
         }
       } else {
         matchEndM = matchStartM + 120;
@@ -212,6 +212,8 @@ export class FacilitiesService {
       facilities = facilities.filter((f) =>
         this.facilityCoversTimeRange(f.operatingHours, matchStartM, matchEndM),
       );
+      // 현재 페이지 기준으로 노출 개수 반영 (운영시간 필터 적용 후)
+      total = facilities.length;
     }
 
     return { facilities, total };

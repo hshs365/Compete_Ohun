@@ -20,6 +20,15 @@ const getApiBaseUrl = (): string => {
 
 const API_BASE_URL = getApiBaseUrl();
 
+/** Socket.io 연결용 URL (API와 동일 오리진) */
+export function getSocketUrl(): string {
+  if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;
+  const hostname = window.location.hostname;
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.');
+  if (!isLocalhost) return window.location.origin;
+  return 'http://localhost:3000';
+}
+
 export interface ApiResponse<T> {
   data?: T;
   error?: string;

@@ -140,7 +140,7 @@ const CreateTeamPage = () => {
   };
 
   return (
-    <div className="flex flex-col flex-1 w-full min-h-0">
+    <div className="flex flex-col w-full">
       {/* 히어로: 무게감 있는 헤더 */}
       <header className="flex-shrink-0 border-b border-[var(--color-border-card)] bg-[var(--color-bg-card)]">
         <div className="max-w-3xl mx-auto px-4 md:px-6 py-6 md:py-8">
@@ -160,7 +160,7 @@ const CreateTeamPage = () => {
         </div>
       </header>
 
-      <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+      <form onSubmit={handleSubmit} className="flex-1">
         <div className="max-w-3xl mx-auto px-4 md:px-6 py-6 md:py-8 space-y-8 pb-24">
           {/* 섹션 1: 기본 정보 */}
           <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 md:p-8 shadow-sm">
@@ -175,7 +175,7 @@ const CreateTeamPage = () => {
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                  팀 로고 <span className="text-red-500">*</span>
+                  팀 로고 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                 </label>
                 <div className="flex items-center gap-4">
                   <label className="w-24 h-24 rounded-2xl border-2 border-dashed border-[var(--color-border-card)] flex items-center justify-center overflow-hidden cursor-pointer hover:border-[var(--color-blue-primary)] transition-colors shrink-0">
@@ -195,7 +195,7 @@ const CreateTeamPage = () => {
 
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                  팀명 <span className="text-red-500">*</span>
+                  팀명 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                 </label>
                 <input
                   type="text"
@@ -210,7 +210,7 @@ const CreateTeamPage = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                    종목 <span className="text-red-500">*</span>
+                    종목 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                   </label>
                   <select
                     value={sport}
@@ -224,7 +224,7 @@ const CreateTeamPage = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                    팀 소재지 <span className="text-red-500">*</span>
+                    팀 소재지 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                   </label>
                   <select
                     value={region}

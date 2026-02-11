@@ -1,8 +1,10 @@
+import { Transform } from 'class-transformer';
 import { IsEmail, IsString, MinLength, IsEnum, IsIn, IsOptional, IsArray, IsBoolean, Matches, ValidateIf } from 'class-validator';
 import { Gender, SkillLevel } from '../../users/entities/user.entity';
 
 export class RegisterDto {
-  @IsEmail()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsEmail({}, { message: '올바른 이메일 형식을 입력해 주세요.' })
   email: string;
 
   @IsString()
@@ -55,6 +57,11 @@ export class RegisterDto {
 
   @IsString()
   residenceSigungu: string;
+
+  /** 전체 주소 (도로명/지번 + 상세주소). 내 정보 주소 표시용 */
+  @IsOptional()
+  @IsString()
+  residenceAddress?: string;
 
   @IsOptional()
   @IsArray()

@@ -4,7 +4,7 @@ import NaverMap from '../NaverMap';
 import { api } from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { getMinParticipantsForSport } from '../../constants/sports';
-import { extractCityFromAddress, getUserCity, getRegionDisplayName } from '../../utils/locationUtils';
+import { extractCityFromAddress, getUserCity, getRegionDisplayName, type KoreanCity } from '../../utils/locationUtils';
 
 /** 위경도 거리(km) — 하버사인 */
 function distanceKm(
@@ -73,8 +73,12 @@ interface Step3CommonSettingsProps {
   defaultMinParticipants?: number;
   /** true면 매치 일정 입력란 숨김 (이전 단계에서 이미 선택된 일정 사용, 해당 일정에 예약 가능한 시설만 표시) */
   scheduleReadOnly?: boolean;
+  /** 매치 생성 시 이전 단계(지역 선택)에서 선택한 지역. 있으면 시설 목록을 이 지역 기준으로 조회 */
+  selectedRegion?: KoreanCity | null;
   /** 설정 시 해당 섹션만 렌더 (매치명/성별/일자/위치/참가비 단계 분리용) */
   onlySection?: 'name' | 'gender' | 'location' | 'fee' | null;
+  /** 변경 시 시설 목록 재조회 (다른 단계 갔다가 돌아올 때 초기화용) */
+  facilityListRefetchTrigger?: number;
 }
 
 const Step3CommonSettings: React.FC<Step3CommonSettingsProps> = ({
@@ -122,7 +126,9 @@ const Step3CommonSettings: React.FC<Step3CommonSettingsProps> = ({
   timeStepHourOnly = false,
   defaultMinParticipants,
   scheduleReadOnly = false,
+  selectedRegion: propSelectedRegion = null,
   onlySection = null,
+  facilityListRefetchTrigger = 0,
 }) => {
   const { user } = useAuth();
   const showName = onlySection == null || onlySection === 'name';
@@ -190,7 +196,7 @@ const Step3CommonSettings: React.FC<Step3CommonSettingsProps> = ({
     }
   }, [category, minParticipants, onMinParticipantsChange]);
 
-  // 시설 검색: 오운 등록 시설 중 해당 지역·종목 가능한 시설만
+  // 시설 검색: 올코트플레이 등록 시설 중 해당 지역·종목 가능한 시설만
   useEffect(() => {
     const loadRecommendedFacilities = async () => {
       if (!showFacilitySearch) {
@@ -207,10 +213,12 @@ const Step3CommonSettings: React.FC<Step3CommonSettingsProps> = ({
           queryParams.append('category', category);
         }
         
-        // 지역 필터: 주소에서 추출 또는 사용자 현재 지역 (시설 주소와 매칭되도록 짧은 이름 사용)
-        const region = location?.trim()
-          ? extractCityFromAddress(location)
-          : getUserCity(user?.id);
+        // 지역 필터: 매치 생성 시 이전 단계(지역 선택)에서 선택한 지역 우선, 없으면 주소/사용자 지역
+        const region = (propSelectedRegion && propSelectedRegion !== '전체')
+          ? propSelectedRegion
+          : (location?.trim()
+              ? extractCityFromAddress(location)
+              : getUserCity(user?.id));
         if (region && region !== '전체') {
           const areaSearch = getRegionDisplayName(region);
           if (areaSearch && areaSearch !== '전국') {
@@ -262,12 +270,12 @@ const Step3CommonSettings: React.FC<Step3CommonSettingsProps> = ({
     } else {
       loadRecommendedFacilities();
     }
-  }, [showFacilitySearch, facilitySearchQuery, category, location, coordinates, facilityPage, meetingDate, meetingTime, meetingEndTime, meetingEndDate]);
+  }, [showFacilitySearch, facilitySearchQuery, category, location, coordinates, facilityPage, meetingDate, meetingTime, meetingEndTime, meetingEndDate, user?.id, propSelectedRegion, facilityListRefetchTrigger]);
 
-  // 검색 조건·위치 변경 시 시설 목록 1페이지로 초기화
+  // 검색 조건·위치 변경 또는 재진입 시 시설 목록 1페이지로 초기화
   useEffect(() => {
     setFacilityPage(1);
-  }, [facilitySearchQuery, category, location]);
+  }, [facilitySearchQuery, category, location, facilityListRefetchTrigger]);
 
   // 시설 선택 핸들러 (1순위는 위치도 설정, 2·3순위는 가계약용. 중복 선택 방지)
   // locationOnlyFacility일 때는 "선택" 버튼으로 빈 순위에 자동 등록 (1 → 2 → 3)
@@ -567,7 +575,7 @@ const Step3CommonSettings: React.FC<Step3CommonSettingsProps> = ({
       <div>
         <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
           <TagIcon className="w-4 h-4 inline mr-1" />
-          매치 이름 <span className="text-red-500">*</span>
+          매치 이름 <span className="text-[var(--color-text-secondary)]">(필수)</span>
         </label>
         <input
           type="text"
@@ -586,7 +594,7 @@ const Step3CommonSettings: React.FC<Step3CommonSettingsProps> = ({
         {!locationOnlyFacility && (
           <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
             <MapPinIcon className="w-4 h-4 inline mr-1" />
-            위치 <span className="text-red-500">*</span>
+            위치 <span className="text-[var(--color-text-secondary)]">(필수)</span>
           </label>
         )}
         {!locationOnlyFacility && (
@@ -989,19 +997,24 @@ const Step3CommonSettings: React.FC<Step3CommonSettingsProps> = ({
                 {!scheduleReadOnly && (
                   <>
                     <p className="text-xs font-medium text-[var(--color-text-primary)] mb-2">예약할 날짜 선택</p>
-                    <input
-                      type="date"
-                      value={reservationDate}
-                      onChange={(e) => setReservationDate(e.target.value)}
-                      min={(() => {
-                        const d = new Date();
-                        const y = d.getFullYear();
-                        const m = String(d.getMonth() + 1).padStart(2, '0');
-                        const day = String(d.getDate()).padStart(2, '0');
-                        return `${y}-${m}-${day}`;
-                      })()}
-                      className="w-full max-w-[200px] px-3 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-sm date-input-dark"
-                    />
+                    <div className="relative max-w-[200px]">
+                      <input
+                        type="date"
+                        value={reservationDate}
+                        onChange={(e) => setReservationDate(e.target.value)}
+                        min={(() => {
+                          const d = new Date();
+                          const y = d.getFullYear();
+                          const m = String(d.getMonth() + 1).padStart(2, '0');
+                          const day = String(d.getDate()).padStart(2, '0');
+                          return `${y}-${m}-${day}`;
+                        })()}
+                        className="w-full pl-3 pr-9 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-sm date-input-dark date-input-with-icon"
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
+                        <CalendarIcon className="w-4 h-4" />
+                      </span>
+                    </div>
                     {reservationDate && (
                       <div className="mt-2">
                         <p className="text-xs font-medium text-[var(--color-text-primary)] mb-2">예약 가능한 시간 (2시간 단위)</p>
@@ -1067,24 +1080,29 @@ const Step3CommonSettings: React.FC<Step3CommonSettingsProps> = ({
         <div>
           <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
             <CalendarIcon className="w-4 h-4 inline mr-1" />
-            매치 일정 <span className="text-red-500">*</span>
+            매치 일정 <span className="text-[var(--color-text-secondary)]">(필수)</span>
           </label>
           {timeStepHourOnly ? (
             <div className="flex gap-2 flex-wrap items-center">
-              <input
-                type="date"
-                required
-                value={meetingDate}
-                onChange={(e) => onDateTimeChange(e.target.value || '', meetingTime)}
-                min={(() => {
-                  const d = new Date();
-                  const y = d.getFullYear();
-                  const m = String(d.getMonth() + 1).padStart(2, '0');
-                  const day = String(d.getDate()).padStart(2, '0');
-                  return `${y}-${m}-${day}`;
-                })()}
-                className="flex-1 min-w-[140px] px-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
-              />
+              <div className="flex-1 min-w-[140px] relative">
+                <input
+                  type="date"
+                  required
+                  value={meetingDate}
+                  onChange={(e) => onDateTimeChange(e.target.value || '', meetingTime)}
+                  min={(() => {
+                    const d = new Date();
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return `${y}-${m}-${day}`;
+                  })()}
+                  className="w-full pl-4 pr-10 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark date-input-with-icon"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
+                  <CalendarIcon className="w-5 h-5" />
+                </span>
+              </div>
               <select
                 required
                 value={meetingTime ? (parseInt(meetingTime.slice(0, 2), 10) < 12 ? 'am' : 'pm') : ''}
@@ -1132,32 +1150,37 @@ const Step3CommonSettings: React.FC<Step3CommonSettingsProps> = ({
               </select>
             </div>
           ) : (
-            <input
-              type="datetime-local"
-              value={meetingDate && meetingTime 
-                ? `${meetingDate}T${meetingTime}` 
-                : ''}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value) {
-                  const [date, time] = value.split('T');
-                  onDateTimeChange(date || '', time || '');
-                } else {
-                  onDateTimeChange('', '');
-                }
-              }}
-              min={(() => {
-                const d = new Date();
-                d.setTime(d.getTime() + 2 * 60 * 60 * 1000);
-                const y = d.getFullYear();
-                const m = String(d.getMonth() + 1).padStart(2, '0');
-                const day = String(d.getDate()).padStart(2, '0');
-                const h = String(d.getHours()).padStart(2, '0');
-                const min = String(d.getMinutes()).padStart(2, '0');
-                return `${y}-${m}-${day}T${h}:${min}`;
-              })()}
-              className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
-            />
+            <div className="relative">
+              <input
+                type="datetime-local"
+                value={meetingDate && meetingTime 
+                  ? `${meetingDate}T${meetingTime}` 
+                  : ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value) {
+                    const [date, time] = value.split('T');
+                    onDateTimeChange(date || '', time || '');
+                  } else {
+                    onDateTimeChange('', '');
+                  }
+                }}
+                min={(() => {
+                  const d = new Date();
+                  d.setTime(d.getTime() + 2 * 60 * 60 * 1000);
+                  const y = d.getFullYear();
+                  const m = String(d.getMonth() + 1).padStart(2, '0');
+                  const day = String(d.getDate()).padStart(2, '0');
+                  const h = String(d.getHours()).padStart(2, '0');
+                  const min = String(d.getMinutes()).padStart(2, '0');
+                  return `${y}-${m}-${day}T${h}:${min}`;
+                })()}
+                className="w-full pl-4 pr-10 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark date-input-with-icon"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
+                <CalendarIcon className="w-5 h-5" />
+              </span>
+            </div>
           )}
           <p className="text-xs text-[var(--color-text-secondary)] mt-2">
             📅 모임 생성은 최소 2시간 전까지 가능합니다. {timeStepHourOnly ? '날짜와 시간(오전·시)은 필수 선택입니다.' : '날짜·시간을 선택하세요.'}

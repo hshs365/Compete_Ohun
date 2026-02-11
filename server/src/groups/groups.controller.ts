@@ -19,15 +19,20 @@ import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupQueryDto } from './dto/group-query.dto';
 import { JoinGroupDto } from './dto/join-group.dto';
+import { UpdateMyPositionDto } from './dto/update-my-position.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { User } from '../users/entities/user.entity';
 import type { Request } from 'express';
+import { GroupsGateway } from './groups.gateway';
 
 @Controller('api/groups')
 export class GroupsController {
-  constructor(private readonly groupsService: GroupsService) {}
+  constructor(
+    private readonly groupsService: GroupsService,
+    private readonly groupsGateway: GroupsGateway,
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Post()
@@ -90,7 +95,7 @@ export class GroupsController {
     @Body() body?: JoinGroupDto,
   ) {
     try {
-      return await this.groupsService.joinGroup(id, user.id, body?.positionCode, body?.team);
+      return await this.groupsService.joinGroup(id, user.id, body?.positionCode, body?.team, body?.slotLabel);
     } catch (error) {
       console.error('joinGroup 컨트롤러 에러:', {
         groupId: id,
@@ -134,6 +139,50 @@ export class GroupsController {
   ) {
     await this.groupsService.leaveGroup(id, user.id);
     return { success: true, message: '모임에서 나갔습니다.' };
+  }
+
+  /** 참가자가 자신의 포지션/팀 변경 (포지션 지정 매치) */
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/my-position')
+  async updateMyPosition(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+    @Body() body: UpdateMyPositionDto,
+  ) {
+    const result = await this.groupsService.updateMyPosition(
+      id,
+      user.id,
+      body.positionCode,
+      body.team,
+      body.slotLabel ?? undefined,
+      body.positionX,
+      body.positionY,
+    );
+    this.groupsGateway.emitPositionUpdated(id);
+    return result;
+  }
+
+  /** 예약 대기 등록. 인원 마감된 매치에만 가능. 반환: { position: number } */
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/waitlist')
+  @HttpCode(HttpStatus.OK)
+  async addToWaitlist(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+  ) {
+    return this.groupsService.addToWaitlist(id, user.id);
+  }
+
+  /** 예약 대기 취소 */
+  @UseGuards(JwtAuthGuard)
+  @Delete(':id/waitlist')
+  @HttpCode(HttpStatus.OK)
+  async removeFromWaitlist(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+  ) {
+    await this.groupsService.removeFromWaitlist(id, user.id);
+    return { success: true, message: '예약 대기를 취소했습니다.' };
   }
 
   /** 찜 토글. 반환: { favorited: boolean } */
@@ -198,6 +247,22 @@ export class GroupsController {
     @CurrentUser() user: User,
   ) {
     return this.groupsService.cancelReferee(id, user.id);
+  }
+
+  /** 랭크매치 승패 기록 (심판만). 이긴 팀 +25·1승, 진 팀 -25·1패 반영 */
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/record-rank-result')
+  @HttpCode(HttpStatus.OK)
+  async recordRankMatchResult(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+    @Body() body: { finalScoreRed: number; finalScoreBlue: number },
+  ) {
+    const { finalScoreRed, finalScoreBlue } = body;
+    if (typeof finalScoreRed !== 'number' || typeof finalScoreBlue !== 'number' || finalScoreRed < 0 || finalScoreBlue < 0) {
+      throw new BadRequestException('finalScoreRed, finalScoreBlue는 0 이상의 숫자여야 합니다.');
+    }
+    return this.groupsService.recordRankMatchResult(id, user.id, finalScoreRed, finalScoreBlue);
   }
 
   /** 매치 종료 후 리뷰 작성 가능 여부 및 항목·참가자 목록 */
