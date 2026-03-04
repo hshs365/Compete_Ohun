@@ -69,6 +69,35 @@ export class GroupQueryDto {
   @Type(() => Number)
   @Min(0.1)
   radiusKm?: number = 3;
+
+  /** 지도 bounds 기반 필터: 남서쪽 위도 */
+  @IsOptional()
+  @Type(() => Number)
+  latMin?: number;
+
+  /** 지도 bounds 기반 필터: 북동쪽 위도 */
+  @IsOptional()
+  @Type(() => Number)
+  latMax?: number;
+
+  /** 지도 bounds 기반 필터: 남서쪽 경도 */
+  @IsOptional()
+  @Type(() => Number)
+  lngMin?: number;
+
+  /** 지도 bounds 기반 필터: 북동쪽 경도 */
+  @IsOptional()
+  @Type(() => Number)
+  lngMax?: number;
+
+  /** 날짜 필터: YYYY-MM-DD (해당 날짜 매치만) */
+  @IsOptional()
+  @IsString()
+  filterDate?: string;
+
+  /** 종목별 동적 필터 (JSON 문자열). 예: {"levelCategory":"A"} 또는 {"positions":["GK","DF"]} */
+  @IsOptional()
+  sportSpecificFilter?: string;
 }
 
 

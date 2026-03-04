@@ -168,6 +168,15 @@ export class CreateGroupDto {
   @IsString()
   @IsIn(['normal', 'rank', 'event'])
   type?: 'normal' | 'rank' | 'event'; // 매치 유형 (기본값: 'normal')
+
+  /** 종목별 확장 데이터 (배드민턴: 급수/종목, 축구: 포지션 등). 종목에 따라 필수값 검증 */
+  @IsOptional()
+  sportSpecificData?: Record<string, unknown>;
+
+  /** 용병 구하기 글 여부. true이면 해당 종목 용병 알림 수신 유저에게 알림 발송 */
+  @IsOptional()
+  @IsBoolean()
+  isMercenaryRecruit?: boolean;
 }
 
 

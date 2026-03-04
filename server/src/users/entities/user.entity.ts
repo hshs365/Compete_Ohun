@@ -114,8 +114,11 @@ export class User {
   @Column({ type: 'int', default: 0 })
   activityScore: number; // 활동점수
 
-  @Column({ type: 'int', default: 0 })
-  mannerScore: number; // 매너점수
+  @Column({ type: 'int', default: 80 })
+  mannerScore: number; // 매너점수 (가입 시 80, 매너칭찬 +1, 신고 5회당 -10, 노쇼 1회당 -41)
+
+  @Column({ type: 'int', default: 0, name: 'no_show_count' })
+  noShowCount: number; // 시설 예약 노쇼 누적 횟수 (1회당 매너 -41점)
 
   @Column({ type: 'int', default: 0 })
   victoryScore: number; // 승리점수
@@ -237,6 +240,28 @@ export class User {
   /** 내 지역 랭크매치 생성 시 심판 신청 알림 받기 */
   @Column({ type: 'boolean', default: false })
   notifyRefereeRankMatchInRegion: boolean;
+
+  /**
+   * 패널티 점수 (신고 누적 시 증가). 본인인증 도입 후에도 데이터 손실 없이 마이그레이션 가능.
+   * threshold 초과 시 매치 참여 제한.
+   */
+  @Column({ type: 'int', default: 0 })
+  penaltyScore: number;
+
+  /** 용병 활동 상태. 'active'일 때만 구인자 검색에 노출됨 */
+  @Column({ type: 'varchar', length: 20, default: 'paused', name: 'mercenary_activity_status' })
+  mercenaryActivityStatus: 'active' | 'paused';
+
+  /** 용병 활동 가능 시간표. [{ dayOfWeek: 0, timeSlots: [{ start: "09:00", end: "12:00" }] }] */
+  @Column({ type: 'jsonb', default: () => "'[]'", name: 'mercenary_availability' })
+  mercenaryAvailability: Array<{
+    dayOfWeek: number;
+    timeSlots: Array<{ start: string; end: string }>;
+  }>;
+
+  /** 종목별 용병 알림 수신 활성화. { "축구": true, "배드민턴": false } - true일 때 해당 종목 용병 구하기 알림 수신 */
+  @Column({ type: 'jsonb', default: () => "'{}'", name: 'mercenary_active_by_sport' })
+  mercenaryActiveBySport: Record<string, boolean>;
 
   // 메타 정보
   @CreateDateColumn()

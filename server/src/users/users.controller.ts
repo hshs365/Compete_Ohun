@@ -24,7 +24,9 @@ function getEffectiveAllcourtplayRanks(targetUser: User): Record<string, string>
   const stored = targetUser.ohunRanks || {};
   const result: Record<string, string> = {};
   for (const [sport, rank] of Object.entries(stored)) {
-    if (rank && /^[SABCDEF]$/i.test(rank)) {
+    if (rank === 'none') {
+      result[sport] = 'none';
+    } else if (rank && /^[SABCDEF]$/i.test(rank)) {
       result[sport] = rank.toUpperCase();
     }
   }
@@ -48,7 +50,7 @@ export class UsersController {
   ) {}
 
   /**
-   * 명예의 전당 랭킹 조회
+   * 명예의 전당 랭킹 조회 (용병 지수 = 참가 횟수 + 활동 종목 수 + 매너점수 합산)
    */
   @Get('hall-of-fame')
   async getHallOfFame(@Query() queryDto: HallOfFameQueryDto) {
@@ -62,38 +64,70 @@ export class UsersController {
 
     const skip = (page - 1) * limit;
 
-    // 랭킹 조회
-    const queryBuilder = this.seasonScoreRepository
+    // 용병 랭킹: sport='전체'인 행만 사용 (참가 횟수, 매너점수 포함)
+    const allScores = await this.seasonScoreRepository
       .createQueryBuilder('score')
       .leftJoinAndSelect('score.user', 'user')
       .where('score.year = :year', { year })
       .andWhere('score.region = :region', { region })
       .andWhere('score.sport = :sport', { sport })
-      .orderBy('score.totalScore', 'DESC')
-      .addOrderBy('score.createdAt', 'ASC') // 동점 시 먼저 달성한 사람이 우선
-      .skip(skip)
-      .take(limit);
+      .getMany();
 
-    const [scores, total] = await queryBuilder.getManyAndCount();
+    if (allScores.length === 0) {
+      return { rankings: [], total: 0, page, limit, year, region, sport };
+    }
 
-    // 랭킹 데이터 포맷팅
-    const rankings = scores.map((score, index) => ({
+    const userIds = allScores.map((s) => s.userId);
+    // 활동한 종목 수: 같은 연도/지역에서 sport != '전체'인 행의 개수(종목별 1행)
+    const sportsCountRaw = await this.seasonScoreRepository
+      .createQueryBuilder('score')
+      .select('score.userId', 'userId')
+      .addSelect('COUNT(DISTINCT score.sport)', 'sportsCount')
+      .where('score.year = :year', { year })
+      .andWhere('score.region = :region', { region })
+      .andWhere('score.sport != :sport', { sport: '전체' })
+      .andWhere('score.userId IN (:...userIds)', { userIds })
+      .groupBy('score.userId')
+      .getRawMany<{ userId: number; sportsCount: string }>();
+
+    const sportsCountByUser = new Map<number, number>();
+    sportsCountRaw.forEach((r) => sportsCountByUser.set(r.userId, parseInt(r.sportsCount, 10) || 0));
+
+    const WEIGHT_PARTICIPATION = 10;
+    const WEIGHT_MANNER = 1;
+    const WEIGHT_SPORTS = 20;
+
+    const withComposite = allScores.map((score) => {
+      const sportsCount = sportsCountByUser.get(score.userId) ?? 0;
+      const composite =
+        (score.groupsParticipated || 0) * WEIGHT_PARTICIPATION +
+        (score.mannerScore || 0) * WEIGHT_MANNER +
+        sportsCount * WEIGHT_SPORTS;
+      return { score, composite, sportsCount };
+    });
+
+    withComposite.sort((a, b) => b.composite - a.composite);
+    const total = withComposite.length;
+    const paged = withComposite.slice(skip, skip + limit);
+
+    const rankings = paged.map(({ score, composite, sportsCount }, index) => ({
       id: score.user.id,
       rank: skip + index + 1,
       nickname: score.user.nickname,
       tag: score.user.tag,
-      score: score.totalScore,
+      score: composite,
+      groupsParticipated: score.groupsParticipated ?? 0,
+      mannerScore: score.mannerScore ?? 0,
+      sportsCount,
       sportCategory: sport === '전체' ? '전체' : sport,
-      region: region,
-      year: year,
+      region,
+      year,
       activityScore: score.activityScore,
-      mannerScore: score.mannerScore,
       leadershipScore: score.leadershipScore,
       diversityScore: score.diversityScore,
       continuityScore: score.continuityScore,
       growthScore: score.growthScore,
       groupsCreated: score.groupsCreated,
-      groupsParticipated: score.groupsParticipated,
       groupsCompleted: score.groupsCompleted,
       avatar: score.user.profileImageUrl,
     }));
@@ -110,7 +144,7 @@ export class UsersController {
   }
 
   /**
-   * 내 순위 조회
+   * 내 순위 조회 (용병 지수 동일 공식 적용)
    */
   @Get('hall-of-fame/my-rank')
   @UseGuards(JwtAuthGuard)
@@ -122,7 +156,6 @@ export class UsersController {
       sport = '전체',
     } = queryDto;
 
-    // 내 점수 조회
     const myScore = await this.seasonScoreRepository.findOne({
       where: { userId, year, region, sport },
       relations: ['user'],
@@ -132,28 +165,68 @@ export class UsersController {
       return {
         rank: null,
         score: 0,
+        groupsParticipated: 0,
+        mannerScore: 0,
+        sportsCount: 0,
         message: '랭킹 데이터가 없습니다.',
       };
     }
 
-    // 내 순위 계산
-    const rank = await this.seasonScoreRepository
+    const sportsCountRaw = await this.seasonScoreRepository
+      .createQueryBuilder('score')
+      .select('COUNT(DISTINCT score.sport)', 'sportsCount')
+      .where('score.year = :year', { year })
+      .andWhere('score.region = :region', { region })
+      .andWhere('score.sport != :sport', { sport: '전체' })
+      .andWhere('score.userId = :userId', { userId })
+      .getRawOne<{ sportsCount: string }>();
+
+    const sportsCount = parseInt(sportsCountRaw?.sportsCount ?? '0', 10) || 0;
+    const WEIGHT_PARTICIPATION = 10;
+    const WEIGHT_MANNER = 1;
+    const WEIGHT_SPORTS = 20;
+    const myComposite =
+      (myScore.groupsParticipated || 0) * WEIGHT_PARTICIPATION +
+      (myScore.mannerScore || 0) * WEIGHT_MANNER +
+      sportsCount * WEIGHT_SPORTS;
+
+    const allScores = await this.seasonScoreRepository
       .createQueryBuilder('score')
       .where('score.year = :year', { year })
       .andWhere('score.region = :region', { region })
       .andWhere('score.sport = :sport', { sport })
-      .andWhere(
-        '(score.totalScore > :myScore OR (score.totalScore = :myScore AND score.createdAt < :myCreatedAt))',
-        {
-          myScore: myScore.totalScore,
-          myCreatedAt: myScore.createdAt,
-        },
-      )
-      .getCount();
+      .getMany();
+
+    const userIds = allScores.map((s) => s.userId);
+    const sportsCountRawAll = await this.seasonScoreRepository
+      .createQueryBuilder('score')
+      .select('score.userId', 'userId')
+      .addSelect('COUNT(DISTINCT score.sport)', 'sportsCount')
+      .where('score.year = :year', { year })
+      .andWhere('score.region = :region', { region })
+      .andWhere('score.sport != :sport', { sport: '전체' })
+      .andWhere('score.userId IN (:...userIds)', { userIds })
+      .groupBy('score.userId')
+      .getRawMany<{ userId: number; sportsCount: string }>();
+
+    const sportsCountByUser = new Map<number, number>();
+    sportsCountRawAll.forEach((r) => sportsCountByUser.set(r.userId, parseInt(r.sportsCount, 10) || 0));
+
+    const rank = allScores.filter((score) => {
+      const sc = sportsCountByUser.get(score.userId) ?? 0;
+      const composite =
+        (score.groupsParticipated || 0) * WEIGHT_PARTICIPATION +
+        (score.mannerScore || 0) * WEIGHT_MANNER +
+        sc * WEIGHT_SPORTS;
+      return composite > myComposite;
+    }).length;
 
     return {
       rank: rank + 1,
-      score: myScore.totalScore,
+      score: myComposite,
+      groupsParticipated: myScore.groupsParticipated ?? 0,
+      mannerScore: myScore.mannerScore ?? 0,
+      sportsCount,
       year,
       region,
       sport,
@@ -306,11 +379,26 @@ export class UsersController {
 
   /**
    * 내 축구 스텟 (매치 리뷰에서 뽑힌 횟수 기반, 레이더차트용 1~10)
+   * @deprecated GET me/sport-stats?sport=축구 사용 권장
    */
   @Get('me/football-stats')
   @UseGuards(JwtAuthGuard)
   async getMyFootballStats(@CurrentUser() user: User) {
     return this.userReviewStatsService.getFootballStatsFromReviews(user.id);
+  }
+
+  /**
+   * 종목별 내 스텟 (최근 20경기 평균 + Z-score 1~10 스케일링)
+   * ?sport=축구 | 풋살 | 농구 | 테니스
+   */
+  @Get('me/sport-stats')
+  @UseGuards(JwtAuthGuard)
+  async getMySportStats(
+    @CurrentUser() user: User,
+    @Query('sport') sport?: string,
+  ) {
+    const s = (sport || '축구').trim();
+    return this.userReviewStatsService.getSportStatsFromReviews(user.id, s);
   }
 
   /**
@@ -365,7 +453,7 @@ export class UsersController {
       totalScore,
       isFollowing,
       skillLevel: targetUser.skillLevel ?? null,
-      mannerScore: targetUser.mannerScore ?? 0,
+      mannerScore: targetUser.mannerScore ?? 80, // 기본 80점 (기존 데이터 호환)
       preferredPosition: preferredPosition ?? undefined,
       earnedTitles,
       recentCompletedActivities: activitySummary.recentCompleted,

@@ -53,6 +53,10 @@ export class UpdateGroupDto {
   @IsBoolean()
   @IsOptional()
   isClosed?: boolean;
+
+  /** 종목별 확장 데이터 */
+  @IsOptional()
+  sportSpecificData?: Record<string, unknown>;
 }
 
 

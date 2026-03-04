@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { XMarkIcon, MapPinIcon, BuildingOfficeIcon, PhoneIcon, ClockIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, MapPinIcon, BuildingOfficeIcon, PhoneIcon, ClockIcon, MagnifyingGlassIcon, PlusCircleIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import TimeRangeSlider from './TimeRangeSlider';
 import { api } from '../utils/api';
+import FacilityCourtFormModal from './FacilityCourtFormModal';
+import type { FacilityCourtDto } from './FacilityCourtFormModal';
+import { PHONE_PLACEHOLDER } from '../utils/phoneFormat';
 import NaverMap from './NaverMap';
 import Tooltip from './Tooltip';
 import { showError, showSuccess, showWarning } from '../utils/swal';
@@ -19,6 +23,7 @@ export interface FacilityForEdit {
   latitude?: number | null;
   longitude?: number | null;
   reservationSlotHours?: number;
+  indoorOutdoor?: string | null;
 }
 
 interface CreateFacilityModalProps {
@@ -83,6 +88,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
   const [formData, setFormData] = useState({
     name: '',
     type: '체육센터',
+    indoorOutdoor: '' as '' | 'indoor' | 'outdoor',
     address: '',
     coordinates: getUserLocation(),
     phone: '',
@@ -100,6 +106,9 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
   const [showMap, setShowMap] = useState(false);
   const [mapKey, setMapKey] = useState(0);
   const [mapZoom, setMapZoom] = useState(15);
+  const [courts, setCourts] = useState<FacilityCourtDto[]>([]);
+  const [courtModalOpen, setCourtModalOpen] = useState(false);
+  const [editingCourt, setEditingCourt] = useState<FacilityCourtDto | null>(null);
   const modalMouseDownRef = useRef<{ x: number; y: number } | null>(null);
 
   // 수정 모드: initialFacility가 있으면 폼 초기화
@@ -114,6 +123,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
       setFormData({
         name: initialFacility.name ?? '',
         type: initialFacility.type ?? '체육센터',
+        indoorOutdoor: (initialFacility.indoorOutdoor === 'indoor' || initialFacility.indoorOutdoor === 'outdoor' ? initialFacility.indoorOutdoor : '') as '' | 'indoor' | 'outdoor',
         address: initialFacility.address ?? '',
         coordinates: coords,
         phone: initialFacility.phone ?? '',
@@ -131,6 +141,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
       setFormData({
         name: '',
         type: '체육센터',
+        indoorOutdoor: '',
         address: '',
         coordinates: getUserLocation(),
         phone: '',
@@ -145,6 +156,14 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
       });
     }
   }, [isOpen, initialFacility]);
+
+  // 시설 수정 모드: 구장 목록 로드
+  useEffect(() => {
+    if (!isOpen || !initialFacility?.id) return;
+    api.get<FacilityCourtDto[]>(`/api/facilities/${initialFacility.id}/courts`)
+      .then((data) => setCourts(Array.isArray(data) ? data : []))
+      .catch(() => setCourts([]));
+  }, [isOpen, initialFacility?.id]);
 
   const commonAmenities = ['주차', '샤워실', '락커룸', '매점', '카페', '프로샵', '관람석', '간이탈의실', '수영용품 판매'];
 
@@ -367,12 +386,11 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
           ? `${formData.operatingHoursStart} - ${formData.operatingHoursEnd}`
           : undefined);
 
-      // 가격에서 콤마 제거 (숫자만 추출)
-      const priceValue = formData.price ? formData.price.replace(/,/g, '') : undefined;
-      
-      // 가격 타입과 가격을 합쳐서 문자열로 저장 (예: "시간당 10,000원" 또는 "일일 50,000원")
-      const priceString = priceValue 
-        ? `${formData.priceType === 'hourly' ? '시간당' : formData.priceType === 'daily' ? '일일' : formData.priceType === 'monthly' ? '월간' : '패키지'} ${formData.price}원`
+      const priceValue = formData.price?.replace(/,/g, '').trim();
+      const priceString = priceValue
+        ? formData.priceType === 'package'
+          ? `패키지 ${formData.price}${formData.price.endsWith('원') ? '' : '원'}`
+          : `${formData.priceType === 'hourly' ? '시간당' : formData.priceType === 'daily' ? '일일' : '월간'} ${formData.price}원`
         : undefined;
 
       const payload = {
@@ -388,6 +406,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
         amenities: formData.amenities,
         availableSports: formData.availableSports,
         reservationSlotHours: formData.reservationSlotHours,
+        ...(formData.indoorOutdoor && { indoorOutdoor: formData.indoorOutdoor }),
       };
 
       if (initialFacility?.id) {
@@ -400,6 +419,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
         setFormData({
           name: '',
           type: '체육센터',
+          indoorOutdoor: '',
           address: '',
           coordinates: getUserLocation(),
           phone: '',
@@ -433,7 +453,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
 
   return (
     <div
-      className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/30 z-[1000] flex items-center justify-center p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) {
           modalMouseDownRef.current = { x: e.clientX, y: e.clientY };
@@ -452,10 +472,10 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
       }}
     >
       <div
-        className="bg-[var(--color-bg-card)] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-[var(--color-border-card)]"
+        className="bg-[var(--color-bg-card)] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col border border-[var(--color-border-card)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)] p-4 md:p-6 flex items-center justify-between z-10">
+        <div className="flex-shrink-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)] p-4 md:p-6 flex items-center justify-between">
           <div>
             <h2 className="text-xl md:text-2xl font-bold text-[var(--color-text-primary)]">
               {initialFacility?.id ? '시설 수정' : '시설 등록'}
@@ -474,7 +494,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 md:p-6 space-y-6">
+        <form id="create-facility-modal-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
           {/* 시설명 */}
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
@@ -509,6 +529,23 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
                   {type}
                 </option>
               ))}
+            </select>
+          </div>
+
+          {/* 실내/실외 */}
+          <div>
+            <label htmlFor="indoorOutdoor" className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+              실내/실외
+            </label>
+            <select
+              id="indoorOutdoor"
+              value={formData.indoorOutdoor}
+              onChange={(e) => handleChange('indoorOutdoor', e.target.value as '' | 'indoor' | 'outdoor')}
+              className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+            >
+              <option value="">선택</option>
+              <option value="indoor">실내</option>
+              <option value="outdoor">실외</option>
             </select>
           </div>
 
@@ -569,7 +606,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
             <label htmlFor="phone" className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-primary)] mb-2">
               <PhoneIcon className="w-4 h-4" />
               전화번호 <span className="text-xs text-[var(--color-text-secondary)] font-normal">(선택사항)</span>
-              <Tooltip content="전화번호는 자동으로 하이픈(-)이 추가됩니다. 숫자만 입력해주세요." />
+              <Tooltip content="- 없이 입력하면 자동으로 추가됩니다." />
             </label>
             <input
               id="phone"
@@ -613,7 +650,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
                 handleChange('phone', formatted);
               }}
               className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-              placeholder="전화번호를 입력해주세요"
+              placeholder={PHONE_PLACEHOLDER}
               maxLength={13}
             />
           </div>
@@ -639,65 +676,15 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
                 야간/새벽 운영 시 종료를 &quot;오전 12시&quot;(자정) 또는 &quot;오전 2시&quot; 등으로 선택할 수 있습니다.
               </p>
               )}
-              <div className={`flex items-center gap-2 mt-1 ${formData.is24Hours ? 'opacity-50 pointer-events-none' : ''}`}>
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-[var(--color-text-secondary)] shrink-0">시작</span>
-                  <select
-                    id="operatingHoursStart"
-                    value={formData.operatingHoursStart.split(':')[0]}
-                    onChange={(e) => {
-                      const m = (formData.operatingHoursStart.split(':')[1] === '30') ? '30' : '00';
-                      handleChange('operatingHoursStart', `${e.target.value}:${m}`);
-                    }}
-                    className="w-20 px-2 py-1.5 text-sm border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                  >
-                    {HOUR_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                  <span className="text-[var(--color-text-primary)] font-medium">:</span>
-                  <select
-                    value={(formData.operatingHoursStart.split(':')[1] === '30') ? '30' : '00'}
-                    onChange={(e) => {
-                      const h = formData.operatingHoursStart.split(':')[0];
-                      handleChange('operatingHoursStart', `${h}:${e.target.value}`);
-                    }}
-                    className="w-14 px-2 py-1.5 text-sm border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                  >
-                    {MINUTE_OPTIONS_30.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <span className="text-[var(--color-text-secondary)]">~</span>
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-[var(--color-text-secondary)] shrink-0">종료</span>
-                  <select
-                    value={formData.operatingHoursEnd.split(':')[0]}
-                    onChange={(e) => {
-                      const m = (formData.operatingHoursEnd.split(':')[1] === '30') ? '30' : '00';
-                      handleChange('operatingHoursEnd', `${e.target.value}:${m}`);
-                    }}
-                    className="w-20 px-2 py-1.5 text-sm border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                  >
-                    {HOUR_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                  <span className="text-[var(--color-text-primary)] font-medium">:</span>
-                  <select
-                    value={(formData.operatingHoursEnd.split(':')[1] === '30') ? '30' : '00'}
-                    onChange={(e) => {
-                      const h = formData.operatingHoursEnd.split(':')[0];
-                      handleChange('operatingHoursEnd', `${h}:${e.target.value}`);
-                    }}
-                    className="w-14 px-2 py-1.5 text-sm border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                  >
-                    {MINUTE_OPTIONS_30.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
+              <div className={`mt-1 ${formData.is24Hours ? 'opacity-50 pointer-events-none' : ''}`}>
+                <TimeRangeSlider
+                  startTime={formData.operatingHoursStart}
+                  endTime={formData.operatingHoursEnd}
+                  onChange={(start, end) =>
+                    setFormData((prev) => ({ ...prev, operatingHoursStart: start, operatingHoursEnd: end }))
+                  }
+                  pointColor="#3b82f6"
+                />
               </div>
             </div>
             <div>
@@ -775,7 +762,7 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
                   </button>
                 </div>
               </div>
-              {/* 가격 입력 */}
+              {/* 가격 입력 — 가격 타입별 동적 폼 */}
               <div>
                 <label htmlFor="price" className="block text-xs text-[var(--color-text-secondary)] mb-2">
                   {formData.priceType === 'hourly' && '시간당'}
@@ -783,32 +770,45 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
                   {formData.priceType === 'monthly' && '월간'}
                   {formData.priceType === 'package' && '패키지'} 가격
                 </label>
-                <div className="relative">
-                  <input
-                    id="price"
-                    type="text"
-                    value={formData.price}
-                    onChange={(e) => {
-                      // 숫자만 추출
-                      const numbers = e.target.value.replace(/[^\d]/g, '');
-                      // 천단위 콤마 추가
-                      const formatted = numbers ? parseInt(numbers, 10).toLocaleString() : '';
-                      handleChange('price', formatted);
-                    }}
-                    className="w-full px-4 py-2 pr-12 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                    placeholder="가격을 입력해주세요"
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--color-text-secondary)] text-sm">
-                    원
-                  </span>
-                </div>
-                {formData.price && (
-                  <p className="text-xs text-[var(--color-text-secondary)] mt-1">
-                    {formData.priceType === 'hourly' && '시간당'}
-                    {formData.priceType === 'daily' && '일일'}
-                    {formData.priceType === 'monthly' && '월간'}
-                    {formData.priceType === 'package' && '패키지'} {formData.price}원
-                  </p>
+                {formData.priceType === 'package' ? (
+                  <div className="space-y-1">
+                    <input
+                      id="price"
+                      type="text"
+                      value={formData.price}
+                      onChange={(e) => handleChange('price', e.target.value)}
+                      className="w-full px-4 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                      placeholder="예: 10회 150,000원 / 1개월 정액 200,000원"
+                    />
+                    <p className="text-xs text-[var(--color-text-secondary)]">패키지 요금은 자유 형식으로 입력해 주세요.</p>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <input
+                      id="price"
+                      type="text"
+                      value={formData.price}
+                      onChange={(e) => {
+                        const numbers = e.target.value.replace(/[^\d]/g, '');
+                        const formatted = numbers ? parseInt(numbers, 10).toLocaleString() : '';
+                        handleChange('price', formatted);
+                      }}
+                      className="w-full px-4 py-2 pr-12 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                      placeholder={
+                        formData.priceType === 'hourly' ? '예: 20,000 (시간당)' :
+                        formData.priceType === 'daily' ? '예: 50,000 (일일)' :
+                        formData.priceType === 'monthly' ? '예: 200,000 (월간)' : '가격을 입력해주세요'
+                      }
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--color-text-secondary)] text-sm">원</span>
+                    {formData.price && (
+                      <p className="text-xs text-[var(--color-text-secondary)] mt-1">
+                        {formData.priceType === 'hourly' && '시간당'}
+                        {formData.priceType === 'daily' && '일일'}
+                        {formData.priceType === 'monthly' && '월간'} {formData.price}원
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -880,8 +880,88 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
             </div>
           </div>
 
-          {/* 버튼 */}
-          <div className="flex space-x-3 pt-4 border-t border-[var(--color-border-card)]">
+          {/* 구장 목록 (시설 수정 모드에서만 표시) */}
+          {initialFacility?.id && (
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                구장 목록 <span className="text-xs text-[var(--color-text-secondary)] font-normal">(층·면별 등록)</span>
+              </label>
+              <p className="text-xs text-[var(--color-text-secondary)] mb-3">
+                하나의 시설에 여러 구장(층, 면)이 있을 경우 등록하세요. 예약/매치 시 구장을 선택할 수 있습니다.
+              </p>
+              <div className="space-y-2">
+                {courts.map((court) => (
+                  <div
+                    key={court.id}
+                    className="flex items-center justify-between px-4 py-3 rounded-xl border border-[var(--color-border-card)] bg-[var(--color-bg-primary)]"
+                  >
+                    <div>
+                      <span className="font-medium text-[var(--color-text-primary)]">{court.courtName}</span>
+                      <span className="ml-2 text-xs text-[var(--color-text-secondary)]">
+                        {court.floorMaterial} · {court.indoorOutdoor === 'indoor' ? '실내' : '실외'}
+                      </span>
+                    </div>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => { setEditingCourt(court); setCourtModalOpen(true); }}
+                        className="p-1.5 rounded-lg hover:bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)]"
+                        title="수정"
+                      >
+                        <PencilIcon className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!court.id || !window.confirm(`"${court.courtName}" 구장을 삭제하시겠습니까?`)) return;
+                          try {
+                            await api.delete(`/api/facilities/${initialFacility.id}/courts/${court.id}`);
+                            setCourts((prev) => prev.filter((c) => c.id !== court.id));
+                            await showSuccess('구장이 삭제되었습니다.', '삭제 완료');
+                          } catch (err) {
+                            await showError(err instanceof Error ? err.message : '삭제 실패', '오류');
+                          }
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-red-500/10 text-red-500"
+                        title="삭제"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => { setEditingCourt(null); setCourtModalOpen(true); }}
+                  className="w-full py-3 px-4 rounded-xl border-2 border-dashed border-[var(--color-border-card)] hover:border-[var(--color-blue-primary)] hover:bg-[var(--color-blue-primary)]/5 flex items-center justify-center gap-2 text-[var(--color-text-secondary)] hover:text-[var(--color-blue-primary)] transition-colors"
+                >
+                  <PlusCircleIcon className="w-5 h-5" />
+                  구장 추가
+                </button>
+              </div>
+            </div>
+          )}
+
+        </form>
+
+        {initialFacility?.id && (
+          <FacilityCourtFormModal
+            isOpen={courtModalOpen}
+            onClose={() => { setCourtModalOpen(false); setEditingCourt(null); }}
+            onSuccess={() => {
+              api.get<FacilityCourtDto[]>(`/api/facilities/${initialFacility.id}/courts`)
+                .then((data) => setCourts(Array.isArray(data) ? data : []))
+                .catch(() => setCourts([]));
+            }}
+            facilityId={initialFacility.id}
+            existingCourts={courts}
+            editCourt={editingCourt}
+          />
+        )}
+
+        {/* Sticky 저장 버튼 영역 */}
+        <div className="flex-shrink-0 p-4 md:p-6 pt-4 border-t border-[var(--color-border-card)] bg-[var(--color-bg-card)]">
+          <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
@@ -891,13 +971,14 @@ const CreateFacilityModal: React.FC<CreateFacilityModalProps> = ({ isOpen, onClo
             </button>
             <button
               type="submit"
+              form="create-facility-modal-form"
               disabled={isSubmitting}
               className="flex-1 px-4 py-3 bg-[var(--color-blue-primary)] text-white rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? '등록 중...' : '시설 등록'}
+              {isSubmitting ? (initialFacility?.id ? '수정 중...' : '등록 중...') : (initialFacility?.id ? '저장' : '시설 등록')}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

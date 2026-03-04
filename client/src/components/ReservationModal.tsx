@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { XMarkIcon, CalendarDaysIcon, ClockIcon, UsersIcon, PhoneIcon, ChatBubbleLeftIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
+import TimeRangeSlider from './TimeRangeSlider';
 import { api } from '../utils/api';
 import { showError, showSuccess } from '../utils/swal';
+import { formatPhoneNumber, PHONE_PLACEHOLDER } from '../utils/phoneFormat';
 
 const SPORT_OPTIONS = ['축구', '풋살', '농구', '배드민턴', '테니스', '수영', '골프', '탁구', '배구', '기타'] as const;
 const MATCH_TYPE_OPTIONS: { value: 'general' | 'rank' | 'event'; label: string }[] = [
@@ -96,7 +98,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/30 z-[1000] flex items-center justify-center p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) {
           modalMouseDownRef.current = { x: e.clientX, y: e.clientY };
@@ -210,47 +212,23 @@ const ReservationModal: React.FC<ReservationModalProps> = ({
                 min={todayStr}
                 value={formData.reservationDate}
                 onChange={(e) => setFormData({ ...formData, reservationDate: e.target.value })}
-                className="w-full pl-4 pr-10 py-2.5 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark date-input-with-icon"
+                className="w-full pl-4 pr-3 py-2.5 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
-                <CalendarDaysIcon className="w-5 h-5" />
-              </span>
             </div>
           </div>
 
           {/* 예약 시간 */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                <ClockIcon className="w-4 h-4 inline mr-1" />
-                시작 시간 <span className="text-[var(--color-text-secondary)]">(필수)</span>
-              </label>
-              <select
-                required
-                value={formData.startTime}
-                onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                className="w-full px-4 py-2.5 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-              >
-                {timeOptions.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                종료 시간 <span className="text-[var(--color-text-secondary)]">(필수)</span>
-              </label>
-              <select
-                required
-                value={formData.endTime}
-                onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                className="w-full px-4 py-2.5 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-              >
-                {timeOptions.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+              <ClockIcon className="w-4 h-4 inline mr-1" />
+              예약 시간 <span className="text-[var(--color-text-secondary)]">(필수)</span>
+            </label>
+            <TimeRangeSlider
+              startTime={formData.startTime}
+              endTime={formData.endTime}
+              onChange={(start, end) => setFormData({ ...formData, startTime: start, endTime: end })}
+              pointColor="#3b82f6"
+            />
           </div>
 
           {/* 인원 수 */}
@@ -277,9 +255,14 @@ const ReservationModal: React.FC<ReservationModalProps> = ({
             </label>
             <input
               type="tel"
+              inputMode="numeric"
               value={formData.contactPhone}
-              onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-              placeholder="010-1234-5678"
+              onChange={(e) => {
+                const numbers = e.target.value.replace(/[^\d]/g, '');
+                setFormData({ ...formData, contactPhone: formatPhoneNumber(numbers) });
+              }}
+              placeholder={PHONE_PLACEHOLDER}
+              maxLength={13}
               className="w-full px-4 py-2.5 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
             />
           </div>

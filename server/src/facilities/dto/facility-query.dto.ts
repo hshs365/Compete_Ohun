@@ -6,6 +6,11 @@ export class FacilityQueryDto {
   @IsString()
   type?: string; // 시설 종류
 
+  /** 실내/실외 필터. indoor=실내만, outdoor=실외만 */
+  @IsOptional()
+  @IsString()
+  indoorOutdoor?: 'indoor' | 'outdoor';
+
   @IsOptional()
   @IsString()
   search?: string; // 검색어

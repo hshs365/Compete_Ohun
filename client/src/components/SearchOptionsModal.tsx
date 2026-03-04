@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 
-/** 사용자 주소 기준 기본 지도 보기 단위 (시≈5km, 구≈2km, 동≈500m) */
-export type MapViewLevel = 'sido' | 'gu' | 'dong';
-
 interface SearchOptionsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -17,16 +14,7 @@ interface SearchOptionsModalProps {
   onGenderChange?: (gender: 'male' | 'female' | null) => void;
   includeCompleted?: boolean;
   onIncludeCompletedChange?: (include: boolean) => void;
-  /** 지도 기본 보기 단위 (사용자 주소 기준) */
-  mapViewLevel?: MapViewLevel;
-  onMapViewLevelChange?: (level: MapViewLevel) => void;
 }
-
-const MAP_VIEW_OPTIONS: { value: MapViewLevel; label: string }[] = [
-  { value: 'sido', label: '시 단위' },
-  { value: 'gu', label: '구 단위' },
-  { value: 'dong', label: '동 단위' },
-];
 
 const SearchOptionsModal: React.FC<SearchOptionsModalProps> = ({
   isOpen,
@@ -41,15 +29,12 @@ const SearchOptionsModal: React.FC<SearchOptionsModalProps> = ({
   onGenderChange,
   includeCompleted = false,
   onIncludeCompletedChange,
-  mapViewLevel = 'sido',
-  onMapViewLevelChange,
 }) => {
   const [localSelectedDays, setLocalSelectedDays] = useState<number[]>(selectedDays);
   const [localHideClosed, setLocalHideClosed] = useState<boolean>(hideClosed);
   const [localOnlyRanker, setLocalOnlyRanker] = useState<boolean>(onlyRanker);
   const [localGender, setLocalGender] = useState<'male' | 'female' | null>(gender);
   const [localIncludeCompleted, setLocalIncludeCompleted] = useState<boolean>(includeCompleted);
-  const [localMapViewLevel, setLocalMapViewLevel] = useState<MapViewLevel>(mapViewLevel);
   const modalMouseDownRef = React.useRef<{ x: number; y: number } | null>(null);
 
   // prop 변경 시 로컬 상태 업데이트
@@ -59,8 +44,7 @@ const SearchOptionsModal: React.FC<SearchOptionsModalProps> = ({
     setLocalOnlyRanker(onlyRanker);
     setLocalGender(gender);
     setLocalIncludeCompleted(includeCompleted);
-    setLocalMapViewLevel(mapViewLevel);
-  }, [selectedDays, hideClosed, onlyRanker, gender, includeCompleted, mapViewLevel, isOpen]);
+  }, [selectedDays, hideClosed, onlyRanker, gender, includeCompleted, isOpen]);
 
   const weekDays = [
     { day: 1, label: '월' },
@@ -94,9 +78,6 @@ const SearchOptionsModal: React.FC<SearchOptionsModalProps> = ({
     if (onIncludeCompletedChange) {
       onIncludeCompletedChange(localIncludeCompleted);
     }
-    if (onMapViewLevelChange) {
-      onMapViewLevelChange(localMapViewLevel);
-    }
     onClose();
   };
 
@@ -106,7 +87,6 @@ const SearchOptionsModal: React.FC<SearchOptionsModalProps> = ({
     setLocalOnlyRanker(false);
     setLocalGender(null);
     setLocalIncludeCompleted(false);
-    setLocalMapViewLevel('sido');
     onDaysChange([]);
     if (onHideClosedChange) {
       onHideClosedChange(true);
@@ -120,16 +100,13 @@ const SearchOptionsModal: React.FC<SearchOptionsModalProps> = ({
     if (onIncludeCompletedChange) {
       onIncludeCompletedChange(false);
     }
-    if (onMapViewLevelChange) {
-      onMapViewLevelChange('sido');
-    }
   };
 
   if (!isOpen) return null;
 
   return (
     <div
-      className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/30 z-[1000] flex items-center justify-center p-4"
       onMouseDown={(e) => {
         // 모달 내부가 아닌 경우에만 마우스 다운 위치 저장
         if (e.target === e.currentTarget) {
@@ -198,60 +175,34 @@ const SearchOptionsModal: React.FC<SearchOptionsModalProps> = ({
 
           <div className="border-t border-[var(--color-border-card)] pt-4">
             <h3 className="text-sm font-medium text-[var(--color-text-primary)] mb-3">기타 필터</h3>
-            <div className="space-y-3">
-              <label className="flex items-center gap-3 p-3 rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border-card)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors">
+            <div className="space-y-2">
+              <label className="flex items-center gap-4 p-4 rounded-xl bg-[var(--color-bg-primary)] border border-[var(--color-border-card)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors min-h-[48px]">
                 <input
                   type="checkbox"
                   checked={!localHideClosed}
                   onChange={(e) => setLocalHideClosed(!e.target.checked)}
-                  className="w-4 h-4 text-[var(--color-blue-primary)] rounded focus:ring-[var(--color-blue-primary)]"
+                  className="w-5 h-5 rounded border-2 border-[var(--color-border-card)] text-[var(--color-blue-primary)] focus:ring-2 focus:ring-[var(--color-blue-primary)] focus:ring-offset-0 transition-all duration-200 accent-[var(--color-blue-primary)]"
                 />
-                <span className="text-sm text-[var(--color-text-primary)]">마감된 매치 보이기</span>
+                <span className="text-sm text-[var(--color-text-primary)] select-none">마감된 매치 보이기</span>
               </label>
-              <label className="flex items-center gap-3 p-3 rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border-card)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors">
+              <label className="flex items-center gap-4 p-4 rounded-xl bg-[var(--color-bg-primary)] border border-[var(--color-border-card)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors min-h-[48px]">
                 <input
                   type="checkbox"
                   checked={localOnlyRanker}
                   onChange={(e) => setLocalOnlyRanker(e.target.checked)}
-                  className="w-4 h-4 text-[var(--color-blue-primary)] rounded focus:ring-[var(--color-blue-primary)]"
+                  className="w-5 h-5 rounded border-2 border-[var(--color-border-card)] text-[var(--color-blue-primary)] focus:ring-2 focus:ring-[var(--color-blue-primary)] focus:ring-offset-0 transition-all duration-200 accent-[var(--color-blue-primary)]"
                 />
-                <span className="text-sm text-[var(--color-text-primary)]">선수출신 경기만 보기</span>
+                <span className="text-sm text-[var(--color-text-primary)] select-none">선수출신 경기만 보기</span>
               </label>
-              <label className="flex items-center gap-3 p-3 rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border-card)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors">
+              <label className="flex items-center gap-4 p-4 rounded-xl bg-[var(--color-bg-primary)] border border-[var(--color-border-card)] cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors min-h-[48px]">
                 <input
                   type="checkbox"
                   checked={localIncludeCompleted}
                   onChange={(e) => setLocalIncludeCompleted(e.target.checked)}
-                  className="w-4 h-4 text-[var(--color-blue-primary)] rounded focus:ring-[var(--color-blue-primary)]"
+                  className="w-5 h-5 rounded border-2 border-[var(--color-border-card)] text-[var(--color-blue-primary)] focus:ring-2 focus:ring-[var(--color-blue-primary)] focus:ring-offset-0 transition-all duration-200 accent-[var(--color-blue-primary)]"
                 />
-                <span className="text-sm text-[var(--color-text-primary)]">종료된 매치 보이기</span>
+                <span className="text-sm text-[var(--color-text-primary)] select-none">종료된 매치 보이기</span>
               </label>
-            </div>
-          </div>
-
-          <div className="border-t border-[var(--color-border-card)] pt-4">
-            <h3 className="text-sm font-medium text-[var(--color-text-primary)] mb-3">지도 기본 보기</h3>
-            <p className="text-xs text-[var(--color-text-secondary)] mb-2">
-              사용자 주소를 기준으로 기본 지도 축척이 설정됩니다.
-            </p>
-            <p className="text-xs text-[var(--color-text-secondary)] mb-3">
-              시·구 단위 선택 시 지역 드롭다운 2개(시/도, 구), 동 단위 선택 시 3개(시/도, 구, 동)가 표시됩니다.
-            </p>
-            <div className="flex gap-2">
-              {MAP_VIEW_OPTIONS.map(({ value, label }) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setLocalMapViewLevel(value)}
-                  className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all ${
-                    localMapViewLevel === value
-                      ? 'border-[var(--color-blue-primary)] bg-blue-50 dark:bg-blue-900/20 text-[var(--color-blue-primary)] font-medium'
-                      : 'border-[var(--color-border-card)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] hover:border-[var(--color-blue-primary)]/50'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
             </div>
           </div>
 

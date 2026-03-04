@@ -13,6 +13,7 @@ import Step3LoginInfo from './register/Step3LoginInfo';
 import Step4PhoneVerification from './register/Step4PhoneVerification';
 import Step5BusinessVerification from './register/Step5BusinessVerification';
 import Step6AdditionalInfo from './register/Step5AdditionalInfo';
+import AppLogo from './AppLogo';
 
 interface MultiStepRegisterProps {}
 
@@ -108,13 +109,11 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
       }
       case 4: {
         const isSmsEnabled = import.meta.env.VITE_SMS_VERIFICATION_ENABLED === 'true';
-        if (formData.phone?.trim()) {
-          const phoneRegex = /^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/;
-          if (!phoneRegex.test(formData.phone)) return false;
-          if (isSmsEnabled && !formData.isPhoneVerified) return false;
-        } else if (isSmsEnabled) {
-          return false;
-        }
+        const phone = formData.phone?.trim();
+        if (!phone) return false;
+        const phoneRegex = /^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/;
+        if (!phoneRegex.test(phone)) return false;
+        if (isSmsEnabled && !formData.isPhoneVerified) return false;
         return !!(formData.realName && formData.realName.length >= 2);
       }
       case 5:
@@ -181,21 +180,19 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
         }
         return true;
       case 4:
-        // SMS 인증 활성화 여부 확인
         const isSmsVerificationEnabledStep4 = import.meta.env.VITE_SMS_VERIFICATION_ENABLED === 'true';
-        // 전화번호: SMS 비활성화 시 선택 입력, 활성화 시 필수
-        if (formData.phone && formData.phone.trim() !== '') {
-          const phoneRegex = /^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/;
-          if (!phoneRegex.test(formData.phone)) {
-            showError('올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)', '전화번호 형식 오류');
-            return false;
-          }
-          if (isSmsVerificationEnabledStep4 && !formData.isPhoneVerified) {
-            showError('본인인증을 완료해주세요.', '본인인증 필요');
-            return false;
-          }
-        } else if (isSmsVerificationEnabledStep4) {
+        // 휴대전화 항상 필수 (가입자 구분)
+        if (!formData.phone || formData.phone.trim() === '') {
           showError('전화번호를 입력해주세요.', '전화번호 입력 필요');
+          return false;
+        }
+        const phoneRegexStep4 = /^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/;
+        if (!phoneRegexStep4.test(formData.phone)) {
+          showError('올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)', '전화번호 형식 오류');
+          return false;
+        }
+        if (isSmsVerificationEnabledStep4 && !formData.isPhoneVerified) {
+          showError('본인인증을 완료해주세요.', '본인인증 필요');
           return false;
         }
         if (!formData.realName || formData.realName.length < 2) {
@@ -258,21 +255,19 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
       return;
     }
 
-    // 전화번호: SMS 비활성화 시 선택 입력, 활성화 시 필수
+    // 휴대전화 항상 필수 (가입자 구분)
     const isSmsVerificationEnabled = import.meta.env.VITE_SMS_VERIFICATION_ENABLED === 'true';
-    const hasPhone = formData.phone != null && formData.phone.trim() !== '';
-    if (hasPhone) {
-      const phoneRegex = /^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/;
-      if (!phoneRegex.test(formData.phone)) {
-        await showError('올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)', '전화번호 형식 오류');
-        return;
-      }
-      if (isSmsVerificationEnabled && !formData.isPhoneVerified) {
-        await showError('본인인증을 완료해주세요.', '본인인증 필요');
-        return;
-      }
-    } else if (isSmsVerificationEnabled) {
+    if (!formData.phone?.trim()) {
       await showError('전화번호를 입력해주세요.', '전화번호 입력 필요');
+      return;
+    }
+    const phoneRegex = /^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/;
+    if (!phoneRegex.test(formData.phone)) {
+      await showError('올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)', '전화번호 형식 오류');
+      return;
+    }
+    if (isSmsVerificationEnabled && !formData.isPhoneVerified) {
+      await showError('본인인증을 완료해주세요.', '본인인증 필요');
       return;
     }
 
@@ -296,7 +291,7 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
         termsServiceAgreed: formData.termsServiceAgreed,
         termsPrivacyAgreed: formData.termsPrivacyAgreed,
         marketingConsent: formData.marketingConsent,
-        phone: formData.phone || '', // SMS 비활성화 시 빈 값 허용 (서버에서 optional 처리)
+        phone: formData.phone || '', // 항상 필수
         verificationCode: isSmsVerificationEnabled ? formData.verificationCode : '000000',
         memberType: formData.memberType,
         businessNumber: formData.memberType === 'business' ? formData.businessNumber : undefined,
@@ -414,16 +409,12 @@ const MultiStepRegister: React.FC<MultiStepRegisterProps> = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg-primary)] px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg-primary)] px-4 py-6">
       <div className="w-full max-w-2xl">
-        {/* 로고 영역 */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="w-10 h-10 bg-[var(--color-blue-primary)] rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-xl">오</span>
-            </div>
-            <div className="text-2xl font-bold text-[var(--color-text-primary)]">올코트플레이</div>
-          </div>
+        {/* 로고 영역 - 로그인과 동일 크기·슬로건, 한 화면 노출을 위해 mb 축소 */}
+        <div className="text-center mb-4">
+          <AppLogo className="h-24 w-auto max-w-[200px] mx-auto object-contain" />
+          <p className="mt-2 text-[var(--color-text-secondary)] text-base font-medium">운동 매치, 여기서 시작하다</p>
         </div>
 
         {/* 메인 카드 */}

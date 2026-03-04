@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EnvelopeIcon, LockClosedIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../contexts/AuthContext';
+import AppLogo from './AppLogo';
 
 const LoginPage = () => {
   const [email, setEmail] = useState(() => {
@@ -81,9 +82,39 @@ const LoginPage = () => {
     }
   };
 
-  const handleNaverLogin = () => {
-    // 네이버 로그인은 현재 지원하지 않음
-    setError('네이버 로그인은 현재 준비 중입니다.');
+  const handleNaverLogin = async () => {
+    setError('');
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+      const response = await fetch(
+        `${API_BASE_URL}/api/auth/social/auth-url?provider=naver`,
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: '서버 응답 오류' }));
+        throw new Error(errorData.message || `서버 오류: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.authUrl) {
+        sessionStorage.setItem('oauth_state', data.state);
+        window.location.href = data.authUrl;
+      } else {
+        setError('네이버 로그인 URL을 가져오는데 실패했습니다. 백엔드 서버를 확인해주세요.');
+      }
+    } catch (error) {
+      console.error('네이버 로그인 오류:', error);
+      const errorMessage = error instanceof Error
+        ? error.message
+        : '네이버 로그인을 시작하는데 실패했습니다.';
+
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('network')) {
+        setError('백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.');
+      } else {
+        setError(errorMessage);
+      }
+    }
   };
 
   const handleGoogleLogin = async () => {
@@ -133,15 +164,12 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg-primary)] px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg-primary)] px-4 py-6">
       <div className="w-full max-w-md">
-        {/* 로고 영역 */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-500 rounded-full mb-4">
-            <span className="text-white text-2xl font-bold">O</span>
-          </div>
-          <h1 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2">Allcourtplay</h1>
-          <p className="text-[var(--color-text-secondary)]">운동 매치 플랫폼에 오신 것을 환영합니다</p>
+        {/* 로고 영역 - 회원가입·로그인 동일 크기, 한 화면 노출을 위해 mb 축소 */}
+        <div className="text-center mb-4">
+          <AppLogo alt="Allcourtplay" className="h-24 w-auto max-w-[200px] mx-auto object-contain" />
+          <p className="mt-2 text-[var(--color-text-secondary)] text-base font-medium">운동 매치, 여기서 시작하다</p>
         </div>
 
         {/* 로그인 폼 카드 */}
@@ -312,6 +340,17 @@ const LoginPage = () => {
               회원가입
             </Link>
           </div>
+        </div>
+
+        {/* 이용약관 · 개인정보 처리방침 */}
+        <div className="mt-8 text-center text-sm">
+          <Link to="/terms" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:underline">
+            이용약관
+          </Link>
+          <span className="mx-2 text-[var(--color-text-secondary)]">|</span>
+          <Link to="/privacy" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:underline">
+            개인정보 처리방침
+          </Link>
         </div>
       </div>
     </div>

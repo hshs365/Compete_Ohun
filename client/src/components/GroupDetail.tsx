@@ -10,6 +10,7 @@ import FootballPitch from './FootballPitch';
 import MatchReviewModal from './MatchReviewModal';
 import { showError, showSuccess, showInfo, showConfirm } from '../utils/swal';
 import { extractCityFromAddress, getUserCityForJoin } from '../utils/locationUtils';
+import { MANNER_SCORE_THRESHOLD } from '../constants/penalty';
 
 interface GroupDetailProps {
   group: SelectedGroup | null;
@@ -204,8 +205,8 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
   const [positionModalTeam, setPositionModalTeam] = useState<'red' | 'blue'>('red');
   /** 상세 페이지 인라인 포메이션에서 보는 팀 */
   const [inlineFormationTeam, setInlineFormationTeam] = useState<'red' | 'blue'>('red');
-  /** 결제 모달에서 결제 후 참가할 포지션 (빈 슬롯 클릭 → 결제 → 해당 포지션으로 참가) */
-  const [pendingJoinPosition, setPendingJoinPosition] = useState<{ positionCode: string; team: 'red' | 'blue' } | null>(null);
+  /** 결제 모달에서 결제 후 참가할 포지션 (빈 슬롯 클릭 → 결제 → 해당 포지션으로 참가). 팀만 배정 시 positionCode 생략 */
+  const [pendingJoinPosition, setPendingJoinPosition] = useState<{ positionCode?: string; team: 'red' | 'blue' } | null>(null);
   /** 이미 활동이 끝난 매치 여부 (종료된 매치는 수정/삭제/마감 불가) */
   const [isPastMatch, setIsPastMatch] = useState(false);
   const [referees, setReferees] = useState<Array<{ id: number; userId: number; user: { id: number; nickname: string; tag?: string } }>>([]);
@@ -218,6 +219,9 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
   /** 예약 대기: 등록 여부 및 대기 순서 */
   const [isUserOnWaitlist, setIsUserOnWaitlist] = useState(false);
   const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null);
+
+  /** Penalty Guard: 신뢰도 점수 임계값 미만이면 참가 제한 */
+  const isMannerBlocked = user != null && (user.mannerScore ?? 80) < MANNER_SCORE_THRESHOLD;
 
   /** 매치 10분 전 이후면 참가 신청 불가 */
   const isJoinClosedByTime =
@@ -391,6 +395,10 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
       await showInfo('매치 시작 10분 전까지만 참가 신청이 가능합니다.', '참가 마감');
       return;
     }
+    if (isMannerBlocked) {
+      await showInfo(`신뢰도 점수(${user?.mannerScore ?? 0}점)가 낮아 매치 참가가 제한되었습니다. 매너를 개선해 주세요.`, '참가 제한');
+      return;
+    }
 
     // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
     if (!user) {
@@ -418,21 +426,47 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
       }
     }
 
+    // 레드/블루 팀 배정 매치: 랭크 평균 균형에 따라 배정될 팀 제안 후 확인
+    const isTeamPositionMatch =
+      (groupType === 'rank' && gameSettings?.positions?.length) ||
+      (gameSettings?.gameType === 'team' && gameSettings?.positions?.length);
+    let suggestedTeam: 'red' | 'blue' | null = null;
+    if (isTeamPositionMatch && group?.id) {
+      try {
+        const res = await api.get<{ team: 'red' | 'blue' }>(`/api/groups/${group.id}/suggested-team`);
+        suggestedTeam = res.team ?? 'red';
+      } catch {
+        suggestedTeam = 'red';
+      }
+      const teamLabel = suggestedTeam === 'red' ? '레드' : '블루';
+      const confirmed = await showConfirm(
+        `${teamLabel}팀에 배정됩니다. 참가하시겠습니까?`,
+        '팀 배정',
+        '참가',
+        '취소'
+      );
+      if (!confirmed) return;
+    }
+
     // 축구는 항상 포인트로 참가 (10,000P 또는 전일 이전 8,000P)
     const needsPayment = group?.category === '축구' || (hasFee && feeAmount && feeAmount > 0);
     if (needsPayment) {
-      setPendingJoinPosition(null);
+      setPendingJoinPosition(suggestedTeam != null ? { team: suggestedTeam } : null);
       setShowPaymentModal(true);
       return;
     }
 
-    await processJoin();
+    await processJoin(undefined, suggestedTeam ?? undefined);
   };
 
   const handleJoinWithPosition = async (positionCode: string, team: 'red' | 'blue' = 'red'): Promise<boolean> => {
     if (!group || isLoading) return false;
     if (isJoinClosedByTime) {
       await showInfo('매치 시작 10분 전까지만 참가 신청이 가능합니다.', '참가 마감');
+      return false;
+    }
+    if (isMannerBlocked) {
+      await showInfo(`신뢰도 점수(${user?.mannerScore ?? 0}점)가 낮아 매치 참가가 제한되었습니다. 매너를 개선해 주세요.`, '참가 제한');
       return false;
     }
     if (!user) {
@@ -1082,6 +1116,19 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
 
       {/* 내용: 스크롤 가능한 상세 (경기 정보 → 시설 → 참가자 순) */}
       <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-4">
+          {!isActive ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+              <p className="text-[var(--color-text-secondary)] mb-4">이 매치는 최소 인원 미달 등으로 취소되었습니다.</p>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)] font-medium hover:opacity-90"
+              >
+                닫기
+              </button>
+            </div>
+          ) : (
+          <>
           {/* 상태 배지 (상단) */}
           {isClosed && (
             <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-red-500/10 via-red-500/5 to-transparent border border-red-500/20 p-3">
@@ -1329,23 +1376,30 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
             </div>
           )}
 
-          {/* 준비물: 아이콘 그리드 (컴팩트) */}
+          {/* 준비물: 아이콘 그리드 (라인·여백 통일, 필수/대여 색상 구분) */}
           {group.equipment && group.equipment.length > 0 && (
             <div className="border-t border-[var(--color-border-card)] pt-4">
               <div className="flex items-center gap-2 mb-2">
-                <WrenchScrewdriverIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
+                <WrenchScrewdriverIcon className="w-4 h-4 text-[var(--color-text-secondary)]" strokeWidth={2} />
                 <h3 className="text-sm font-bold text-[var(--color-text-primary)]">준비물</h3>
               </div>
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                {group.equipment.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex flex-col items-center justify-center p-2 rounded-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)]"
-                  >
-                    <span className="text-lg mb-0.5" aria-hidden>{getEquipmentIcon(item)}</span>
-                    <span className="text-xs font-medium text-[var(--color-text-primary)] text-center truncate w-full">{item}</span>
-                  </div>
-                ))}
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                {group.equipment.map((item, index) => {
+                  const isRentable = /대여|렌탈|빌려/.test(item);
+                  return (
+                    <div
+                      key={index}
+                      className={`flex flex-col items-center justify-center p-3 rounded-lg border min-h-[72px] ${
+                        isRentable
+                          ? 'bg-emerald-500/10 border-emerald-500/30'
+                          : 'bg-[var(--color-bg-secondary)] border-[var(--color-border-card)]'
+                      }`}
+                    >
+                      <span className="text-xl mb-1.5 inline-flex items-center justify-center w-8 h-8 shrink-0" aria-hidden>{getEquipmentIcon(item)}</span>
+                      <span className={`text-xs font-medium text-center truncate w-full ${isRentable ? 'text-emerald-600 dark:text-emerald-400' : 'text-[var(--color-text-primary)]'}`}>{item}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1727,9 +1781,12 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
               공유하기
             </button>
           </div>
+          </>
+          )}
       </div>
 
-      {/* 하단 스티키: 참가 신청하기 (컴팩트) */}
+      {/* 하단 스티키: 참가 신청하기 (컴팩트) - 취소된 매치가 아닐 때만 표시 */}
+      {isActive && (
       <div className="sticky bottom-0 left-0 right-0 flex-shrink-0 p-3 bg-[var(--color-bg-card)] border-t border-[var(--color-border-card)] rounded-t-xl shadow-[0_-2px_8px_rgba(0,0,0,0.06)] dark:shadow-[0_-2px_8px_rgba(0,0,0,0.2)]">
         <div className="flex flex-col gap-1.5">
           {isCreator ? (
@@ -1773,18 +1830,30 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
             </>
           ) : (
             <>
+              {isMannerBlocked && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/20 border border-amber-500/40 rounded-lg px-3 py-2 mb-2">
+                  신뢰도 점수({user?.mannerScore ?? 0}점)가 낮아 참가가 제한됩니다. 매너를 개선해 주세요.
+                </p>
+              )}
               <button
                 onClick={handleJoin}
-                disabled={isLoading || isClosed || isJoinClosedByTime}
-                className={`w-full py-2.5 px-3 rounded-lg text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isClosed || isJoinClosedByTime ? 'bg-gray-400 text-white' : 'bg-[var(--color-blue-primary)] text-white hover:opacity-90'
+                disabled={isLoading || isClosed || isJoinClosedByTime || isMannerBlocked}
+                className={`w-full py-2.5 px-4 rounded-lg text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-4 ${
+                  isClosed || isJoinClosedByTime || isMannerBlocked
+                    ? 'bg-gray-400 text-white'
+                    : 'bg-[var(--color-blue-primary)] text-white hover:opacity-95 shadow-lg shadow-[var(--color-blue-primary)]/30 hover:shadow-xl hover:shadow-[var(--color-blue-primary)]/40'
                 }`}
               >
-                {isLoading ? '처리 중...' : isClosed ? '인원 마감' : isJoinClosedByTime ? '참가 마감' : (() => {
+                {isLoading ? '처리 중...' : isClosed ? '인원 마감' : isJoinClosedByTime ? '참가 마감' : isMannerBlocked ? '참가 제한' : (() => {
                   if (group?.category === '축구' || (hasFee && feeAmount && feeAmount > 0)) {
                     const baseFee = group?.category === '축구' ? FOOTBALL_FEE_NORMAL : (feeAmount ?? 0);
                     const required = getRequiredPoints(baseFee, group?.category || '', groupMeetingDateTime);
-                    return `참가 신청하기 ${required.toLocaleString()}P`;
+                    return (
+                      <>
+                        <span>참가 신청하기</span>
+                        <span className="font-bold">{required.toLocaleString()}P</span>
+                      </>
+                    );
                   }
                   return '참가 신청하기';
                 })()}
@@ -1805,6 +1874,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
           )}
         </div>
       </div>
+      )}
 
       {/* 매치 리뷰 작성 모달 */}
       {group && showReviewModal && (
@@ -1842,7 +1912,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
           const canPay = myPoints >= required;
           const isEarlyDiscount = group?.category === '축구' && required === FOOTBALL_FEE_EARLY;
           return (
-            <div className="fixed inset-0 bg-black/30 z-[150] flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/30 z-[1000] flex items-center justify-center p-4">
               <div className="bg-[var(--color-bg-card)] rounded-lg shadow-xl max-w-md w-full p-6">
                 <h3 className="text-xl font-bold text-[var(--color-text-primary)] mb-4">참가비 결제 (포인트)</h3>
 
@@ -1928,7 +1998,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
         const currentList = positionModalTeam === 'red' ? redList : blueList;
         return (
           <div
-            className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/30"
+            className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-4 bg-black/30"
             onClick={() => setShowPositionModal(false)}
             role="dialog"
             aria-modal="true"

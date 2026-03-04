@@ -4,6 +4,7 @@ import {
   Body,
   Get,
   Put,
+  Patch,
   Delete,
   Query,
   UseGuards,
@@ -13,6 +14,7 @@ import {
   ValidationPipe,
   UseInterceptors,
   UploadedFile,
+  Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Express } from 'express';
@@ -25,8 +27,11 @@ import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { SocialCallbackDto } from './dto/social-callback.dto';
 import { OAuthAuthUrlDto } from './dto/oauth-auth-url.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UpdateMercenaryProfileDto } from './dto/update-mercenary-profile.dto';
 import { VerifyBusinessNumberDto } from './dto/verify-business-number.dto';
 import { VerifyBusinessWithDocumentDto } from './dto/verify-business-with-document.dto';
+import { RegisterBusinessWithDocumentDto } from './dto/register-business-with-document.dto';
+import { RegisterBusinessConfirmDto } from './dto/register-business-confirm.dto';
 import { ChangeBusinessNumberDto } from './dto/change-business-number.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Public } from './decorators/public.decorator';
@@ -42,7 +47,9 @@ function getEffectiveAllcourtplayRanks(user: User): Record<string, string> {
   const stored = user.ohunRanks || {};
   const result: Record<string, string> = {};
   for (const [sport, rank] of Object.entries(stored)) {
-    if (rank && /^[SABCDEF]$/i.test(rank)) {
+    if (rank === 'none') {
+      result[sport] = 'none';
+    } else if (rank && /^[SABCDEF]$/i.test(rank)) {
       result[sport] = rank.toUpperCase();
     }
   }
@@ -65,6 +72,20 @@ export class AuthController {
       throw new BadRequestException('전화번호를 입력해주세요.');
     }
     return this.phoneVerificationService.requestVerification(phone);
+  }
+
+  /** 연락처 수정용 인증번호 발송 (로그인 필수, 본인 전화번호 재인증 허용) */
+  @UseGuards(JwtAuthGuard)
+  @Post('me/phone/request-verification')
+  @HttpCode(HttpStatus.OK)
+  async requestPhoneVerificationForProfile(
+    @CurrentUser() user: User,
+    @Body('phone') phone: string,
+  ) {
+    if (!phone) {
+      throw new BadRequestException('전화번호를 입력해주세요.');
+    }
+    return this.phoneVerificationService.requestVerificationForProfileUpdate(phone, user.id);
   }
 
   @Public()
@@ -114,7 +135,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(
     FileInterceptor('document', {
-      limits: { fileSize: 5 * 1024 * 1024 },
+      limits: { fileSize: 10 * 1024 * 1024 }, // 10MB (NCP OCR 가이드·고화질 대응, 프론트에서 10MB 이하로 압축 권장)
       fileFilter: (_req, file, callback) => {
         if (!file.mimetype?.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
           return callback(
@@ -152,6 +173,8 @@ export class AuthController {
 
     if (query.provider === SocialProvider.KAKAO) {
       authUrl = this.oauthService.getKakaoAuthUrl(state);
+    } else if (query.provider === SocialProvider.NAVER) {
+      authUrl = this.oauthService.getNaverAuthUrl(state);
     } else if (query.provider === SocialProvider.GOOGLE) {
       authUrl = this.oauthService.getGoogleAuthUrl(state);
     } else {
@@ -178,7 +201,11 @@ export class AuthController {
       providerUserId: string;
       email?: string;
       name?: string;
+      nickname?: string;
       profileImageUrl?: string;
+      phone?: string;
+      gender?: string;
+      age?: string;
     };
 
     try {
@@ -186,6 +213,9 @@ export class AuthController {
       if (callbackDto.provider === SocialProvider.KAKAO) {
         accessToken = await this.oauthService.exchangeKakaoCode(callbackDto.code, redirectUri);
         userInfo = await this.oauthService.getKakaoUserInfo(accessToken);
+      } else if (callbackDto.provider === SocialProvider.NAVER) {
+        accessToken = await this.oauthService.exchangeNaverCode(callbackDto.code, redirectUri, callbackDto.state);
+        userInfo = await this.oauthService.getNaverUserInfo(accessToken);
       } else if (callbackDto.provider === SocialProvider.GOOGLE) {
         accessToken = await this.oauthService.exchangeGoogleCode(callbackDto.code, redirectUri);
         userInfo = await this.oauthService.getGoogleUserInfo(accessToken);
@@ -196,6 +226,10 @@ export class AuthController {
       // 사용자 정보를 기반으로 로그인 처리
       return this.authService.socialCallback(callbackDto, userInfo);
     } catch (error) {
+      Logger.error(
+        `[소셜 로그인 실패] provider=${callbackDto.provider}`,
+        error instanceof Error ? error.stack : String(error),
+      );
       if (error instanceof BadRequestException) {
         throw error;
       }
@@ -243,7 +277,7 @@ export class AuthController {
     const socialAccounts = user.socialAccounts || [];
     const connectedProviders = {
       kakao: socialAccounts.some((account) => account.provider === SocialProvider.KAKAO),
-      naver: false, // 네이버 로그인은 아직 구현되지 않음
+      naver: socialAccounts.some((account) => account.provider === SocialProvider.NAVER),
       google: socialAccounts.some((account) => account.provider === SocialProvider.GOOGLE),
     };
 
@@ -280,7 +314,23 @@ export class AuthController {
       effectiveRanks: getEffectiveAllcourtplayRanks(user),
       points: user.points ?? 0,
       notifyRefereeRankMatchInRegion: user.notifyRefereeRankMatchInRegion ?? false,
+      mannerScore: user.mannerScore ?? 80,
+      noShowCount: user.noShowCount ?? 0,
+      mercenaryActivityStatus: user.mercenaryActivityStatus ?? 'paused',
+      mercenaryAvailability: user.mercenaryAvailability ?? [],
+      mercenaryActiveBySport: user.mercenaryActiveBySport ?? {},
     };
+  }
+
+  /** 용병 프로필 업데이트 (활동 상태, 가용 시간표, 주력 종목, 급수, 선호 역할) */
+  @UseGuards(JwtAuthGuard)
+  @Patch('me/mercenary-profile')
+  @HttpCode(HttpStatus.OK)
+  async updateMercenaryProfile(
+    @CurrentUser() user: User,
+    @Body(ValidationPipe) dto: UpdateMercenaryProfileDto,
+  ) {
+    return this.authService.updateMercenaryProfile(user.id, dto);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -311,6 +361,46 @@ export class AuthController {
     @Body(ValidationPipe) verifyDto: VerifyBusinessNumberDto,
   ) {
     return this.authService.verifyBusinessNumber(user.id, verifyDto);
+  }
+
+  /** 비즈니스 계정 전환 1단계: 사업자등록증 이미지 → OCR만 수행, 추출 결과·대조 여부 반환 (전환 없음) */
+  @UseGuards(JwtAuthGuard)
+  @Post('register-business-with-document')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(
+    FileInterceptor('document', {
+      limits: { fileSize: 10 * 1024 * 1024 }, // 10MB (NCP OCR·고화질 대응, 프론트에서 10MB 이하 압축)
+      fileFilter: (_req, file, callback) => {
+        if (!file.mimetype?.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
+          return callback(
+            new BadRequestException('사업자등록증 이미지 파일만 업로드 가능합니다. (jpg, png 등)'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  async extractBusinessFromDocument(
+    @CurrentUser() user: User,
+    @Body(ValidationPipe) dto: RegisterBusinessWithDocumentDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('사업자등록증 이미지 파일을 업로드해 주세요.');
+    }
+    return this.authService.extractBusinessFromDocument(user.id, file, dto);
+  }
+
+  /** 비즈니스 계정 전환 2단계: OCR 추출 결과 또는 직접입력으로 전환 확정 */
+  @UseGuards(JwtAuthGuard)
+  @Post('register-business-confirm')
+  @HttpCode(HttpStatus.OK)
+  async registerBusinessConfirm(
+    @CurrentUser() user: User,
+    @Body(ValidationPipe) dto: RegisterBusinessConfirmDto,
+  ) {
+    return this.authService.registerBusinessConfirm(user.id, dto);
   }
 
   /** 비밀번호 확인 (사업자번호 변경 1단계 등) */

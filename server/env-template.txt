@@ -15,8 +15,9 @@ NODE_ENV=development
 # NODE_ENV=production (운영 환경)
 
 # SMS 인증 활성화 여부
-# 개발 환경: false (SMS 인증 없이 회원가입 가능)
-# 운영 환경: true (SMS 인증 필수)
+# 개발 환경: false (SMS 인증 없이 회원가입 가능, 콘솔 로그만 출력)
+# 베타/운영 환경: true (SMS 인증 필수, SENS 발송)
+# 베타에서는 전화번호 필수 + SENS 권장 (중복 가입 방지)
 SMS_VERIFICATION_ENABLED=false
 
 # 파일 업로드 디렉토리 (NFS 공유 스토리지 사용 시)
@@ -38,6 +39,11 @@ KAKAO_CLIENT_SECRET=your_kakao_client_secret
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 
+# 네이버 로그인 API (소셜 로그인용)
+# 네이버 지도 API(NAVER_MAP_CLIENT_ID)와 별도. developers.naver.com > 애플리케이션 > 로그인 API 등록
+NAVER_LOGIN_CLIENT_ID=your_naver_login_client_id
+NAVER_LOGIN_CLIENT_SECRET=your_naver_login_client_secret
+
 # 네이버 지도 API (역지오코딩용)
 NAVER_MAP_CLIENT_ID=your_naver_map_client_id
 NAVER_MAP_CLIENT_SECRET=your_naver_map_client_secret
@@ -47,9 +53,12 @@ NAVER_MAP_CLIENT_SECRET=your_naver_map_client_secret
 # 신청: https://www.data.go.kr/data/15081808/openapi.do (국세청_사업자등록정보 진위확인및상태조회)
 # DATA_GO_KR_SERVICE_KEY=your_data_go_kr_service_key
 
-# 네이버 클로바 OCR - 사업자등록증 이미지 검증용 (회원가입 시 문서와 입력 정보 비교)
-# CLOVA OCR 콘솔에서 Document OCR · 사업자등록증(bizlicense) 도메인 생성 후 Invoke URL, Secret 설정
-# 미설정 시: 사업자등록증 이미지 업로드 검증 불가 (verify-business-with-document 사용 불가)
+# 네이버 클로바 OCR - 사업자등록증 이미지 검증용
+# - 회원가입 시: 사업자등록증 업로드 → OCR → 실명 매칭
+# - 비즈니스 전환: 내정보 > 사업자등록증으로 전환하기 (로그인 사용자)
+# 설정 절차: CLOVA OCR > Domain > 특화 모델 신청(사업자등록증) 승인 후
+#   → 도메인 생성(인식 모델: 사업자등록증 KR) → API Gateway 연동 → Invoke URL과 Secret 발급
+# 미설정 시: 사업자등록증 이미지 업로드 검증 불가 (관리자 안내 메시지 표시)
 # NCP_OCR_SECRET=your_clova_ocr_secret
 # NCP_OCR_INVOKE_URL=https://xxxxx.apigw.ntruss.com/custom/v1/xxxx/xxxx/document/bizlicense
 
@@ -61,6 +70,9 @@ NAVER_MAP_CLIENT_SECRET=your_naver_map_client_secret
 # KSA_ATHLETE_CSV_PATH=data/선수등록정보.csv
 # KSA_ATHLETE_CSV_URL=https://... (CSV 다운로드 URL)
 
+# 네이버 클라우드 SENS (SMS 인증)
+# 콘솔: Simple & Easy Notification Service > SMS > 발신번호 등록, 서비스 생성
+# SMS_VERIFICATION_ENABLED=true 시 실제 문자 발송
 NCP_ACCESS_KEY=your_ncp_access_key
 NCP_SECRET_KEY=your_ncp_secret_key
 NCP_SMS_SERVICE_ID=your_sens_service_id

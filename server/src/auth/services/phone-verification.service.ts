@@ -130,9 +130,28 @@ export class PhoneVerificationService {
     return crypto.createHmac('sha256', secretKey).update(message).digest('base64');
   }
   /**
-   * 인증번호 발송 요청
+   * 인증번호 발송 요청 (회원가입용, 비로그인)
    */
   async requestVerification(phone: string): Promise<{ success: boolean; message: string }> {
+    return this.requestVerificationInternal(phone, undefined);
+  }
+
+  /**
+   * 연락처 수정용 인증번호 발송 (로그인 사용자)
+   * currentUserId가 있으면 해당 사용자가 이미 그 전화번호를 사용 중인 경우 허용
+   */
+  async requestVerificationForProfileUpdate(phone: string, currentUserId: number): Promise<{ success: boolean; message: string }> {
+    return this.requestVerificationInternal(phone, currentUserId);
+  }
+
+  /**
+   * 인증번호 발송 내부 로직
+   * @param excludeUserId 해당 사용자가 전화번호 소유 시 중복 체크 제외 (프로필 수정용)
+   */
+  private async requestVerificationInternal(
+    phone: string,
+    excludeUserId?: number,
+  ): Promise<{ success: boolean; message: string }> {
     // 전화번호 형식 검증
     if (!this.validatePhoneFormat(phone)) {
       throw new BadRequestException('올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)');
@@ -140,9 +159,9 @@ export class PhoneVerificationService {
 
     const normalizedPhone = this.normalizePhone(phone);
 
-    // 전화번호 중복 확인 (활성 사용자만 확인, 탈퇴한 사용자의 전화번호는 재사용 가능)
+    // 전화번호 중복 확인 (활성 사용자만, excludeUserId 본인은 제외)
     const existingUser = await this.usersService.findByPhone(normalizedPhone);
-    if (existingUser && existingUser.status === UserStatus.ACTIVE) {
+    if (existingUser && existingUser.status === UserStatus.ACTIVE && existingUser.id !== excludeUserId) {
       throw new BadRequestException('이미 가입된 휴대폰 번호입니다.');
     }
 

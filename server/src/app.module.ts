@@ -27,6 +27,7 @@ import { MatchReview } from './groups/entities/match-review.entity';
 import { GroupProvisionalFacility } from './groups/entities/group-provisional-facility.entity';
 import { GroupWaitlist } from './groups/entities/group-waitlist.entity';
 import { Facility } from './facilities/entities/facility.entity';
+import { FacilityCourt } from './facilities/entities/facility-court.entity';
 import { FacilityReservation } from './facilities/entities/facility-reservation.entity';
 import { FacilityReview } from './facilities/entities/facility-review.entity';
 import { Notification } from './notifications/entities/notification.entity';
@@ -41,6 +42,11 @@ import { Contact } from './contact/entities/contact.entity';
 import { Product } from './products/entities/product.entity';
 import { NoticesModule } from './notices/notices.module';
 import { Notice } from './notices/entities/notice.entity';
+import { Blacklist } from './blacklist/entities/blacklist.entity';
+import { BlacklistModule } from './blacklist/blacklist.module';
+import { ChatModule } from './chat/chat.module';
+import { Conversation } from './chat/entities/conversation.entity';
+import { Message } from './chat/entities/message.entity';
 
 @Module({
   imports: [
@@ -75,6 +81,7 @@ ConfigModule.forRoot({
           GroupProvisionalFacility,
           GroupWaitlist,
           Facility,
+          FacilityCourt,
           FacilityReservation,
           FacilityReview,
           Notification,
@@ -88,6 +95,9 @@ ConfigModule.forRoot({
           Contact,
           Product,
           Notice,
+          Blacklist,
+          Conversation,
+          Message,
         ],
         synchronize: true, // In development, auto-creates DB schema. Disable for production.
         dropSchema: false, // Set to true to drop all tables on startup (WARNING: deletes all data!)
@@ -103,6 +113,8 @@ ConfigModule.forRoot({
     ContactModule,
     ProductsModule,
     NoticesModule,
+    BlacklistModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [AppService],

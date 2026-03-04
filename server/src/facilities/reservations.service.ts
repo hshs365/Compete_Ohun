@@ -6,6 +6,8 @@ import { CreateReservationDto } from './dto/create-reservation.dto';
 import { FacilitiesService } from './facilities.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
+import { UsersService } from '../users/users.service';
+import { UserScoreService } from '../users/user-score.service';
 
 @Injectable()
 export class ReservationsService {
@@ -15,6 +17,8 @@ export class ReservationsService {
     @Inject(forwardRef(() => FacilitiesService))
     private facilitiesService: FacilitiesService,
     private notificationsService: NotificationsService,
+    private usersService: UsersService,
+    private userScoreService: UserScoreService,
   ) {}
 
   /**
@@ -290,6 +294,16 @@ export class ReservationsService {
 
     reservation.status = newStatus;
     const updated = await this.reservationRepository.save(reservation);
+
+    // 노쇼 신고 접수 시 매너점수 즉시 -41점 (옐로카드 강등)
+    if (newStatus === ReservationStatus.NO_SHOW) {
+      try {
+        await this.usersService.incrementNoShowCount(reservation.userId);
+        await this.userScoreService.recalculateAllScores(reservation.userId);
+      } catch (err) {
+        console.error('[노쇼] 매너점수 감점 처리 실패 (userId=%d):', reservation.userId, err);
+      }
+    }
 
     // 알림 발송
     try {

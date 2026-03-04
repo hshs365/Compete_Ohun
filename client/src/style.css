@@ -18,20 +18,31 @@
   --color-bg-calendar-cell: #0f172a; /* slate-900 - fixed for calendar cells */
 }
 
+/* Docker Desktop 다크 테마 스타일 */
 html.dark {
-  --color-text-primary: #f1f5f9; /* slate-100 */
-  --color-text-secondary: #94a3b8; /* slate-400 */
-  --color-bg-primary: #0f172a; /* slate-900 */
-  --color-bg-secondary: #1e293b; /* slate-800 */
-  --color-bg-card: #1e293b; /* slate-800 */
-  --color-border-card: #334155; /* slate-700 */
-  --color-blue-primary: #60a5fa; /* blue-400 */
-  --color-bg-calendar-cell: #0f172a; /* slate-900 - fixed for calendar cells */
+  --color-text-primary: #e8eaed; /* Docker 다크 - 밝은 흰색 텍스트 */
+  --color-text-secondary: #9aa0a6; /* 보조/정보 텍스트 */
+  --color-bg-primary: #1a202c; /* 메인 배경 - 진한 남색 */
+  --color-bg-secondary: #151a20; /* 사이드바/선택 영역 배경 */
+  --color-bg-card: #1e252d; /* 카드/패널 배경 */
+  --color-border-card: #2c3540; /* 테두리 - 선택된 항목 톤 */
+  --color-blue-primary: #5e8fef; /* Docker 액센트 블루 */
+  --color-bg-calendar-cell: #1a202c; /* 캘린더 셀 배경 */
 }
 
 body {
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
+  /* 모바일: 300ms 탭 지연 제거 */
+  touch-action: manipulation;
+}
+
+/* safe-area 유틸리티 (상단 헤더·하단 네비 등, 노치·홈 인디케이터 대응) */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0);
+}
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 /* 스크롤바: 흰 배경 제거, 테마 연동 */
@@ -57,10 +68,27 @@ body {
   background: transparent;
 }
 
+/* SweetAlert2: MercenaryDetailDrawer(9999), FloatingChatWidget(9999) 위에 표시 */
+.swal2-container {
+  z-index: 10001 !important;
+}
+
 /* 오운 랭크 패널 종목 전환 시 페이드 */
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* 지도 마커 종목 아이콘 전환 시 부드러운 등장 */
+@keyframes markerIconFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* 네이버 지도 InfoWindow 기본 말풍선/배경 제거 (매치 제목 라벨용) */
@@ -95,6 +123,124 @@ body {
 html.dark .date-input-dark::-webkit-calendar-picker-indicator {
   filter: invert(1);
   cursor: pointer;
+}
+
+/* 어두운 배경에서 항상 흰색 아이콘 (용병 구하기 모달 등) */
+.input-icon-light::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+  opacity: 0.9;
+}
+
+/* React DatePicker 다크 테마 (용병 구하기 등) */
+.dark-date-picker-root {
+  min-height: 2.5rem;
+}
+.dark-date-picker-root .react-datepicker-wrapper {
+  width: 100%;
+}
+.dark-date-picker-input {
+  width: 100%;
+  padding-right: 2.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-card);
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+}
+.dark-date-picker-input:focus {
+  outline: none;
+  ring: 2px;
+}
+.react-datepicker-popper {
+  z-index: 10001 !important;
+}
+.dark-date-picker-popper {
+  z-index: 10001 !important;
+}
+.react-datepicker-popper[data-placement^="bottom"] .react-datepicker {
+  font-family: inherit;
+}
+.react-datepicker {
+  background: var(--color-bg-card) !important;
+  border: 1px solid var(--color-border-card) !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.4) !important;
+}
+.react-datepicker__header {
+  background: var(--color-bg-secondary) !important;
+  border-bottom: 1px solid var(--color-border-card) !important;
+  padding-top: 0.75rem !important;
+}
+.react-datepicker__current-month,
+.react-datepicker__day-name {
+  color: var(--color-text-primary) !important;
+}
+.react-datepicker__day-name {
+  font-weight: 600;
+}
+.react-datepicker__day {
+  color: var(--color-text-primary) !important;
+}
+.react-datepicker__day:hover {
+  background: var(--color-bg-secondary) !important;
+  color: var(--color-text-primary) !important;
+  border-radius: 0.375rem;
+}
+.react-datepicker__day--selected,
+.react-datepicker__day--keyboard-selected {
+  background: var(--color-blue-primary) !important;
+  color: white !important;
+  border-radius: 0.375rem;
+}
+.react-datepicker__day--outside-month {
+  color: var(--color-text-secondary) !important;
+  opacity: 0.6;
+}
+.react-datepicker__day--today {
+  font-weight: 600;
+}
+.react-datepicker__navigation {
+  top: 0.75rem !important;
+}
+.react-datepicker__navigation-icon::before {
+  border-color: var(--color-text-primary) !important;
+}
+.react-datepicker__month-dropdown-container,
+.react-datepicker__year-dropdown-container {
+  background: var(--color-bg-secondary) !important;
+  border: 1px solid var(--color-border-card) !important;
+  color: var(--color-text-primary) !important;
+  border-radius: 0.375rem;
+}
+.react-datepicker__month-read-view--down-arrow,
+.react-datepicker__year-read-view--down-arrow {
+  border-top-color: var(--color-text-primary) !important;
+}
+.react-datepicker__month-dropdown,
+.react-datepicker__year-dropdown {
+  background: var(--color-bg-card) !important;
+  border: 1px solid var(--color-border-card) !important;
+}
+.react-datepicker__month-option,
+.react-datepicker__year-option {
+  color: var(--color-text-primary) !important;
+}
+.react-datepicker__month-option:hover,
+.react-datepicker__year-option:hover {
+  background: var(--color-bg-secondary) !important;
+}
+
+/* Dark TimePicker (오전/오후 분리, 12시간만 30분 단위) */
+.dark-time-picker-root {
+  min-height: 2.5rem;
+}
+.dark-time-picker-input {
+  min-height: 2.5rem;
+}
+.dark-time-picker-dropdown {
+  min-width: 100%;
 }
 
 /* 내 일정 캘린더 - 테마 연동 */
@@ -148,11 +294,83 @@ html.dark .date-input-dark::-webkit-calendar-picker-indicator {
 .schedule-calendar-wrapper .fc-timegrid-col.fc-day-today {
   background: color-mix(in srgb, var(--color-blue-primary) 5%, transparent);
 }
+/* 일정 박스: 좌측 stroke로 시설 예약/개인 매치 구분, 텍스트 간격·채도 최적화 */
 .schedule-calendar-wrapper .fc-event {
   border-radius: 4px;
-  padding: 2px 6px;
+  padding: 3px 8px;
   font-size: 0.75rem;
+  line-height: 1.35;
+  border-left-width: 3px;
+  border-left-style: solid;
+  filter: saturate(1.15);
+}
+.schedule-calendar-wrapper .fc-event-type-match {
+  border-left-color: #6366f1;
+}
+.schedule-calendar-wrapper .fc-event-type-reservation {
+  border-left-color: #10b981;
+}
+/* 확정(Solid) vs 신청중(투명) 구분 */
+.schedule-calendar-wrapper .fc-event-confirmed {
+  opacity: 1;
+}
+.schedule-calendar-wrapper .fc-event-applying {
+  opacity: 0.6;
+}
+.schedule-calendar-wrapper .fc-event-applying .fc-event-main {
+  font-style: italic;
+}
+/* 매치 1시간 전 깜빡임(Glow) 효과 */
+.schedule-calendar-wrapper .fc-event-starting-soon {
+  animation: schedule-event-glow 1.5s ease-in-out infinite;
+  box-shadow: 0 0 12px var(--color-blue-primary);
+}
+@keyframes schedule-event-glow {
+  0%, 100% { box-shadow: 0 0 8px var(--color-blue-primary); }
+  50% { box-shadow: 0 0 16px var(--color-blue-primary), 0 0 24px color-mix(in srgb, var(--color-blue-primary) 50%, transparent); }
+}
+.schedule-calendar-wrapper .fc-event-main {
+  padding: 0 2px;
 }
 .schedule-calendar-wrapper .fc-daygrid-event {
   border-radius: 4px;
+}
+.schedule-calendar-wrapper .fc-daygrid-event-dot {
+  display: none;
+}
+/* 현재 시간 표시선 */
+.schedule-calendar-wrapper .fc-timegrid-now-indicator-line {
+  border-color: var(--color-blue-primary);
+  border-width: 2px;
+}
+.schedule-calendar-wrapper .fc-timegrid-now-indicator-arrow {
+  border-color: var(--color-blue-primary);
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+}
+
+/* 체크박스 - 테마 연동 (앱 전체 적용) */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--color-border-card);
+  border-radius: 0.375rem;
+  background: var(--color-bg-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+input[type="checkbox"]:hover {
+  border-color: var(--color-blue-primary);
+}
+input[type="checkbox"]:checked {
+  background: var(--color-blue-primary);
+  border-color: var(--color-blue-primary);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='white'%3E%3Cpath fill-rule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clip-rule='evenodd'/%3E%3C/svg%3E");
+}
+input[type="checkbox"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-blue-primary) 40%, transparent);
 }

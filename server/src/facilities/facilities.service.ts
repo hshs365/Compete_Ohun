@@ -147,6 +147,12 @@ export class FacilitiesService {
       queryBuilder.andWhere('facility.type = :type', { type });
     }
 
+    // 실내/실외 필터
+    const { indoorOutdoor } = queryDto;
+    if (indoorOutdoor === 'indoor' || indoorOutdoor === 'outdoor') {
+      queryBuilder.andWhere('facility.indoorOutdoor = :indoorOutdoor', { indoorOutdoor });
+    }
+
     // 검색어 필터
     if (search) {
       queryBuilder.andWhere(
@@ -234,7 +240,7 @@ export class FacilitiesService {
   async findOne(id: number): Promise<Facility> {
     const facility = await this.facilityRepository.findOne({
       where: { id },
-      relations: ['owner'],
+      relations: ['owner', 'courts'],
     });
 
     if (!facility) {

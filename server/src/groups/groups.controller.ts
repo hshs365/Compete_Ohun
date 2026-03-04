@@ -73,6 +73,13 @@ export class GroupsController {
     return this.groupsService.getFavoriteCount(user.id);
   }
 
+  /** 운동 통계: 매치 유형별 비율, 월별 활동 추이, 종목별 참여 (도넛차트·그래프 데이터) */
+  @UseGuards(JwtAuthGuard)
+  @Get('my-activity-stats')
+  async getMyActivityStats(@CurrentUser() user: User) {
+    return this.groupsService.getMyActivityStats(user.id);
+  }
+
   @Public()
   @Get(':id')
   async findOne(
@@ -84,6 +91,16 @@ export class GroupsController {
     // 일단 토큰이 없어도 동작하도록 함
     const user = (req as any).user as User | undefined;
     return this.groupsService.findOne(id, user?.id);
+  }
+
+  /** 참가 시 랭크 평균 균형에 따라 배정될 팀(레드/블루) 제안 */
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/suggested-team')
+  async getSuggestedTeam(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+  ) {
+    return this.groupsService.getSuggestedTeamForJoin(id, user.id);
   }
 
   @UseGuards(JwtAuthGuard)

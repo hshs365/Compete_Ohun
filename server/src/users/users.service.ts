@@ -45,6 +45,33 @@ export class UsersService {
     });
   }
 
+  /**
+   * 계정 찾기/통합 유도: 이메일 또는 전화번호로 기존 사용자 조회 (ACTIVE, PENDING만)
+   * 동일 이메일/전화로 다른 소셜 로그인 시도 시 기존 연동 계정 안내용
+   */
+  async findExistingUserByEmailOrPhone(email?: string | null, phone?: string | null): Promise<User | null> {
+    if (!email?.trim() && !phone?.trim()) return null;
+    const normalizedPhone = phone?.replace(/-/g, '').trim();
+    const normalizedEmail = email?.trim().toLowerCase();
+    const qb = this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.socialAccounts', 'sa')
+      .where('user.status IN (:...statuses)', { statuses: [UserStatus.ACTIVE, UserStatus.PENDING] });
+    const conditions: string[] = [];
+    const params: Record<string, string> = {};
+    if (normalizedEmail) {
+      conditions.push('LOWER(user.email) = :email');
+      params.email = normalizedEmail;
+    }
+    if (normalizedPhone) {
+      conditions.push('user.phone = :phone');
+      params.phone = normalizedPhone;
+    }
+    if (conditions.length === 0) return null;
+    qb.andWhere(`(${conditions.join(' OR ')})`).setParameters(params);
+    return qb.getOne();
+  }
+
   async findById(id: number): Promise<User | null> {
     return this.userRepository.findOne({
       where: { id },
@@ -93,6 +120,26 @@ export class UsersService {
       where: { notifyRefereeRankMatchInRegion: true, status: UserStatus.ACTIVE },
       select: ['id', 'residenceSido', 'residenceAddress'],
     });
+  }
+
+  /** 용병 구하기 알림 수신 대상: 해당 종목 주력·활성화·알림 ON인 사용자 */
+  async findMercenaryEligibleUserIds(category: string, excludeUserId: number): Promise<number[]> {
+    const users = await this.userRepository.find({
+      where: {
+        status: UserStatus.ACTIVE,
+        mercenaryActivityStatus: 'active' as const,
+      },
+      select: ['id', 'interestedSports', 'mercenaryActiveBySport'],
+    });
+
+    return users
+      .filter((u) => u.id !== excludeUserId)
+      .filter((u) => (u.interestedSports ?? []).includes(category))
+      .filter((u) => {
+        const bySport = u.mercenaryActiveBySport ?? {};
+        return bySport[category] !== false;
+      })
+      .map((u) => u.id);
   }
 
   /** 전체 유저 검색 (닉네임, 태그 - 부분 일치). 이메일은 개인정보 보호를 위해 검색 불가 */
@@ -172,35 +219,16 @@ export class UsersService {
   }
 
   async createUser(userData: Partial<User>): Promise<User> {
-    // 이메일 중복 체크 (활성 사용자만 확인, 탈퇴한 사용자의 이메일은 재사용 가능)
+    // 이메일 중복 체크 (ACTIVE, PENDING만 - 탈퇴한 사용자의 이메일은 재사용 가능)
     if (userData.email) {
-      const existingUser = await this.userRepository.findOne({
-        where: { 
-          email: userData.email,
-          status: UserStatus.ACTIVE,
-        },
-      });
-      
-      // 디버깅: 사용자가 발견된 경우 로그 출력
+      const normalizedEmail = userData.email.trim().toLowerCase();
+      const existingUser = await this.userRepository
+        .createQueryBuilder('user')
+        .where('LOWER(user.email) = :email', { email: normalizedEmail })
+        .andWhere('user.status IN (:...statuses)', { statuses: [UserStatus.ACTIVE, UserStatus.PENDING] })
+        .getOne();
       if (existingUser) {
-        console.log(`[createUser] 이메일 ${userData.email} 사용 중인 사용자 발견:`, {
-          id: existingUser.id,
-          email: existingUser.email,
-          status: existingUser.status,
-          nickname: existingUser.nickname,
-        });
         throw new ConflictException('이미 사용 중인 이메일입니다.');
-      }
-      
-      // 디버깅: 모든 이메일 사용자 확인 (상태 무관)
-      const allUsersWithEmail = await this.userRepository.find({
-        where: { email: userData.email },
-        select: ['id', 'email', 'status', 'nickname'],
-      });
-      if (allUsersWithEmail.length > 0) {
-        console.log(`[createUser] 이메일 ${userData.email}를 사용하는 모든 사용자 (상태 무관):`, 
-          allUsersWithEmail.map(u => ({ id: u.id, email: u.email, status: u.status, nickname: u.nickname }))
-        );
       }
     }
 
@@ -225,7 +253,7 @@ export class UsersService {
 
     const user = this.userRepository.create({
       ...userData,
-      // userData에서 status와 isProfileComplete가 제공되지 않은 경우에만 기본값 사용
+      mannerScore: userData.mannerScore ?? 80, // 가입 시 기본 80점
       status: userData.status ?? UserStatus.PENDING,
       isProfileComplete: userData.isProfileComplete ?? false,
     });
@@ -272,6 +300,26 @@ export class UsersService {
     });
 
     return this.socialAccountRepository.save(socialAccount);
+  }
+
+  /** 패널티 점수 증가 (신고 누적 시 호출). 본인인증 도입 후에도 데이터 유지. */
+  async incrementPenaltyScore(userId: number, amount: number): Promise<User> {
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    }
+    const current = user.penaltyScore ?? 0;
+    return this.updateUser(userId, { penaltyScore: current + amount });
+  }
+
+  /** 노쇼 신고 접수 시 noShowCount 증가 (매너 -41점 적용용) */
+  async incrementNoShowCount(userId: number): Promise<User> {
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    }
+    const current = user.noShowCount ?? 0;
+    return this.updateUser(userId, { noShowCount: current + 1 });
   }
 
   async updateUser(userId: number, updateData: Partial<User>): Promise<User> {

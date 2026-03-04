@@ -5,11 +5,11 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import koLocale from '@fullcalendar/core/locales/ko';
-import { CalendarDaysIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { CalendarDaysIcon, PlusIcon, ChevronLeftIcon, ChevronRightIcon, ChartBarIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
 import type { DatesSetArg } from '@fullcalendar/core';
 import { api } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
-import { showInfo } from '../utils/swal';
+import { showInfo, showToast } from '../utils/swal';
 
 interface GroupEvent {
   id: number;
@@ -27,6 +27,8 @@ interface GroupEvent {
     facilityName?: string;
     userName?: string;
     status?: string;
+    /** 확정(참가/생성) vs 신청중(대기/가예약) - solid vs 투명 스타일 */
+    isConfirmed?: boolean;
   };
 }
 
@@ -49,6 +51,9 @@ const MySchedulePage = () => {
   const [myFacilities, setMyFacilities] = useState<MyFacility[]>([]);
   /** 시설별 예약 표시 여부 (facilityId → checked). 기본값: 전체 선택 */
   const [selectedFacilityIds, setSelectedFacilityIds] = useState<Set<number>>(new Set());
+  /** 매치 1시간 전 깜빡임 적용할 이벤트 ID (토스트도 이 시점에 1회만) */
+  const [startingSoonEventIds, setStartingSoonEventIds] = useState<Set<string>>(new Set());
+  const toastedEventIdsRef = useRef<Set<string>>(new Set());
 
   // 시설 등록 권한: 사업자 또는 내가 등록한 시설이 있는 경우
   const hasFacilities = myFacilities.length > 0;
@@ -107,12 +112,17 @@ const MySchedulePage = () => {
         const myGroups = allGroups.filter((group: any, index: number) => {
           if (group.creatorId === user.id) return true;
           const result = participationChecks[index];
-          return result.status === 'fulfilled' && (result.value as any)?.isUserParticipant === true;
+          if (result.status !== 'fulfilled') return false;
+          const detail = result.value as any;
+          return detail?.isUserParticipant === true || detail?.isUserOnWaitlist === true;
         });
 
         const matchEvents: GroupEvent[] = myGroups
-          .map((group: any) => {
+          .map((group: any, index: number) => {
             if (!group.meetingTime) return null;
+            const result = participationChecks[index];
+            const detail = result?.status === 'fulfilled' ? (result.value as any) : null;
+            const isConfirmed = group.creatorId === user.id || detail?.isUserParticipant === true;
             let startDate: Date | null = null;
             const meetingTimeStr = group.meetingTime.trim();
             if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(meetingTimeStr)) {
@@ -131,15 +141,17 @@ const MySchedulePage = () => {
             endDate.setHours(endDate.getHours() + 2);
             return {
               id: group.id,
-              title: group.name,
+              title: isConfirmed ? group.name : `${group.name} (신청 중)`,
               start: startDate.toISOString(),
               end: endDate.toISOString(),
               color: categoryColors[group.category] || '#6366f1',
+              className: isConfirmed ? 'fc-event-type-match fc-event-confirmed' : 'fc-event-type-match fc-event-applying',
               extendedProps: {
                 groupId: group.id,
                 location: group.location,
                 category: group.category,
                 type: 'match' as const,
+                isConfirmed,
               },
             };
           })
@@ -172,6 +184,7 @@ const MySchedulePage = () => {
               };
 
               const isProvisional = res.status === 'provisional';
+              const isConfirmedRes = res.status === 'confirmed' || res.status === 'completed';
               const titleSuffix = isProvisional ? ' (가예약)' : '';
               // 예약자/매치장 닉네임: user.nickname 우선, 가예약 시 memo에서 "가예약중 - 닉네임" 추출
               let hostNickname = res.user?.nickname;
@@ -186,6 +199,7 @@ const MySchedulePage = () => {
                 start: startDate.toISOString(),
                 end: endDate.toISOString(),
                 color: statusColors[res.status] || '#6366f1',
+                className: isConfirmedRes ? 'fc-event-type-reservation fc-event-confirmed' : 'fc-event-type-reservation fc-event-applying',
                 extendedProps: {
                   type: 'reservation' as const,
                   reservationId: res.id,
@@ -195,6 +209,7 @@ const MySchedulePage = () => {
                   status: res.status,
                   location: res.facility?.address || '',
                   category: '시설예약',
+                  isConfirmed: isConfirmedRes,
                 },
               };
             })
@@ -216,6 +231,34 @@ const MySchedulePage = () => {
 
     fetchSchedules();
   }, [user?.id]);
+
+  // 매치 1시간 전(55~65분 전) 체크: 토스트 1회 + 깜빡임 효과
+  useEffect(() => {
+    const check = () => {
+      const now = Date.now();
+      const ids = new Set<string>();
+      const toToast: { id: string; title: string }[] = [];
+      events.forEach((e) => {
+        if (e.extendedProps.type !== 'match') return;
+        const start = new Date(e.start).getTime();
+        const diffMin = (start - now) / 60000;
+        if (diffMin >= 55 && diffMin <= 65) {
+          ids.add(String(e.id));
+          if (!toastedEventIdsRef.current.has(String(e.id))) {
+            toToast.push({ id: String(e.id), title: e.title });
+          }
+        }
+      });
+      setStartingSoonEventIds(ids);
+      toToast.forEach(({ id, title }) => {
+        toastedEventIdsRef.current.add(id);
+        showToast(`곧 시작합니다! "${title}"`, 'info');
+      });
+    };
+    check();
+    const id = setInterval(check, 60000); // 1분마다
+    return () => clearInterval(id);
+  }, [events]);
 
   const goToToday = () => {
     const today = new Date();
@@ -270,6 +313,27 @@ const MySchedulePage = () => {
   };
 
   const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  /** 이번 달 참여(확정) 매치 수 */
+  const thisMonthMatchCount = events.filter((e) => {
+    if (e.extendedProps.type !== 'match' || !e.extendedProps.isConfirmed) return false;
+    const d = new Date(e.start);
+    return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+  }).length;
+  /** 시설별 금일 예약 건수 */
+  const facilityTodayCounts = myFacilities.reduce<Record<number, number>>((acc, f) => {
+    const count = events.filter((e) => {
+      if (e.extendedProps.type !== 'reservation' || e.extendedProps.facilityId !== f.id) return false;
+      const startDate = e.start ? new Date(e.start) : null;
+      if (!startDate) return false;
+      const d = startDate.toISOString().slice(0, 10);
+      return d === todayStr;
+    }).length;
+    acc[f.id] = count;
+    return acc;
+  }, {});
+
   const miniDays = getMiniCalendarDays();
 
   return (
@@ -333,12 +397,13 @@ const MySchedulePage = () => {
                     className="rounded"
                   />
                   <span
-                    className="w-3 h-3 rounded-full shrink-0"
+                    className="w-1 h-4 rounded-r shrink-0"
                     style={{ backgroundColor: '#6366f1' }}
                     aria-hidden
                   />
                   매치 일정
                 </label>
+                <p className="text-[10px] text-[var(--color-text-secondary)] pl-6 -mt-0.5">진하게=확정 · 연하게=신청 중</p>
                 {hasFacilities && (
                   <>
                     <label className="flex items-center gap-2 cursor-pointer text-sm text-[var(--color-text-secondary)]">
@@ -349,36 +414,44 @@ const MySchedulePage = () => {
                         className="rounded"
                       />
                       <span
-                        className="w-3 h-3 rounded-full shrink-0"
+                        className="w-1 h-4 rounded-r shrink-0"
                         style={{ backgroundColor: '#10b981' }}
                         aria-hidden
                       />
                       시설 예약
                     </label>
                     <div className="ml-4 mt-2 space-y-1.5 border-l-2 border-[var(--color-border-card)] pl-3">
-                      {myFacilities.map((f) => (
-                        <label
-                          key={f.id}
-                          className="flex items-center gap-2 cursor-pointer text-xs text-[var(--color-text-secondary)]"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedFacilityIds.has(f.id)}
-                            onChange={(e) => {
-                              setSelectedFacilityIds((prev) => {
-                                const next = new Set(prev);
-                                if (e.target.checked) next.add(f.id);
-                                else next.delete(f.id);
-                                return next;
-                              });
-                            }}
-                            className="rounded"
-                          />
-                          <span className="truncate" title={f.name}>
-                            {f.name}
-                          </span>
-                        </label>
-                      ))}
+                      {myFacilities.map((f) => {
+                        const todayCount = facilityTodayCounts[f.id] ?? 0;
+                        return (
+                          <label
+                            key={f.id}
+                            className="flex items-center gap-2 cursor-pointer text-xs text-[var(--color-text-secondary)]"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedFacilityIds.has(f.id)}
+                              onChange={(e) => {
+                                setSelectedFacilityIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (e.target.checked) next.add(f.id);
+                                  else next.delete(f.id);
+                                  return next;
+                                });
+                              }}
+                              className="rounded"
+                            />
+                            <span className="truncate flex-1 min-w-0" title={f.name}>
+                              {f.name}
+                            </span>
+                            {todayCount > 0 && (
+                              <span className="shrink-0 min-w-[1.25rem] text-center text-[10px] font-semibold text-[var(--color-blue-primary)] bg-[var(--color-blue-primary)]/15 rounded-full px-1.5 py-0.5">
+                                {todayCount}
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
                     </div>
                   </>
                 )}
@@ -421,7 +494,7 @@ const MySchedulePage = () => {
             <button
               type="button"
               onClick={goToToday}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium text-[var(--color-text-primary)] bg-[var(--color-bg-secondary)] hover:bg-[var(--color-bg-card)] border border-[var(--color-border-card)] transition-colors"
+              className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-[var(--color-blue-primary)] hover:opacity-90 transition-opacity shadow-sm"
             >
               오늘
             </button>
@@ -471,7 +544,7 @@ const MySchedulePage = () => {
             </div>
           ) : (
             <>
-              <div className="schedule-calendar-wrapper flex-1 min-h-0 rounded-lg border border-[var(--color-border-card)] overflow-hidden">
+              <div className="schedule-calendar-wrapper flex-1 min-h-0 rounded-lg border border-[var(--color-border-card)] overflow-hidden relative">
                 <FullCalendar
                 ref={calendarRef}
                 plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -495,7 +568,12 @@ const MySchedulePage = () => {
                 slotMinTime="06:00:00"
                 slotMaxTime="24:00:00"
                 allDaySlot={true}
+                nowIndicator={true}
                 datesSet={handleDatesSet}
+                eventClassNames={(arg) => {
+                  if (startingSoonEventIds.has(String(arg.event.id))) return ['fc-event-starting-soon'];
+                  return [];
+                }}
                 eventClick={async (info) => {
                   const props = info.event.extendedProps;
                   if (props.type === 'reservation') {
@@ -519,6 +597,13 @@ const MySchedulePage = () => {
                   }
                 }}
               />
+                {/* 빈 공간 미니 통계 카드 */}
+                <div className="absolute bottom-4 right-4 flex flex-col gap-2 z-10">
+                  <div className="px-4 py-2.5 rounded-xl bg-[var(--color-bg-card)]/95 backdrop-blur border border-[var(--color-border-card)] shadow-lg">
+                    <p className="text-xs font-medium text-[var(--color-text-secondary)]">이번 달 참여</p>
+                    <p className="text-xl font-bold text-[var(--color-blue-primary)]">{thisMonthMatchCount}건</p>
+                  </div>
+                </div>
               </div>
               {events.length === 0 && (
                 <p className="mt-3 text-center text-sm text-[var(--color-text-secondary)]">
@@ -527,6 +612,16 @@ const MySchedulePage = () => {
                     : '참가하거나 생성한 모임이 있으면 여기에 일정이 표시됩니다.'}
                 </p>
               )}
+              {/* 지난 매치 기록 → 매치 기록 보기 연동 */}
+              <button
+                type="button"
+                onClick={() => navigate('/my-activity')}
+                className="mt-4 w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-[var(--color-border-card)] text-[var(--color-text-secondary)] hover:border-[var(--color-blue-primary)] hover:text-[var(--color-blue-primary)] transition-colors"
+              >
+                <ChartBarIcon className="w-5 h-5" />
+                <span>지난 매치 기록 보기</span>
+                <ArrowRightIcon className="w-4 h-4" />
+              </button>
             </>
           )}
         </main>

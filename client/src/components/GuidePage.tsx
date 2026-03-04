@@ -1,5 +1,6 @@
 import React from 'react';
 import FootballStatsRadar from './FootballStatsRadar';
+import AppLogo from './AppLogo';
 
 const APP_NAME = '올코트플레이';
 
@@ -24,6 +25,10 @@ const ImagePlaceholder: React.FC<{
 const GuidePage = () => {
   return (
     <div className="flex-1 w-full max-w-4xl mx-auto px-4 md:px-6 py-8">
+      <div className="flex items-center gap-3 mb-8">
+        <AppLogo className="h-10 w-auto object-contain" />
+        <h1 className="text-xl font-bold text-[var(--color-text-primary)]">{APP_NAME} 가이드</h1>
+      </div>
       {/* 빠른 이동 */}
       <nav className="mb-10 p-4 rounded-xl bg-[var(--color-bg-card)] border border-[var(--color-border-card)]">
         <p className="text-xs font-semibold text-[var(--color-text-secondary)] mb-3">빠른 이동</p>

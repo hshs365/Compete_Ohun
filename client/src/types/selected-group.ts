@@ -4,6 +4,8 @@ export type SelectedGroup = {
   location: string;
   coordinates: [number, number];
   memberCount?: number;
+  /** 서버에서 반환한 매치장 제외 참가자 수 (용병 구하기 등) */
+  participantCountExcludingCreator?: number;
   maxParticipants?: number;
   category?: string;
   description?: string;
@@ -26,4 +28,12 @@ export type SelectedGroup = {
     isToday?: boolean;
   };
   parsedMeetingTime?: Date;
-};
+  /** 작성자(매치장) 정보 - 신뢰도/노쇼 표시용 */
+  creator?: {
+    id: number;
+    nickname: string;
+    tag?: string | null;
+    mannerScore?: number;
+    noShowCount?: number;
+  };
+}

@@ -13,7 +13,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { TrophyIcon as TrophySolidIcon } from '@heroicons/react/24/solid';
 import { api } from '../utils/api';
-import { getAllcourtplayRankStyle } from '../constants/allcourtplayRank';
+import { getAllcourtplayRankStyle, getRankDisplayLabel } from '../constants/allcourtplayRank';
+import { getMannerGradeConfig } from '../utils/mannerGrade';
 import { getFollowerGrade, getFollowerGradeBadgeStyle } from '../constants/followerGrade';
 import FormatNumber from './FormatNumber';
 
@@ -180,7 +181,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/30 p-4"
       onClick={handleOverlayClick}
     >
       <div
@@ -291,8 +292,12 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
                     <p className="text-xl font-bold text-[var(--color-text-primary)]">{detail.stats.winRate}%</p>
                   </div>
                   <div className="p-3 rounded-lg bg-[var(--color-bg-card)]">
-                    <p className="text-xs text-[var(--color-text-secondary)] mb-1">매너점수</p>
-                    <p className="text-xl font-bold text-[var(--color-text-primary)]">{detail.stats.mannerScore}</p>
+                    <p className="text-xs text-[var(--color-text-secondary)] mb-1">
+                      {getMannerGradeConfig(detail.stats.mannerScore).label}
+                    </p>
+                    <p className={`text-xl font-bold ${getMannerGradeConfig(detail.stats.mannerScore).textColor}`}>
+                      {detail.stats.mannerScore}점
+                    </p>
                   </div>
                   <div className="p-3 rounded-lg bg-[var(--color-bg-card)]">
                     <p className="text-xs text-[var(--color-text-secondary)] mb-1">선호 포지션</p>
@@ -339,7 +344,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
                       key={sport}
                       className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r ${getAllcourtplayRankStyle(rank)}`}
                     >
-                      {sport} {rank}
+                      {sport} {getRankDisplayLabel(sport, rank)}
                     </span>
                   ))}
                   {profileSummary?.athleteVerified && (

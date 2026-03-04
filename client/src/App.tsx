@@ -2,21 +2,31 @@ import React, { useState, useEffect, createContext, useContext, useRef, useCallb
 import { BrowserRouter, Routes, Route, Navigate, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import GroupListPanel from './components/GroupListPanel';
+import SearchAndRegionBar from './components/SearchAndRegionBar';
+import SearchOptionsModal from './components/SearchOptionsModal';
+import DateFilterChips from './components/DateFilterChips';
 import HomeMatchTypeChoice from './components/HomeMatchTypeChoice';
 import HomeCategoryChoice from './components/HomeCategoryChoice';
-import NaverMapPanel from './components/NaverMapPanel';
+import { SPORT_ICONS } from './constants/sports';
+import NaverMapPanel, { type MapBounds } from './components/NaverMapPanel';
 import type { SelectedGroup } from './types/selected-group';
 import GroupDetail from './components/GroupDetail';
 import MultiStepCreateGroup from './components/MultiStepCreateGroup';
 import NotificationPanel from './components/NotificationPanel';
+import { NotificationProvider } from './contexts/NotificationContext';
+import { ChatProvider } from './contexts/ChatContext';
+import FloatingChatWidget from './components/FloatingChatWidget';
 import { api } from './utils/api';
+import { showInfo } from './utils/swal';
 import { getUserCity, type KoreanCity } from './utils/locationUtils';
 import MyInfoPage from './components/MyInfoPage'; // MyInfoPage 컴포넌트 import
 import MyActivityPage from './components/MyActivityPage';
 import MySchedulePage from './components/MySchedulePage'; // MySchedulePage 컴포넌트 import
 import ContactPage from './components/ContactPage'; // ContactPage 컴포넌트 import
 import SettingsPage from './components/SettingsPage'; // SettingsPage 컴포넌트 import
-import LoginPage from './components/LoginPage'; // LoginPage 컴포넌트 import
+import LoginPage from './components/LoginPage';
+import TermsPage from './components/TermsPage';
+import PrivacyPolicyPage from './components/PrivacyPolicyPage';
 import MultiStepRegister from './components/MultiStepRegister'; // MultiStepRegister 컴포넌트 import
 import CompleteProfilePage from './components/CompleteProfilePage'; // CompleteProfilePage 컴포넌트 import
 import OAuthCallbackPage from './components/OAuthCallbackPage'; // OAuthCallbackPage 컴포넌트 import
@@ -25,6 +35,9 @@ import FacilityReservationPage from './components/FacilityReservationPage';
 import FacilityDetailPage from './components/FacilityDetailPage';
 import FacilityRegisterPage from './components/FacilityRegisterPage';
 import HallOfFamePage from './components/HallOfFamePage'; // HallOfFamePage 컴포넌트 import
+import MercenaryHomePage from './components/MercenaryHomePage';
+import MoreMenuPage from './components/MoreMenuPage';
+import BottomNav from './components/BottomNav';
 import SportsEquipmentPage from './components/SportsEquipmentPage';
 import SportsEquipmentDetailPage from './components/SportsEquipmentDetailPage';
 import SportsEquipmentCartPage from './components/SportsEquipmentCartPage';
@@ -100,12 +113,22 @@ const DashboardLayout = () => {
     events: false,
     popularSpots: false,
   });
-  /** 지도 기본 보기 단위 (사용자 주소 기준). 시/구/동 */
-  const [mapViewLevel, setMapViewLevel] = useState<'sido' | 'gu' | 'dong'>(() => {
-    if (typeof window === 'undefined') return 'sido';
-    const saved = localStorage.getItem('mapViewLevel') as 'sido' | 'gu' | 'dong' | null;
-    return saved === 'gu' || saved === 'dong' ? saved : 'sido';
-  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOptionsOpen, setIsSearchOptionsOpen] = useState(false);
+  const [hideClosed, setHideClosed] = useState(true);
+  const [onlyRanker, setOnlyRanker] = useState(false);
+  const [gender, setGender] = useState<'male' | 'female' | null>(null);
+  const [includeCompleted, setIncludeCompleted] = useState(false);
+  /** 날짜 필터 (YYYY-MM-DD). null이면 전체 */
+  const [filterDate, setFilterDate] = useState<string | null>(null);
+  /** 지도 bounds - 이 지역에서 재검색 시 사용 */
+  const [mapBounds, setMapBounds] = useState<MapBounds>(null);
+  /** 마지막 검색 시 사용한 bounds (재검색 버튼 표시 여부용) */
+  const [lastSearchBounds, setLastSearchBounds] = useState<MapBounds>(null);
+  /** 현재 지도 bounds (onBoundsChange에서 설정) */
+  const [currentMapBounds, setCurrentMapBounds] = useState<MapBounds>(null);
+  /** 사용자가 지도를 드래그/줌 했는지 (재검색 버튼 노출 조건) */
+  const [userHasInteractedWithMap, setUserHasInteractedWithMap] = useState(false);
 
   // 로그인 여부에 따른 지역 설정: 미로그인 시 전국, 로그인 시 저장된 주소(내 정보/회원가입) 기반
   useEffect(() => {
@@ -226,8 +249,13 @@ const handleGroupClick = (group: SelectedGroup) => {
       setSearchParams({}, { replace: true });
       return;
     }
-    api.get<{ id: number; name: string; location: string; latitude: number; longitude: number; participantCount: number; category: string; type?: 'normal' | 'rank' | 'event'; description?: string; meetingTime?: string; contact?: string; equipment?: string[] }>(`/api/groups/${id}`)
+    api.get<{ id: number; name: string; location: string; latitude: number; longitude: number; participantCount: number; category: string; type?: 'normal' | 'rank' | 'event'; description?: string; meetingTime?: string; contact?: string; equipment?: string[]; isActive?: boolean }>(`/api/groups/${id}`)
       .then((g) => {
+        if (g.isActive === false) {
+          setSearchParams({}, { replace: true });
+          showInfo('취소된 매치입니다.', '취소된 매치');
+          return;
+        }
         const selected: SelectedGroup = {
           id: g.id,
           name: g.name,
@@ -316,8 +344,9 @@ const handleGroupClick = (group: SelectedGroup) => {
             >
               ← 종목 변경
             </button>
-            <span className="text-sm text-[var(--color-text-secondary)]">
-              종목: {selectedCategory ?? '전체'}
+            <span className="text-sm text-[var(--color-text-secondary)] flex items-center gap-1.5">
+              <span aria-hidden>{selectedCategory ? (SPORT_ICONS[selectedCategory] ?? '●') : '◇'}</span>
+              <span>종목: {selectedCategory ?? '전체'}</span>
             </span>
           </div>
           <HomeMatchTypeChoice
@@ -365,43 +394,40 @@ const handleGroupClick = (group: SelectedGroup) => {
         )}
         {/* 목록 패널: 항상 표시 (데스크톱 고정, 모바일은 미선택 시에만) */}
         <div className={selectedGroup ? 'hidden md:block flex-shrink-0' : 'flex-shrink-0 w-full md:w-auto'}>
-          <GroupListPanel 
+            <GroupListPanel 
             selectedCategory={selectedCategory} 
             onGroupClick={handleGroupClick}
             refreshTrigger={refreshTrigger}
             facilityFilter={facilityFilter}
-            onClearFacilityFilter={() => setFacilityFilter(null)}
+            onClearFacilityFilter={() => { setFacilityFilter(null); setSearchQuery(''); }}
             selectedRegion={selectedRegion}
             onRegionChange={(region) => {
               setSelectedRegion(region);
-              setFacilityFilter(null); // 지역 변경 시 시설 필터 해제
+              setFacilityFilter(null);
+              setMapBounds(null);
+              setLastSearchBounds(null);
+              setUserHasInteractedWithMap(false);
             }}
             selectedDays={selectedDays}
             onDaysChange={setSelectedDays}
+            filterDate={filterDate}
+            mapBounds={mapBounds}
             matchType={matchType}
             onMatchTypeChange={(type) => {
               setMatchType(type);
               setSelectedGroup(null);
-              setFacilityFilter(null); // 매치 타입 전환 시 시설 필터 해제
+              setFacilityFilter(null);
               setIsLoadingGroups(true);
-              try {
-                localStorage.setItem('home_match_type', type);
-              } catch (e) {
-                /* ignore */
-              }
+              try { localStorage.setItem('home_match_type', type); } catch (e) { /* ignore */ }
             }}
             matchTypeTheme
             onGroupsChange={setAllGroups}
             onLoadingChange={setIsLoadingGroups}
-            mapViewLevel={mapViewLevel}
-            onMapViewLevelChange={(level) => {
-              setMapViewLevel(level);
-              try {
-                localStorage.setItem('mapViewLevel', level);
-              } catch (e) {
-                /* ignore */
-              }
-            }}
+            searchQuery={searchQuery}
+            hideClosed={hideClosed}
+            onlyRanker={onlyRanker}
+            gender={gender}
+            includeCompleted={includeCompleted}
           />
         </div>
         {/* 상세 패널: 목록에서 매치 클릭 시에만 생성·펼쳐짐, 좌측 50% 안에서 나머지 공간 차지 */}
@@ -417,14 +443,26 @@ const handleGroupClick = (group: SelectedGroup) => {
       </div>
 
       {/* 지도: 상세 미선택 시 나머지 공간 전체, 상세 선택 시 우측 50% */}
+      {/* ⭐ 지도는 항상 마운트 유지 (재검색 시 위치 복원 방지). 로딩 시 스피너만 오버레이 */}
       <main className="flex-1 min-w-0 relative overflow-hidden order-2" style={{ height: '100%', minHeight: 0 }}>
-        {isLoadingGroups ? (
-          <LoadingSpinner overlay message="매치 목록을 불러오는 중..." />
-        ) : (
-          <>
-            {/* 지도 상단: 왼쪽 초기 화면으로 돌아가기, 오른쪽 현재 종목·매치 유형 (테마 색상) */}
+        {isLoadingGroups && <LoadingSpinner overlay message="매치 목록을 불러오는 중..." />}
+        <>
+            {/* 검색·지역 바: 지도 헤더보다 위에 배치 (지역 드롭다운 항상 노출) */}
+            <div className="absolute top-0 left-0 right-0 z-[110] safe-area-top">
+              <SearchAndRegionBar
+                searchQuery={searchQuery}
+                onSearchQueryChange={setSearchQuery}
+                selectedRegion={selectedRegion}
+                onRegionChange={(region) => {
+                  setSelectedRegion(region);
+                  setFacilityFilter(null);
+                }}
+                onOpenSearchOptions={() => setIsSearchOptionsOpen(true)}
+              />
+            </div>
+            {/* 지도 상단 헤더: 초기 화면 버튼 + 종목·매치 유형 (검색 옵션 바 아래) */}
             <div
-              className="absolute top-0 left-0 right-0 z-[100] py-2.5 flex items-center justify-between gap-2 text-sm font-semibold text-white shadow-lg"
+              className="absolute top-[52px] left-0 right-0 z-[100] py-2.5 flex items-center justify-between gap-2 text-sm font-semibold text-white shadow-lg"
               style={{ background: themeAccent }}
             >
               <button
@@ -451,24 +489,71 @@ const handleGroupClick = (group: SelectedGroup) => {
               </span>
               <span className="w-[4.5rem] flex-shrink-0" aria-hidden />
             </div>
-            <NaverMapPanel 
-              selectedGroup={selectedGroup}
-              allGroups={allGroups}
-              onFacilityMarkerClick={(info) => {
-                setFacilityFilter({ facilityName: info.facilityName, groups: info.groups });
-                setSelectedGroup(null); // 상세 패널 닫고 목록만 표시
-              }}
-              onCreateGroupClick={
-                !user || (matchType === 'event' && !userProfile?.businessNumberVerified && !userProfile?.isAdmin)
-                  ? undefined
-                  : () => setIsCreateModalOpen(true)
-              }
-              onGroupClick={handleGroupClick}
-              selectedRegion={selectedRegion}
-              selectedCategory={selectedCategory}
-              mapLayers={mapLayers}
-              matchType={matchType}
-              mapViewLevel={mapViewLevel}
+            {/* 날짜 선택 수평 스크롤 칩 */}
+            <div
+              className="absolute top-[104px] left-0 right-0 z-[95] px-2 pb-2"
+              style={{ background: themeAccent }}
+            >
+              <DateFilterChips
+                selectedDate={filterDate}
+                onDateChange={setFilterDate}
+                daysCount={14}
+                themeBackground={themeAccent}
+              />
+            </div>
+            <div className="pt-[152px] h-full min-h-0 flex flex-col">
+              <NaverMapPanel
+                selectedGroup={selectedGroup}
+                allGroups={allGroups}
+                onFacilityMarkerClick={(info) => {
+                  setFacilityFilter({ facilityName: info.facilityName, groups: info.groups });
+                  setSearchQuery(info.facilityName);
+                  setSelectedGroup(null);
+                }}
+                onCreateGroupClick={
+                  !user || (matchType === 'event' && !userProfile?.businessNumberVerified && !userProfile?.isAdmin)
+                    ? undefined
+                    : () => setIsCreateModalOpen(true)
+                }
+                onGroupClick={handleGroupClick}
+                selectedRegion={selectedRegion}
+                selectedCategory={selectedCategory}
+                mapLayers={mapLayers}
+                matchType={matchType}
+                bottomSheetHeight={0}
+                onBoundsChange={setCurrentMapBounds}
+                onMapInteraction={() => setUserHasInteractedWithMap(true)}
+                showReSearchButton={
+                  userHasInteractedWithMap &&
+                  currentMapBounds !== null &&
+                  (lastSearchBounds === null ||
+                    Math.abs(currentMapBounds.latMin - lastSearchBounds.latMin) > 0.001 ||
+                    Math.abs(currentMapBounds.latMax - lastSearchBounds.latMax) > 0.001 ||
+                    Math.abs(currentMapBounds.lngMin - lastSearchBounds.lngMin) > 0.001 ||
+                    Math.abs(currentMapBounds.lngMax - lastSearchBounds.lngMax) > 0.001)
+                }
+                onReSearchClick={() => {
+                  if (currentMapBounds) {
+                    setMapBounds(currentMapBounds);
+                    setLastSearchBounds(currentMapBounds);
+                    setRefreshTrigger((prev) => prev + 1);
+                  }
+                }}
+              />
+            </div>
+            <SearchOptionsModal
+              isOpen={isSearchOptionsOpen}
+              onClose={() => setIsSearchOptionsOpen(false)}
+              selectedDays={selectedDays}
+              onDaysChange={setSelectedDays}
+              hideClosed={hideClosed}
+              onHideClosedChange={setHideClosed}
+              onlyRanker={onlyRanker}
+              onOnlyRankerChange={setOnlyRanker}
+              gender={gender}
+              onGenderChange={setGender}
+              includeCompleted={includeCompleted}
+              onIncludeCompletedChange={setIncludeCompleted}
             />
             {/* 가이드 버튼 - 지도 영역 왼쪽 하단, 가이드 페이지로 이동 */}
             <button
@@ -479,8 +564,7 @@ const handleGroupClick = (group: SelectedGroup) => {
             >
               <QuestionMarkCircleIcon className="w-5 h-5 text-[var(--color-text-primary)] group-hover:text-[var(--color-blue-primary)] transition-colors" />
             </button>
-          </>
-        )}
+        </>
       </main>
       
       {/* 새 모임 만들기 모달 */}
@@ -587,12 +671,15 @@ const MainLayout = () => {
 
   return (
     <PublicRoute>
+      <NotificationProvider>
+      <ChatProvider>
       <div className="flex h-screen bg-[var(--color-bg-primary)] overflow-hidden">
         <Sidebar />
-        <div ref={mainScrollRef} className="flex-1 flex flex-col min-w-0 overflow-y-auto relative">
+        <div ref={mainScrollRef} className="flex-1 flex flex-col min-w-0 overflow-y-auto relative pb-20 md:pb-4">
           <Routes>
             {/* 공개 접근 가능한 페이지 */}
-            <Route index element={<DashboardLayout />} />
+            <Route index element={<MercenaryHomePage />} />
+            <Route path="matches" element={<DashboardLayout />} />
             <Route path="hall-of-fame" element={<HallOfFamePage />} />
             <Route path="notice" element={<NoticePage />} />
             <Route path="contact" element={<ContactPage />} />
@@ -675,6 +762,7 @@ const MainLayout = () => {
               </ProtectedRoute>
             } />
             <Route path="guide" element={<GuidePage />} />
+            <Route path="more" element={<MoreMenuPage />} />
             <Route path="settings" element={
               <ProtectedRoute>
                 <SettingsPage />
@@ -693,9 +781,15 @@ const MainLayout = () => {
             TOP
           </button>
         )}
-        {/* 알림 패널 - 사이드바 상단에 고정 (모든 페이지에서 표시) */}
+        {/* 알림 우측 슬라이드 드로어 (모든 페이지에서 접근) */}
         <NotificationPanel />
+        {/* 플로팅 채팅 위젯 (우측 하단 고정, 스크롤해도 유지) */}
+        <FloatingChatWidget />
+        {/* 모바일 하단 네비게이션 */}
+        <BottomNav />
       </div>
+      </ChatProvider>
+      </NotificationProvider>
     </PublicRoute>
   );
 };
@@ -737,6 +831,8 @@ function App() {
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/privacy" element={<PrivacyPolicyPage />} />
             <Route path="/register" element={<MultiStepRegister />} />
             <Route path="/auth/complete-profile" element={<CompleteProfilePage />} />
             <Route path="/auth/oauth/callback" element={<OAuthCallbackPage />} />

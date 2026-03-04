@@ -1,24 +1,37 @@
 import { useState, useEffect, useRef } from 'react';
+import { CurrencyDollarIcon } from '@heroicons/react/24/solid';
+import { getMannerGradeConfig } from '../utils/mannerGrade';
+import { SPORT_CHIP_STYLES } from '../constants/sports';
 import type { SelectedGroup } from '../types/selected-group';
 import { api } from '../utils/api';
-import { extractCityFromAddress, getDistanceKm, KOREAN_CITIES, type KoreanCity } from '../utils/locationUtils';
+import { addressMatchesRegion, getDistanceKm, type KoreanCity } from '../utils/locationUtils';
 import LoadingSpinner from './LoadingSpinner';
+import MercenaryEmptyState from './MercenaryEmptyState';
 import type { MatchType } from './GroupListPanel';
+
+/** 지도 bounds (이 지역에서 재검색용) */
+export type MapBounds = { latMin: number; latMax: number; lngMin: number; lngMax: number } | null;
 
 interface GroupListProps {
   selectedCategory: string | null;
   searchQuery?: string;
+  /** 종목별 동적 필터 값 (API sportSpecificFilter로 전달) */
+  sportFilterValues?: Record<string, string | string[]>;
   /** 선택 지역: '전체' | 시/도 | 구 fullName | 동 fullName. 있으면 selectedCity 대신 사용 */
   selectedRegion?: string;
   /** @deprecated use selectedRegion */
   selectedCity?: KoreanCity;
   selectedDays?: number[]; // 선택된 요일 (0=일요일, 1=월요일, ..., 6=토요일)
+  /** 날짜 필터 YYYY-MM-DD (특정 날짜 매치만) */
+  filterDate?: string | null;
   hideClosed?: boolean;
   onlyRanker?: boolean;
   gender?: 'male' | 'female' | null;
   includeCompleted?: boolean; // 종료된 매치 포함 여부
   onGroupClick: (group: SelectedGroup) => void;
   refreshTrigger?: number; // 목록 새로고침 트리거
+  /** 지도 bounds (이 지역에서 재검색 시 API에 전달) */
+  mapBounds?: MapBounds;
   /** 매치 종류: 일반/랭크/이벤트 (API type·onlyRanker 반영) */
   matchType?: MatchType;
   /** 내 주소(도시) 좌표 [위도, 경도]. 있으면 가까운 순 정렬 */
@@ -29,6 +42,14 @@ interface GroupListProps {
   onLoadingChange?: (loading: boolean) => void;
   /** 마커 클릭 시 해당 시설의 매치 목록 (API 대신 이 목록 표시, 빠른시간순) */
   groupsOverride?: SelectedGroup[];
+  /** 용병 모드: 인원 미달 매치만 표시 (용병 N명 구해요) */
+  mercenaryOnly?: boolean;
+  /** 참가 후 즉시 반영용: { groupId, participantCount } (낙관적 업데이트) */
+  optimisticParticipantCount?: { groupId: number; participantCount: number } | null;
+  /** 용병 빈 상태: 선택된 종목 (있으면 MercenaryEmptyState 표시) */
+  emptyStateSport?: string | null;
+  /** 빈 상태에서 '용병 구하기 작성' 클릭 시 */
+  onEmptyWriteClick?: () => void;
 }
 
 interface GroupResponse {
@@ -40,9 +61,12 @@ interface GroupResponse {
   category: string;
   description: string | null;
   meetingTime: string | null;
+  meetingDateTime?: string | null; // API 실제 일시 (meetingTime 없을 때 용병 등 폴백)
   contact: string | null;
   equipment: string[];
   participantCount: number;
+  /** 매치장 제외 참가자 수 (용병 구하기 등에서 사용) */
+  participantCountExcludingCreator?: number;
   maxParticipants: number | null;
   createdAt: string;
   type?: 'normal' | 'rank' | 'event'; // 매치 유형
@@ -51,6 +75,13 @@ interface GroupResponse {
   isClosed?: boolean;
   hasFee?: boolean;
   feeAmount?: number | null;
+  creator?: {
+    id: number;
+    nickname?: string;
+    tag?: string | null;
+    mannerScore?: number;
+    noShowCount?: number;
+  };
 }
 
 /** 목록용 매치 일시 표기 (예: "2/10(화) 08:00" 또는 "2/10(화) 08:00~10:00") */
@@ -203,15 +234,29 @@ const GroupTitle = ({ title, groupId }: { title: string; groupId: number }) => {
   );
 };
 
-const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, selectedRegion: propSelectedRegion, selectedCity = '전체', selectedDays = [], hideClosed = true, onlyRanker = false, gender = null, includeCompleted = false, onGroupClick, refreshTrigger, matchType = 'general', userCoords = null, onGroupsChange, onLoadingChange, groupsOverride }) => {
+const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sportFilterValues, selectedRegion: propSelectedRegion, selectedCity = '전체', selectedDays = [], filterDate = null, hideClosed = true, onlyRanker = false, gender = null, includeCompleted = false, onGroupClick, refreshTrigger, mapBounds = null, matchType = 'general', userCoords = null, onGroupsChange, onLoadingChange, groupsOverride, mercenaryOnly = false, optimisticParticipantCount, emptyStateSport, onEmptyWriteClick }) => {
   const selectedRegion = propSelectedRegion ?? selectedCity;
   const [groups, setGroups] = useState<SelectedGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // sportFilterValues 객체 참조 대신 직렬화된 값으로 의존성 안정화 (무한 fetch 방지)
+  const sportFilterKey = sportFilterValues && typeof sportFilterValues === 'object' && Object.keys(sportFilterValues).length > 0
+    ? JSON.stringify(sportFilterValues)
+    : '';
+
+  // selectedDays 배열 참조 안정화 (기본값 []가 매 렌더 새 참조 생성 → 로딩/빈 상태 번갈아 나오는 문제)
+  const selectedDaysKey = JSON.stringify(selectedDays ?? []);
+
+  // mapBounds 객체 참조 안정화
+  const mapBoundsKey = mapBounds
+    ? `${mapBounds.latMin},${mapBounds.latMax},${mapBounds.lngMin},${mapBounds.lngMax}`
+    : '';
+
   // 시설 필터(마커 클릭) 모드: groupsOverride 사용, API fetch 스킵
+  const hasGroupsOverride = groupsOverride !== undefined;
   useEffect(() => {
-    if (groupsOverride && groupsOverride.length >= 0) {
+    if (hasGroupsOverride && groupsOverride) {
       const sorted = [...groupsOverride].sort((a, b) => {
         const ta = a.parsedMeetingTime?.getTime() ?? Infinity;
         const tb = b.parsedMeetingTime?.getTime() ?? Infinity;
@@ -223,10 +268,10 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, se
       onGroupsChange?.(sorted);
       return;
     }
-  }, [groupsOverride, onGroupsChange, onLoadingChange]);
+  }, [hasGroupsOverride, groupsOverride, onGroupsChange, onLoadingChange]);
 
   useEffect(() => {
-    if (groupsOverride && groupsOverride.length >= 0) return;
+    if (hasGroupsOverride) return;
     const fetchGroups = async () => {
       setIsLoading(true);
       onLoadingChange?.(true);
@@ -257,6 +302,26 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, se
         if (includeCompleted) {
           queryParams.append('includeCompleted', 'true');
         }
+        if (filterDate) {
+          queryParams.append('filterDate', filterDate);
+        }
+        if (sportFilterValues && Object.keys(sportFilterValues).length > 0) {
+          const filterObj: Record<string, string | string[]> = {};
+          for (const [k, v] of Object.entries(sportFilterValues)) {
+            if (v !== undefined && v !== null && v !== '' && (Array.isArray(v) ? v.length > 0 : true)) {
+              filterObj[k] = v;
+            }
+          }
+          if (Object.keys(filterObj).length > 0) {
+            queryParams.append('sportSpecificFilter', JSON.stringify(filterObj));
+          }
+        }
+        if (mapBounds) {
+          queryParams.append('latMin', String(mapBounds.latMin));
+          queryParams.append('latMax', String(mapBounds.latMax));
+          queryParams.append('lngMin', String(mapBounds.lngMin));
+          queryParams.append('lngMax', String(mapBounds.lngMax));
+        }
         queryParams.append('limit', '1000'); // 충분히 많은 데이터 가져오기 (지역 필터링을 위해)
 
         const response = await api.get<{ groups: GroupResponse[]; total: number }>(
@@ -281,10 +346,16 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, se
                    ? (group.maxParticipants - group.participantCount) <= Math.ceil(group.maxParticipants * 0.1)
                    : false;
                  
-                 // meetingTime 파싱 (다양한 형식 지원: "YYYY-MM-DD HH:MM ~ ..." 포함)
+                 // meetingTime 파싱 (다양한 형식 지원). meetingTime 없으면 meetingDateTime 폴백 (용병 구하기 등)
                  let parsedMeetingTime: Date | null = null;
-                 if (group.meetingTime) {
-                   const meetingTimeStr = group.meetingTime.trim();
+                 const rawMeetingTime = group.meetingTime?.trim() || null;
+                 const rawMeetingDateTime = group.meetingDateTime;
+                 const effectiveMeetingTime = rawMeetingTime || (rawMeetingDateTime ? (() => {
+                   const d = new Date(rawMeetingDateTime);
+                   return !isNaN(d.getTime()) ? d.toISOString().slice(0, 16).replace('T', ' ') : null;
+                 })() : null);
+                 if (effectiveMeetingTime) {
+                   const meetingTimeStr = effectiveMeetingTime;
                    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(meetingTimeStr)) {
                      parsedMeetingTime = new Date(meetingTimeStr.slice(0, 16));
                    } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(meetingTimeStr)) {
@@ -310,16 +381,18 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, se
                  
                  const groupType = group.type || 'normal';
                  const isFull = group.isClosed ?? (group.maxParticipants != null && group.participantCount >= group.maxParticipants);
+                 const creator = (group as GroupResponse & { creator?: { id: number; nickname?: string; tag?: string | null; mannerScore?: number; noShowCount?: number } }).creator;
                  return {
                    id: group.id,
                    name: group.name,
                    location: group.location,
                    coordinates: [parseFloat(group.latitude.toString()), parseFloat(group.longitude.toString())] as [number, number],
                    memberCount: group.participantCount,
+                   participantCountExcludingCreator: group.participantCountExcludingCreator,
                    maxParticipants: group.maxParticipants || undefined,
                    category: group.category,
                    description: group.description || undefined,
-                   meetingTime: group.meetingTime || undefined,
+                   meetingTime: effectiveMeetingTime || undefined,
                    contact: group.contact || undefined,
                    equipment: group.equipment || [],
                    type: groupType,
@@ -334,34 +407,49 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, se
                      isUrgent,
                      isToday,
                    },
-                 };
+                   creator: creator ? {
+                     id: creator.id,
+                     nickname: creator.nickname ?? '',
+                     tag: creator.tag ?? null,
+                     mannerScore: creator.mannerScore ?? 80,
+                     noShowCount: creator.noShowCount ?? 0,
+                   } : undefined,
+                 } as SelectedGroup;
                });
 
-               // ⭐ 날짜 필터링: 당일 기준 1주일치 매치만 표시
+               // ⭐ 날짜 필터링: filterDate 있으면 해당 날짜만, 없으면 오늘~1주일 이내
                const today = new Date();
                today.setHours(0, 0, 0, 0); // 오늘 00:00:00
                
                const oneWeekLater = new Date(today);
                oneWeekLater.setDate(oneWeekLater.getDate() + 7); // 1주일 후 00:00:00
                
+               const filterDateOnly = filterDate ? (() => {
+                 const [y, m, d] = filterDate.split('-').map(Number);
+                 const fd = new Date(y, (m ?? 1) - 1, d ?? 1);
+                 fd.setHours(0, 0, 0, 0);
+                 return fd;
+               })() : null;
+               
                mappedGroups = mappedGroups.filter((group) => {
-                 // 일정이 없으면 표시하지 않음
-                 if (!group.meetingTime) return false;
+                 // 일정이 없으면 표시하지 않음 (parsedMeetingTime 있으면 사용)
+                 if (!group.meetingTime && !group.parsedMeetingTime) return false;
                  
-                 // meetingTime 파싱 (다양한 형식 지원: "YYYY-MM-DD HH:MM ~ ..." 포함)
-                 let meetingDate: Date | null = null;
-                 const meetingTimeStr = group.meetingTime.trim();
-                 
-                 if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(meetingTimeStr)) {
-                   meetingDate = new Date(meetingTimeStr.slice(0, 16));
-                 } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(meetingTimeStr)) {
-                   const startPart = meetingTimeStr.split('~')[0]?.trim() || meetingTimeStr;
-                   meetingDate = new Date(startPart.replace(' ', 'T') + ':00');
-                 } else if (/^\d{4}-\d{2}-\d{2}$/.test(meetingTimeStr)) {
-                   meetingDate = new Date(meetingTimeStr + 'T00:00:00');
-                 } else {
-                   const dateMatch = meetingTimeStr.match(/^\d{4}-\d{2}-\d{2}/);
-                   meetingDate = dateMatch ? new Date(dateMatch[0] + 'T00:00:00') : new Date(meetingTimeStr);
+                 // meetingTime 또는 parsedMeetingTime으로 날짜 비교
+                 let meetingDate: Date | null = group.parsedMeetingTime ?? null;
+                 if (!meetingDate && group.meetingTime) {
+                   const meetingTimeStr = group.meetingTime.trim();
+                   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(meetingTimeStr)) {
+                     meetingDate = new Date(meetingTimeStr.slice(0, 16));
+                   } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(meetingTimeStr)) {
+                     const startPart = meetingTimeStr.split('~')[0]?.trim() || meetingTimeStr;
+                     meetingDate = new Date(startPart.replace(' ', 'T') + ':00');
+                   } else if (/^\d{4}-\d{2}-\d{2}$/.test(meetingTimeStr)) {
+                     meetingDate = new Date(meetingTimeStr + 'T00:00:00');
+                   } else {
+                     const dateMatch = meetingTimeStr.match(/^\d{4}-\d{2}-\d{2}/);
+                     meetingDate = dateMatch ? new Date(dateMatch[0] + 'T00:00:00') : new Date(meetingTimeStr);
+                   }
                  }
                  
                  if (!meetingDate || isNaN(meetingDate.getTime())) {
@@ -372,9 +460,14 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, se
                  const meetingDateOnly = new Date(meetingDate);
                  meetingDateOnly.setHours(0, 0, 0, 0);
                  
-                 // 오늘부터 1주일 이내인지 확인
-                 if (meetingDateOnly < today || meetingDateOnly >= oneWeekLater) {
-                   return false;
+                 // 오늘/내일 등 특정 날짜 선택 시: 해당 날짜의 매치만 표시
+                 if (filterDateOnly) {
+                   if (meetingDateOnly.getTime() !== filterDateOnly.getTime()) return false;
+                 } else {
+                   // 전체 선택 시: 오늘부터 1주일 이내만
+                   if (meetingDateOnly < today || meetingDateOnly >= oneWeekLater) {
+                     return false;
+                   }
                  }
                  
                  // 요일 필터링: 선택된 요일이 있으면 해당 요일만 표시
@@ -386,17 +479,19 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, se
                  return true;
                });
 
-               // ⭐ 지역 필터링: 선택된 지역(시/구/동)에 해당하는 매치만 표시
-               if (selectedRegion && selectedRegion !== '전체') {
-                 const isSidoOnly = (KOREAN_CITIES as readonly string[]).includes(selectedRegion);
+               // ⭐ 지역 필터링: bounds 검색이 아닐 때만 (bounds 사용 시 API가 이미 필터링함)
+               if (!mapBounds && selectedRegion && selectedRegion !== '전체') {
+                 mappedGroups = mappedGroups.filter((group) =>
+                   addressMatchesRegion(group.location, selectedRegion)
+                 );
+               }
+
+               // ⭐ 용병 모드: 인원 미달 매치만 (용병 N명 구해요)
+               if (mercenaryOnly) {
                  mappedGroups = mappedGroups.filter((group) => {
-                   const loc = (group.location || '').trim();
-                   if (!loc) return false;
-                   if (isSidoOnly) {
-                     const groupCity = extractCityFromAddress(loc);
-                     return groupCity === selectedRegion;
-                   }
-                   return loc.includes(selectedRegion) || loc.startsWith(selectedRegion);
+                   const max = group.maxParticipants ?? 0;
+                   const current = group.memberCount ?? 0;
+                   return max > 0 && current < max;
                  });
                }
 
@@ -438,7 +533,7 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, se
     };
 
     fetchGroups();
-  }, [selectedCategory, searchQuery, selectedRegion, selectedDays, hideClosed, onlyRanker, gender, includeCompleted, refreshTrigger, matchType, userCoords, groupsOverride]);
+  }, [selectedCategory, searchQuery, sportFilterKey, selectedRegion, selectedDaysKey, filterDate, hideClosed, onlyRanker, gender, includeCompleted, refreshTrigger, matchType, userCoords, hasGroupsOverride, mapBoundsKey]);
 
   if (isLoading) {
     return (
@@ -505,7 +600,12 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, se
                         랭커
                       </span>
                     )}
-                    {group.badges?.isUrgent && !(group.maxParticipants && group.memberCount && group.memberCount >= group.maxParticipants) && (
+                    {group.badges?.isUrgent && !(group.maxParticipants && (() => {
+                      const opt = optimisticParticipantCount?.groupId === group.id ? optimisticParticipantCount.participantCount : null;
+                      const raw = opt ?? group.memberCount ?? group.participantCount ?? 0;
+                      const max = group.maxParticipants ?? 0;
+                      return mercenaryOnly ? Math.max(0, raw - 1) >= max : raw >= max;
+                    })()) && (
                       <span className="px-2 py-0.5 bg-gradient-to-r from-red-600 to-red-700 text-white text-xs font-bold rounded-full flex items-center gap-1 shadow-md animate-pulse">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -526,40 +626,102 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, se
                     {group.location}
                   </span>
                 </div>
-                {/* 매치 일시 · 포인트 */}
+                {/* 매치 일시 · 포인트 (볼드 + 포인트 아이콘) */}
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--color-text-secondary)] mb-1.5">
                   {formatMeetingTimeForList(group.meetingTime, group.parsedMeetingTime) && (
-                    <span className="font-medium text-[var(--color-text-primary)]">
+                    <span className="font-bold text-[var(--color-text-primary)]">
                       일시: {formatMeetingTimeForList(group.meetingTime, group.parsedMeetingTime)}
                     </span>
                   )}
-                  <span className="font-medium text-[var(--color-text-primary)]">
+                  <span className="font-bold text-[var(--color-text-primary)] flex items-center gap-1">
+                    <CurrencyDollarIcon className="w-3.5 h-3.5 text-[var(--color-blue-primary)]" aria-hidden />
                     포인트: {group.hasFee && group.feeAmount != null && group.feeAmount > 0
                       ? `${Number(group.feeAmount).toLocaleString()}P`
                       : '참가비 없음'}
                   </span>
                 </div>
               </div>
-              <div className="flex flex-col md:flex-row md:items-center gap-1.5">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-xs md:text-sm text-[var(--color-text-secondary)]">
-                    참가자: <span className="px-1.5 py-0.5 bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] text-xs font-semibold rounded-full">{group.memberCount}명</span>
-                    {group.maxParticipants && (
-                      <span className="text-[var(--color-text-secondary)]">/ {group.maxParticipants}명</span>
-                    )}
-                  </p>
-                  {group.maxParticipants && group.memberCount && group.memberCount >= group.maxParticipants && (
-                    <span className="px-1.5 py-0.5 bg-red-500 text-white text-xs font-semibold rounded-full">
-                      인원마감
+              {/* 매치장 신뢰도·노쇼 배지 (매너 등급 아이콘: 그린/옐로/레드) */}
+              {group.creator != null && (
+                <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                  {(() => {
+                    const mannerConfig = getMannerGradeConfig(group.creator.mannerScore ?? 80);
+                    return (
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${mannerConfig.badgeClass}`}
+                        title={`신뢰도: ${group.creator.mannerScore ?? 80}점 · ${mannerConfig.label}`}
+                      >
+                        <span aria-hidden>{mannerConfig.icon}</span>
+                        <span className={mannerConfig.textColor}>{group.creator.mannerScore ?? 80}점</span>
+                      </span>
+                    );
+                  })()}
+                  {(group.creator.noShowCount ?? 0) > 0 && (
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/20 text-red-700 dark:text-red-300 border border-red-500/40"
+                      title="노쇼 횟수"
+                    >
+                      ⚠ 노쇼 {(group.creator.noShowCount ?? 0)}회
                     </span>
                   )}
                 </div>
-                <span className="px-1.5 py-0.5 bg-[var(--color-blue-primary)] text-white text-xs font-semibold rounded-full self-start md:self-auto">
-                  {group.category}
-                </span>
+              )}
+              <div className="flex flex-col md:flex-row md:items-center gap-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {(() => {
+                    const optimistic = optimisticParticipantCount?.groupId === group.id
+                      ? optimisticParticipantCount.participantCount
+                      : null;
+                    const rawCount = optimistic ?? group.memberCount ?? group.participantCount ?? 0;
+                    const rawMax = group.maxParticipants;
+                    const displayCount = mercenaryOnly
+                      ? (group.participantCountExcludingCreator != null
+                          ? (optimistic ?? group.participantCountExcludingCreator)
+                          : Math.max(0, rawCount - 1))
+                      : rawCount;
+                    const displayMax = rawMax; // 모집 수는 입력값 그대로, 매치장 제외한 현재 수만 변경
+                    const pct = displayMax != null && displayMax > 0 ? Math.min(100, (displayCount / displayMax) * 100) : 0;
+                    const showFull = rawMax != null && (mercenaryOnly ? displayCount >= displayMax : rawCount >= rawMax);
+                    return (
+                      <>
+                        <p className="text-xs md:text-sm text-[var(--color-text-secondary)] flex items-center gap-2">
+                          <span>참가자: <span className="font-semibold text-[var(--color-text-primary)]">{displayCount}{displayMax != null ? `/${displayMax}` : ''}명</span></span>
+                          {displayMax != null && displayMax > 0 && (
+                            <span className="flex items-center gap-1.5 min-w-[64px]">
+                              <span className="inline-block h-1.5 flex-1 min-w-[32px] max-w-[48px] rounded-full bg-[var(--color-bg-secondary)] overflow-hidden" aria-hidden>
+                                <span
+                                  className="block h-full rounded-full bg-[var(--color-blue-primary)] transition-all duration-300"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </span>
+                            </span>
+                          )}
+                        </p>
+                        {showFull && (
+                          <span className="px-1.5 py-0.5 bg-red-500 text-white text-xs font-semibold rounded-full">
+                            인원마감
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+                {(() => {
+                  const chipStyle = SPORT_CHIP_STYLES[group.category] ?? SPORT_CHIP_STYLES['전체'];
+                  return (
+                    <span className={`px-1.5 py-0.5 text-xs font-semibold rounded-full self-start md:self-auto border ${chipStyle.bg} ${chipStyle.border} ${chipStyle.text}`}>
+                      {group.category}
+                    </span>
+                  );
+                })()}
               </div>
             </button>
           ))
+        ) : emptyStateSport != null && onEmptyWriteClick ? (
+          <MercenaryEmptyState
+            selectedSport={emptyStateSport}
+            onWriteClick={onEmptyWriteClick}
+          />
         ) : (
           <p className="p-3 text-[var(--color-text-secondary)] italic text-center text-sm">
             {searchQuery

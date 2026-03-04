@@ -100,7 +100,7 @@ const ParticipantDetail: React.FC<ParticipantDetailProps> = ({ participant, onCl
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm"
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/30 backdrop-blur-sm"
       onClick={handleOverlayClick}
     >
       <div 

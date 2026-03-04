@@ -1,7 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { CalendarIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
-
-type DurationPreset = '1' | '2' | '3' | '4' | '5' | '6';
+import React, { useState, useEffect } from 'react';
+import TimeRangeSlider from '../TimeRangeSlider';
 
 /** HH:mm 또는 HH:mm:ss → HH:mm 정규화 */
 function normalizeHHmm(t: string): string {
@@ -32,108 +30,6 @@ function addHoursToTime(timeHHmm: string, hours: number): string {
   return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
 }
 
-function getDurationPreset(startHHmm: string, endHHmm: string): DurationPreset | null {
-  if (!startHHmm || !endHHmm || startHHmm.length < 5 || endHHmm.length < 5) return null;
-  const [sh, sm] = startHHmm.slice(0, 5).split(':').map(Number);
-  const [eh, em] = endHHmm.slice(0, 5).split(':').map(Number);
-  const startM = (sh ?? 0) * 60 + (sm ?? 0);
-  let endM = (eh ?? 0) * 60 + (em ?? 0);
-  if (endM <= startM) endM += 24 * 60; // 야간(자정 넘김) 처리
-  const diffHours = (endM - startM) / 60;
-  if (diffHours <= 0) return null;
-  if (Math.abs(diffHours - 1) < 0.1) return '1';
-  if (Math.abs(diffHours - 2) < 0.1) return '2';
-  if (Math.abs(diffHours - 3) < 0.1) return '3';
-  if (Math.abs(diffHours - 4) < 0.1) return '4';
-  if (Math.abs(diffHours - 5) < 0.1) return '5';
-  if (Math.abs(diffHours - 6) < 0.1) return '6';
-  return null;
-}
-
-/** 0~23시를 오전/오후 N시 라벨로 */
-function hourToLabel(hour24: number): string {
-  if (hour24 === 0) return '오전 12시';
-  if (hour24 < 12) return `오전 ${hour24}시`;
-  if (hour24 === 12) return '오후 12시';
-  return `오후 ${hour24 - 12}시`;
-}
-
-const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({
-  value: `${String(i).padStart(2, '0')}:00`,
-  label: hourToLabel(i),
-}));
-
-/** 모달 내에서 안정적으로 동작하는 커스텀 시간 드롭다운 (네이티브 select 대체) */
-function TimeDropdown({
-  value,
-  placeholder,
-  onChange,
-  options,
-  'data-testid': testId,
-}: {
-  value: string;
-  placeholder: string;
-  onChange: (value: string) => void;
-  options: { value: string; label: string }[];
-  'data-testid'?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onOutside);
-    return () => document.removeEventListener('mousedown', onOutside);
-  }, [open]);
-
-  const displayLabel = value ? (options.find((o) => o.value === value)?.label ?? value) : placeholder;
-
-  return (
-    <div ref={containerRef} className="relative w-full min-w-0">
-      <button
-        type="button"
-        data-testid={testId}
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-2 text-left px-0 py-0.5 bg-transparent text-[var(--color-text-primary)] text-sm focus:outline-none cursor-pointer border-none"
-      >
-        <span className={value ? '' : 'text-[var(--color-text-secondary)]'}>{displayLabel}</span>
-        <ChevronDownIcon className={`w-4 h-4 shrink-0 text-[var(--color-text-secondary)] transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div
-          className="absolute left-0 right-0 top-full mt-1 z-[100] max-h-[220px] overflow-y-auto rounded-lg border border-[var(--color-border-card)] bg-[var(--color-bg-primary)] shadow-lg py-1"
-          role="listbox"
-        >
-          {options.map(({ value: v, label }) => (
-            <button
-              key={v}
-              type="button"
-              role="option"
-              aria-selected={value === v}
-              onClick={() => {
-                onChange(v);
-                setOpen(false);
-              }}
-              className={`w-full text-left px-3 py-2.5 text-sm transition-colors ${
-                value === v
-                  ? 'bg-[var(--color-blue-primary)]/15 text-[var(--color-blue-primary)]'
-                  : 'text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)]'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 const Step2MatchSchedule: React.FC<Step2MatchScheduleProps> = ({
   meetingDate,
   meetingTime,
@@ -145,28 +41,12 @@ const Step2MatchSchedule: React.FC<Step2MatchScheduleProps> = ({
   timeStepHourOnly = false,
   fixedDurationHours,
 }) => {
-  const [durationPreset, setDurationPreset] = useState<DurationPreset | null>(() => {
-    if (fixedDurationHours != null) return null;
-    if (!onMeetingEndTimeChange || !meetingTime || !meetingEndTime) return '2';
-    const p = getDurationPreset(meetingTime, meetingEndTime);
-    return p ?? '2';
-  });
-
   // 고정 경기 시간(예: 랭크 2시간): 시작 시간 변경 시 종료 시간·종료일 자동 반영
   useEffect(() => {
     if (fixedDurationHours == null || !onMeetingEndTimeChange || !meetingTime || meetingTime.length < 5) return;
     const end = addHoursToTime(meetingTime, fixedDurationHours);
     onMeetingEndTimeChange(end);
   }, [meetingTime, fixedDurationHours, onMeetingEndTimeChange]);
-
-  useEffect(() => {
-    if (fixedDurationHours != null) return;
-    if (!onMeetingEndTimeChange || !meetingTime || meetingTime.length < 5) return;
-    if (durationPreset && ['1', '2', '3', '4', '5', '6'].includes(durationPreset)) {
-      const end = addHoursToTime(meetingTime, parseInt(durationPreset, 10));
-      onMeetingEndTimeChange(end);
-    }
-  }, [meetingTime, durationPreset, onMeetingEndTimeChange, fixedDurationHours]);
 
   // 야간(종료 시간이 오전으로 넘어가면 익일) — 종료일자 자동 설정
   // 빠른선택 +4시간 등으로 00:00 넘어가면 종료일자를 다음날로, 당일이면 당일로
@@ -196,17 +76,6 @@ const Step2MatchSchedule: React.FC<Step2MatchScheduleProps> = ({
     return `${y}-${m}-${day}`;
   })();
 
-  const datetimeLocalMin = (() => {
-    const d = new Date();
-    d.setTime(d.getTime() + 2 * 60 * 60 * 1000);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const h = String(d.getHours()).padStart(2, '0');
-    const min = String(d.getMinutes()).padStart(2, '0');
-    return `${y}-${m}-${day}T${h}:${min}`;
-  })();
-
   const startTimeValue = normalizeHHmm(meetingTime);
   const endTimeValue = normalizeHHmm(meetingEndTime) || '20:00';
 
@@ -229,118 +98,67 @@ const Step2MatchSchedule: React.FC<Step2MatchScheduleProps> = ({
           </div>
         )}
 
-        {/* 수직 스택: 날짜 설정(한 줄) → 시간 설정 → 빠른 선택 */}
+        {/* 수직 스택: 날짜 설정(하나) → 시간 설정 → 빠른 선택 */}
         <div className="space-y-6">
-          {/* 일자 설정 — [ 시작 일자 ] ~ [ 종료 일자 ] 한 줄 */}
+          {/* 일자 설정 — 단일 날짜 선택 (종료일은 시작 시간/종료 시간에 따라 자동 반영) */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-[var(--color-text-primary)] text-left">
               일자 설정
             </label>
-            <div className="flex items-center gap-3">
-              <div className="flex-1 min-w-0 relative">
-                <input
-                  type="date"
-                  required
-                  value={meetingDate}
-                  onChange={(e) => onDateTimeChange(e.target.value || '', meetingTime)}
-                  min={todayMin}
-                  className="w-full pl-4 pr-10 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark date-input-with-icon"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
-                  <CalendarIcon className="w-5 h-5" />
-                </span>
-              </div>
-              <span className="text-[var(--color-text-secondary)] font-medium shrink-0">~</span>
-              <div className="flex-1 min-w-0 relative">
-                <input
-                  type="date"
-                  value={meetingEndDate || meetingDate}
-                  onChange={(e) => onMeetingEndDateChange?.(e.target.value || meetingDate)}
-                  min={meetingDate || todayMin}
-                  className="w-full pl-4 pr-10 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark date-input-with-icon"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
-                  <CalendarIcon className="w-5 h-5" />
-                </span>
-              </div>
+            <div className="relative">
+              <input
+                type="date"
+                required
+                value={meetingDate}
+                onChange={(e) => {
+                  const date = e.target.value || '';
+                  onDateTimeChange(date, meetingTime);
+                  if (onMeetingEndDateChange) onMeetingEndDateChange(date);
+                }}
+                min={todayMin}
+                className="w-full pl-4 pr-3 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
+              />
             </div>
-            <p className="text-xs text-[var(--color-text-secondary)]">
-              야간 운영 시 종료 일자를 익일로 설정해 주세요.
-            </p>
+            {fixedDurationHours == null && (
+              <p className="text-xs text-[var(--color-text-secondary)]">
+                야간 운영 시 종료 시간이 자정을 넘으면 종료 일자가 익일로 자동 설정됩니다.
+              </p>
+            )}
           </div>
 
-          {/* 시간 설정 — [ 시작 시간 ▾ ] ~ [ 종료 시간 ▾ ] 한 줄 */}
+          {/* 시간 설정 — 24h 타임라인 슬라이더 (용병 모달과 동일) */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-[var(--color-text-primary)] text-left">
-              시간 설정
+              경기 시간
             </label>
-            <div className="flex items-center gap-3">
-              <div className="flex-1 min-w-0 flex items-center gap-2 rounded-lg border border-[var(--color-border-card)] bg-[var(--color-bg-primary)] px-3 py-2.5 focus-within:ring-2 focus-within:ring-[var(--color-blue-primary)] focus-within:border-transparent">
-                <CalendarIcon className="w-4 h-4 shrink-0 text-[var(--color-text-secondary)]" />
-                <TimeDropdown
-                  value={startTimeValue}
-                  placeholder="시작 시간"
-                  options={HOUR_OPTIONS}
-                  onChange={(v) => onDateTimeChange(meetingDate, v)}
-                />
+            {onMeetingEndTimeChange && fixedDurationHours == null ? (
+              <TimeRangeSlider
+                startTime={startTimeValue || '18:00'}
+                endTime={endTimeValue}
+                onChange={(start, end) => {
+                  onDateTimeChange(meetingDate, start);
+                  onMeetingEndTimeChange(end);
+                }}
+                pointColor="#3b82f6"
+              />
+            ) : (
+              <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-[var(--color-bg-secondary)]">
+                <span className="text-[var(--color-text-primary)]">
+                  {startTimeValue || '18:00'} ~ {endTimeValue}
+                </span>
+                <span className="text-xs text-[var(--color-text-secondary)]">(자동 설정)</span>
               </div>
-              <span className="text-[var(--color-text-secondary)] font-medium shrink-0">~</span>
-              <div className="flex-1 min-w-0 flex items-center gap-2 rounded-lg border border-[var(--color-border-card)] bg-[var(--color-bg-primary)] px-3 py-2.5 focus-within:ring-2 focus-within:ring-[var(--color-blue-primary)] focus-within:border-transparent">
-                <CalendarIcon className="w-4 h-4 shrink-0 text-[var(--color-text-secondary)]" />
-                {onMeetingEndTimeChange && fixedDurationHours == null ? (
-                  <TimeDropdown
-                    value={endTimeValue}
-                    placeholder="종료 시간"
-                    options={HOUR_OPTIONS}
-                    onChange={(v) => {
-                      setDurationPreset(null);
-                      onMeetingEndTimeChange(v);
-                    }}
-                  />
-                ) : (
-                  <span className="text-[var(--color-text-primary)] text-sm">
-                    {HOUR_OPTIONS.find((o) => o.value === endTimeValue)?.label ?? endTimeValue}
-                  </span>
-                )}
-              </div>
-            </div>
+            )}
           </div>
-
-          {/* 빠른 선택 — 고정 경기 시간(랭크 2시간 등)이 아닐 때만 표시 */}
-          {onMeetingEndTimeChange && fixedDurationHours == null && (
-            <div className="space-y-2">
-              <span className="block text-xs font-medium text-[var(--color-text-secondary)] text-left">
-                빠른 선택
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {(['1', '2', '3', '4', '5', '6'] as const).map((hr) => (
-                  <button
-                    key={hr}
-                    type="button"
-                    onClick={() => {
-                      setDurationPreset(hr);
-                      if (meetingTime && meetingTime.length >= 5) {
-                        onMeetingEndTimeChange(addHoursToTime(meetingTime, parseInt(hr, 10)));
-                      }
-                    }}
-                    className={`rounded-full px-4 py-2 text-sm font-medium border transition-colors ${
-                      durationPreset === hr
-                        ? 'border-[var(--color-blue-primary)] bg-[var(--color-blue-primary)]/15 text-[var(--color-blue-primary)]'
-                        : 'border-[var(--color-border-card)] bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] hover:border-[var(--color-blue-primary)]/50 hover:text-[var(--color-text-primary)]'
-                    }`}
-                  >
-                    +{hr}시간
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     );
   }
 
-  /* timeStepHourOnly === false: datetime-local + 종료 시간 */
+  /* timeStepHourOnly === false: 날짜 + TimeRangeSlider (24h 타임라인) */
+  const startVal = normalizeHHmm(meetingTime) || '18:00';
+  const endVal = normalizeHHmm(meetingEndTime) || '20:00';
+
   return (
     <div className="space-y-6">
       <h3 className="text-xl font-bold text-[var(--color-text-primary)] text-left">
@@ -349,58 +167,45 @@ const Step2MatchSchedule: React.FC<Step2MatchScheduleProps> = ({
       <div className="space-y-4">
         <div className="space-y-2">
           <label className="block text-sm font-medium text-[var(--color-text-primary)] text-left">
-            날짜 및 시간
+            날짜
           </label>
           <div className="relative">
             <input
-              type="datetime-local"
-              value={meetingDate && meetingTime ? `${meetingDate}T${meetingTime}` : ''}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value) {
-                  const [date, time] = value.split('T');
-                  onDateTimeChange(date || '', time || '');
-                } else {
-                  onDateTimeChange('', '');
-                }
-              }}
-              min={datetimeLocalMin}
-              className="w-full pl-4 pr-10 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark date-input-with-icon"
+              type="date"
+              value={meetingDate}
+              onChange={(e) => onDateTimeChange(e.target.value || '', meetingTime)}
+              min={todayMin}
+              className="w-full pl-4 pr-3 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
-              <CalendarIcon className="w-5 h-5" />
-            </span>
           </div>
         </div>
-        {onMeetingEndDateChange && (
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-[var(--color-text-primary)] text-left">
-              종료 일자
-            </label>
-            <div className="relative">
-              <input
-                type="date"
-                value={meetingEndDate || meetingDate}
-                onChange={(e) => onMeetingEndDateChange(e.target.value || meetingDate)}
-                min={meetingDate || todayMin}
-                className="w-full pl-4 pr-10 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark date-input-with-icon"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
-                <CalendarIcon className="w-5 h-5" />
-              </span>
-            </div>
-          </div>
-        )}
         {onMeetingEndTimeChange && (
           <div className="space-y-2">
             <label className="block text-sm font-medium text-[var(--color-text-primary)] text-left">
-              종료 시간
+              경기 시간
+            </label>
+            <TimeRangeSlider
+              startTime={startVal}
+              endTime={endVal}
+              onChange={(start, end) => {
+                onDateTimeChange(meetingDate, start);
+                onMeetingEndTimeChange(end);
+              }}
+              pointColor="#3b82f6"
+            />
+          </div>
+        )}
+        {onMeetingEndDateChange && (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-[var(--color-text-primary)] text-left">
+              종료 일자 (야간 매치 시 익일 선택)
             </label>
             <input
-              type="time"
-              value={meetingEndTime}
-              onChange={(e) => onMeetingEndTimeChange(e.target.value)}
-              className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] time-input-dark"
+              type="date"
+              value={meetingEndDate || meetingDate}
+              onChange={(e) => onMeetingEndDateChange(e.target.value || meetingDate)}
+              min={meetingDate || todayMin}
+              className="w-full pl-4 pr-3 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
             />
           </div>
         )}

@@ -42,7 +42,7 @@ export class TeamsController {
   @UseGuards(JwtAuthGuard)
   @Get('browse')
   browseTeams(
-    @Query('sport') sport: string,
+    @Query('sport') sport: string | undefined,
     @Query('region') region: string | undefined,
     @Query('search') search: string | undefined,
     @Query('excludeRegion') excludeRegion: string | undefined,

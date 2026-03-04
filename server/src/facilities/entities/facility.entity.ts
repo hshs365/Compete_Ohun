@@ -5,9 +5,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  OneToMany,
   JoinColumn,
   Index,
 } from 'typeorm';
+import { FacilityCourt } from './facility-court.entity';
 import { User } from '../../users/entities/user.entity';
 
 @Entity('facilities')
@@ -22,6 +24,11 @@ export class Facility {
   @Column({ type: 'varchar', length: 50 })
   @Index()
   type: string; // 시설 종류 (체육센터, 체육관, 풋살장, 테니스장, 수영장, 골프연습장, 기타)
+
+  /** 실내/실외 구분. indoor=실내, outdoor=실외 */
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  @Index()
+  indoorOutdoor: string | null;
 
   @Column({ type: 'varchar', length: 200 })
   address: string; // 주소
@@ -84,6 +91,10 @@ export class Facility {
   // 시설 상태
   @Column({ type: 'boolean', default: true })
   isActive: boolean; // 활성화 여부
+
+  /** 하위 구장 목록 (FacilityCourt) */
+  @OneToMany(() => FacilityCourt, (court) => court.facility)
+  courts: FacilityCourt[];
 
   // 메타 정보
   @CreateDateColumn()

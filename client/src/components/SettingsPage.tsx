@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import ToggleSwitch from './ToggleSwitch';
 import { useTheme } from '../App';
+import AppLogo from './AppLogo';
 import {
   BellIcon,
   ChatBubbleLeftEllipsisIcon,
@@ -83,7 +84,10 @@ const SettingsPage = () => {
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto w-full space-y-6 pb-12">
-      <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)] mb-2">앱 설정</h1>
+      <div className="flex items-center gap-3 mb-6">
+        <AppLogo className="h-10 w-auto object-contain" />
+        <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">앱 설정</h1>
+      </div>
 
       {/* 화면 표시 설정 */}
       <div className="bg-[var(--color-bg-card)] rounded-xl shadow-md p-4 md:p-6 border border-[var(--color-border-card)]">

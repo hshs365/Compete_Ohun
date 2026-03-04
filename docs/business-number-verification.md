@@ -48,6 +48,37 @@
   - `openingDate` (선택)  
 - 대표자명·개업일자를 보내면 국세청 API로 일치 여부 확인 후 `businessNumberVerified` 갱신
 
+### 사업자등록증 OCR 검증 (비로그인: 회원가입 / 로그인: 비즈니스 전환)
+
+네이버 클로바 OCR Document API(사업자등록증 특화 모델)로 이미지에서 대표자명·사업자번호·개업일자 추출 후 국세청 진위확인.
+
+#### OCR 설정 (CLOVA OCR 사업자등록증 승인 후)
+
+1. [네이버 클라우드 플랫폼 콘솔](https://console.ncloud.com) → **CLOVA OCR** → **Domain**
+2. **특화 모델 신청**에서 **사업자등록증(KR)** 사용 신청 후 승인 완료
+3. **도메인 생성** → 인식 모델(특화 모델)에 **사업자등록증** 선택
+4. **API Gateway 연동** 후 발급되는 **Invoke URL**과 **Secret** 확인
+5. 서버 `.env`에 추가:
+   ```env
+   NCP_OCR_SECRET=발급받은_Secret
+   NCP_OCR_INVOKE_URL=https://xxxxx.apigw.ntruss.com/custom/v1/xxxx/xxxx/document/bizlicense
+   ```
+6. 미설정 시: 사업자등록증 이미지 업로드 검증이 비활성화되며, "OCR 서비스가 설정되지 않았습니다" 안내가 표시됨
+
+**회원가입 시 (비로그인)**
+
+- **POST** `/api/auth/verify-business-with-document`  
+- multipart/form-data: `document` (이미지 파일), `realName` (필수, 대표자명과 일치해야 함)  
+- 응답: `{ verified: boolean, message?: string, businessNumber?: string }`
+
+**비즈니스 계정 전환 (로그인 사용자)**
+
+- **POST** `/api/auth/register-business-with-document` (JWT 필요)  
+- multipart/form-data: `document` (이미지 파일), `realName` (선택, 프로필에 없을 때만)  
+- 검증 성공 시 `businessNumber`, `businessNumberVerified`를 계정에 저장  
+- 응답: `{ verified: boolean, message?: string, businessNumber?: string }`  
+- 프론트: 내정보 > 비즈니스 계정 전환 > 사업자등록증으로 전환하기
+
 ## 프론트엔드 연동 예시 (네이버클라우드 스타일)
 
 1. 사업자번호 입력  

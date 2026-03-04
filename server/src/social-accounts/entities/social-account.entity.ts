@@ -13,6 +13,7 @@ import { User } from '../../users/entities/user.entity';
 
 export enum SocialProvider {
   KAKAO = 'kakao',
+  NAVER = 'naver',
   GOOGLE = 'google',
 }
 

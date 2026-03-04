@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PhoneIcon, CheckCircleIcon, UserIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { api } from '../../utils/api';
 import { showSuccess, showError, showWarning } from '../../utils/swal';
+import { formatPhoneNumber, PHONE_PLACEHOLDER } from '../../utils/phoneFormat';
 
 interface Step4PhoneVerificationProps {
   phone: string;
@@ -46,14 +47,6 @@ const Step4PhoneVerification: React.FC<Step4PhoneVerificationProps> = ({
       return () => clearTimeout(timer);
     }
   }, [countdown]);
-
-  // 전화번호 형식 자동 변환
-  const formatPhoneNumber = (value: string) => {
-    const numbers = value.replace(/[^\d]/g, '');
-    if (numbers.length <= 3) return numbers;
-    if (numbers.length <= 7) return `${numbers.slice(0, 3)}-${numbers.slice(3)}`;
-    return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7, 11)}`;
-  };
 
   // 인증번호 발송
   const handleRequestVerification = async () => {
@@ -119,7 +112,7 @@ const Step4PhoneVerification: React.FC<Step4PhoneVerificationProps> = ({
       {/* 전화번호 입력 */}
       <div>
         <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-          휴대전화 번호 {!isSmsVerificationEnabled && <span className="text-[var(--color-text-secondary)] font-normal">(선택)</span>}
+          휴대전화 번호 <span className="text-[var(--color-text-secondary)] font-normal">(필수)</span>
         </label>
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -137,7 +130,7 @@ const Step4PhoneVerification: React.FC<Step4PhoneVerificationProps> = ({
                 onPhoneChange(formatted);
               }}
               className="w-full pl-10 pr-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] disabled:opacity-50"
-              placeholder="010-1234-5678"
+              placeholder={PHONE_PLACEHOLDER}
               maxLength={13}
               disabled={isPhoneVerified}
               autoComplete="tel"

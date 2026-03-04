@@ -1,6 +1,6 @@
 import Swal from 'sweetalert2';
 
-// 기본 SweetAlert 설정
+// 기본 SweetAlert 설정 (z-index는 style.css에서 .swal2-container에 10001 설정)
 const defaultConfig = {
   confirmButtonColor: '#3b82f6', // blue-500
   cancelButtonColor: '#6b7280', // gray-500
@@ -76,4 +76,21 @@ export const showAlert = (message: string, title: string = '알림') => {
     title,
     text: message,
   });
+};
+
+/** 토스트 알림 (매치 1시간 전 등) */
+const Toast = Swal.mixin({
+  toast: true,
+  position: 'top-end',
+  showConfirmButton: false,
+  timer: 4000,
+  timerProgressBar: true,
+  background: 'var(--color-bg-card)',
+  color: 'var(--color-text-primary)',
+  didOpen: (toast) => {
+    toast.style.borderLeft = '4px solid var(--color-blue-primary)';
+  },
+});
+export const showToast = (message: string, icon: 'info' | 'success' | 'warning' = 'info') => {
+  return Toast.fire({ icon, title: message });
 };

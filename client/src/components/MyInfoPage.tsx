@@ -9,6 +9,7 @@ import {
   TrashIcon,
   ArrowRightOnRectangleIcon,
   MapPinIcon,
+  ArrowPathIcon,
   TrophyIcon,
   BuildingOfficeIcon,
   ShieldCheckIcon,
@@ -17,6 +18,8 @@ import {
   ChevronRightIcon,
   BanknotesIcon,
   IdentificationIcon,
+  DocumentArrowUpIcon,
+  PhotoIcon,
 } from '@heroicons/react/24/outline';
 import { showError, showSuccess, showWarning, showInfo, showConfirm } from '../utils/swal';
 import ToggleSwitch from './ToggleSwitch';
@@ -26,9 +29,11 @@ import { useNavigate } from 'react-router-dom';
 import LoadingSpinner from './LoadingSpinner';
 import SportsStatisticsModal from './SportsStatisticsModal';
 import { getEarnedTitles, getCountByCategory } from '../utils/titles';
-import { getAllcourtplayRankStyle } from '../constants/allcourtplayRank';
+import { formatPhoneNumber, PHONE_PLACEHOLDER } from '../utils/phoneFormat';
+import { getAllcourtplayRankStyle, getRankDisplayLabel } from '../constants/allcourtplayRank';
 import { getFollowerGrade, getFollowerGradeBadgeStyle } from '../constants/followerGrade';
 import FormatNumber from './FormatNumber';
+import { compressImageForOcr } from '../utils/imageCompress';
 
 interface UserProfileData {
   id: number;
@@ -91,6 +96,9 @@ const MyInfoPage = () => {
   const [nickname, setNickname] = useState('');
   const [isEditingPhone, setIsEditingPhone] = useState(false);
   const [phone, setPhone] = useState('');
+  const [phoneVerificationCode, setPhoneVerificationCode] = useState('');
+  const [isSendingPhoneCode, setIsSendingPhoneCode] = useState(false);
+  const [phoneCodeCountdown, setPhoneCodeCountdown] = useState(0);
   const [userLocation, setUserLocation] = useState<{ address: string } | null>(null);
   const [isSavingLocation, setIsSavingLocation] = useState(false);
   const [showFacilityRegistrationModal, setShowFacilityRegistrationModal] = useState(false);
@@ -107,6 +115,24 @@ const MyInfoPage = () => {
   const [pointHistory, setPointHistory] = useState<PointHistoryItem[]>([]);
   const [pointHistoryLoading, setPointHistoryLoading] = useState(false);
   const [isCharging, setIsCharging] = useState(false);
+  const [showBusinessConversionModal, setShowBusinessConversionModal] = useState(false);
+  const [businessConversionDocumentFile, setBusinessConversionDocumentFile] = useState<File | null>(null);
+  const [isConvertingBusiness, setIsConvertingBusiness] = useState(false);
+  const [businessConversionRealName, setBusinessConversionRealName] = useState('');
+  type BusinessConversionStep = 'upload' | 'compare' | 'direct';
+  const [businessConversionStep, setBusinessConversionStep] = useState<BusinessConversionStep>('upload');
+  const [businessConversionExtracted, setBusinessConversionExtracted] = useState<{
+    businessNumber: string;
+    representativeName?: string;
+    openingDate?: string;
+  } | null>(null);
+  const [businessConversionMatch, setBusinessConversionMatch] = useState<boolean | null>(null);
+  const [businessConversionManual, setBusinessConversionManual] = useState({
+    businessNumber: '',
+    representativeName: '',
+    openingDate: '',
+  });
+  const businessConversionFileInputRef = useRef<HTMLInputElement>(null);
   const lastFetchTimeRef = useRef<number>(0);
 
   const closeChangeBusinessNumberModal = () => {
@@ -114,6 +140,190 @@ const MyInfoPage = () => {
     setChangeBusinessNumberStep(1);
     setChangeBusinessNumberPassword('');
     setChangeBusinessNumberNew('');
+  };
+
+  const closeBusinessConversionModal = () => {
+    setShowBusinessConversionModal(false);
+    setBusinessConversionDocumentFile(null);
+    setBusinessConversionRealName('');
+    setBusinessConversionStep('upload');
+    setBusinessConversionExtracted(null);
+    setBusinessConversionMatch(null);
+    setBusinessConversionManual({ businessNumber: '', representativeName: '', openingDate: '' });
+  };
+
+  /** 1단계: 사업자등록증 이미지 업로드 → OCR 추출·가입자 정보 대조 (전환 없음) */
+  const handleBusinessConversionSubmit = async () => {
+    const realName = profileData?.realName?.trim() || businessConversionRealName.trim();
+    if (!realName) {
+      await showWarning(
+        '실명이 등록되어 있지 않습니다. 아래에 실명(대표자명)을 입력해 주세요. 사업자등록증의 대표자명과 일치해야 합니다.',
+        '실명 필요',
+      );
+      return;
+    }
+    if (!businessConversionDocumentFile) {
+      await showWarning(
+        '사업자등록증 이미지 파일을 첨부해 주세요. OCR로 문서에서 대표자명·사업자번호를 추출합니다.',
+        '파일 필요',
+      );
+      return;
+    }
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(businessConversionDocumentFile.type)) {
+      await showWarning('사업자등록증은 이미지 파일만 업로드 가능합니다. (jpg, png 등)', '파일 형식 오류');
+      return;
+    }
+
+    setIsConvertingBusiness(true);
+    let fileToUpload: File;
+    try {
+      fileToUpload = await compressImageForOcr(businessConversionDocumentFile, 10 * 1024 * 1024);
+      // Blob 기반 File이 전송 중 무효화되는 ERR_UPLOAD_FILE_CHANGED 방지: 버퍼로 복사한 새 File 사용
+      const buffer = await fileToUpload.arrayBuffer();
+      fileToUpload = new File([buffer], fileToUpload.name, { type: fileToUpload.type });
+    } catch (compressErr) {
+      setIsConvertingBusiness(false);
+      await showError(
+        compressErr instanceof Error ? compressErr.message : '이미지 압축에 실패했습니다. 10MB 이하 이미지를 사용해 주세요.',
+        '압축 실패',
+      );
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('document', fileToUpload);
+      if (!profileData?.realName?.trim()) {
+        formData.append('realName', realName);
+      }
+
+      const res = await api.request<{
+        verified: boolean;
+        ocrFailed?: boolean;
+        message?: string;
+        extracted?: { businessNumber: string; representativeName?: string; openingDate?: string };
+        match?: boolean;
+      }>('/api/auth/register-business-with-document', { method: 'POST', body: formData });
+
+      if (res?.ocrFailed) {
+        setBusinessConversionStep('direct');
+        if (res?.message) await showWarning(res.message, 'OCR 인식 실패');
+      } else if (res?.verified && res?.extracted) {
+        setBusinessConversionExtracted(res.extracted);
+        setBusinessConversionMatch(res?.match ?? false);
+        setBusinessConversionStep('compare');
+        if (!res?.match) {
+          await showWarning(
+            '사업자등록증의 대표자명과 등록된 실명이 일치하지 않습니다. 직접 입력으로 전환하거나, 본인 명의의 사업자등록증을 올려 주세요.',
+            '대표자명 불일치',
+          );
+        }
+      } else {
+        await showError(
+          res?.message || '사업자등록증 조회에 실패했습니다. 직접 입력을 이용해 주세요.',
+          '조회 실패',
+        );
+      }
+    } catch (error: unknown) {
+      console.error('비즈니스 OCR 실패:', error);
+      const err = error as { message?: string; response?: { data?: { message?: string } } };
+      const msg =
+        err?.response?.data?.message ||
+        (err?.message as string) ||
+        'OCR 조회에 실패했습니다. 직접 입력으로 진행해 주세요.';
+      await showError(msg, '조회 실패');
+    } finally {
+      setIsConvertingBusiness(false);
+    }
+  };
+
+  /** 2단계: OCR 대조 일치 시 전환 확정 */
+  const handleBusinessConversionConfirm = async () => {
+    if (!businessConversionExtracted?.businessNumber) return;
+    setIsConvertingBusiness(true);
+    try {
+      const res = await api.request<{ verified: boolean; message?: string; businessNumber?: string }>(
+        '/api/auth/register-business-confirm',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessNumber: businessConversionExtracted.businessNumber,
+            representativeName: businessConversionExtracted.representativeName,
+            openingDate: businessConversionExtracted.openingDate,
+          }),
+        },
+      );
+      if (res?.verified) {
+        await showSuccess(
+          '비즈니스 계정 전환이 완료되었습니다. 시설·상품 등록이 가능합니다.',
+          '전환 완료',
+        );
+        closeBusinessConversionModal();
+        fetchUserData();
+      } else {
+        await showError(res?.message || '전환에 실패했습니다.', '전환 실패');
+      }
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
+      await showError(
+        err?.response?.data?.message || (err?.message as string) || '전환에 실패했습니다.',
+        '전환 실패',
+      );
+    } finally {
+      setIsConvertingBusiness(false);
+    }
+  };
+
+  /** 직접입력 후 전환 확정 */
+  const handleBusinessConversionManualSubmit = async () => {
+    const realName = profileData?.realName?.trim() || businessConversionRealName.trim();
+    const num = businessConversionManual.businessNumber.replace(/\D/g, '');
+    if (num.length !== 10) {
+      await showWarning('사업자번호는 XXX-XX-XXXXX 형식으로 입력해 주세요.', '형식 오류');
+      return;
+    }
+    const businessNumber = `${num.slice(0, 3)}-${num.slice(3, 5)}-${num.slice(5)}`;
+    const representativeName = (businessConversionManual.representativeName || realName).trim();
+    if (!representativeName) {
+      await showWarning('대표자명을 입력해 주세요. 등록된 실명과 일치해야 합니다.', '입력 필요');
+      return;
+    }
+
+    setIsConvertingBusiness(true);
+    try {
+      const res = await api.request<{ verified: boolean; message?: string; businessNumber?: string }>(
+        '/api/auth/register-business-confirm',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessNumber,
+            representativeName,
+            openingDate: businessConversionManual.openingDate.replace(/\D/g, '').slice(0, 8) || undefined,
+          }),
+        },
+      );
+      if (res?.verified) {
+        await showSuccess(
+          '비즈니스 계정 전환이 완료되었습니다. 시설·상품 등록이 가능합니다.',
+          '전환 완료',
+        );
+        closeBusinessConversionModal();
+        fetchUserData();
+      } else {
+        await showError(res?.message || '전환에 실패했습니다.', '전환 실패');
+      }
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
+      await showError(
+        err?.response?.data?.message || (err?.message as string) || '전환에 실패했습니다.',
+        '전환 실패',
+      );
+    } finally {
+      setIsConvertingBusiness(false);
+    }
   };
 
   // 사업자번호 형식 (하이픈 자동)
@@ -323,8 +533,6 @@ const MyInfoPage = () => {
   });
 
   const [isAthleteRegistering, setIsAthleteRegistering] = useState(false);
-  /** 랭크 매치 점수가 있는 종목을 시간에 따라 자동 전환 (올코트플레이 랭크 패널) */
-  const [rankCycleIndex, setRankCycleIndex] = useState(0);
 
   // 모달 배경 클릭 감지용 (드래그와 클릭 구분)
   const modalMouseDownRef = useRef<{ x: number; y: number } | null>(null);
@@ -388,7 +596,7 @@ const MyInfoPage = () => {
           upcomingGroups: upcomingCount,
         });
       } catch (error) {
-        console.error('활동 기록 조회 실패:', error);
+        console.error('매치 기록 조회 실패:', error);
       }
     };
 
@@ -422,17 +630,6 @@ const MyInfoPage = () => {
       fetchFollowStats();
     }
   }, [authUser, profileData]);
-
-  // 올코트플레이 랭크: 점수가 있는 종목을 일정 간격으로 자동 전환 (3초)
-  useEffect(() => {
-    const entries = Object.entries(profileData?.effectiveRanks || {});
-    if (entries.length <= 1) return;
-    const t = setInterval(
-      () => setRankCycleIndex((i) => (i + 1) % entries.length),
-      3000
-    );
-    return () => clearInterval(t);
-  }, [profileData?.effectiveRanks]);
 
   const handleProfileImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -530,15 +727,74 @@ const MyInfoPage = () => {
     }
   };
 
+  const isSmsVerificationEnabled = import.meta.env.VITE_SMS_VERIFICATION_ENABLED === 'true';
+
+  // 연락처 인증번호 발송 요청
+  const handleRequestPhoneVerification = async () => {
+    if (!phone?.trim()) {
+      await showWarning('전화번호를 입력해주세요.', '입력 필요');
+      return;
+    }
+    const phoneRegex = /^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/;
+    if (!phoneRegex.test(phone)) {
+      await showWarning('올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)', '형식 오류');
+      return;
+    }
+    setIsSendingPhoneCode(true);
+    try {
+      await api.post('/api/auth/me/phone/request-verification', { phone });
+      setPhoneCodeCountdown(180);
+      await showSuccess('인증번호가 발송되었습니다.', '인증번호 발송');
+    } catch (error) {
+      await showError(
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          (error instanceof Error ? error.message : '인증번호 발송에 실패했습니다.'),
+        '발송 실패',
+      );
+    } finally {
+      setIsSendingPhoneCode(false);
+    }
+  };
+
+  // 연락처 인증번호 카운트다운
+  useEffect(() => {
+    if (phoneCodeCountdown <= 0) return;
+    const t = setTimeout(() => setPhoneCodeCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phoneCodeCountdown]);
+
   const handlePhoneSave = async () => {
     if (!profileData) return;
+    if (!phone?.trim()) {
+      await showWarning('전화번호를 입력해주세요.', '입력 필요');
+      return;
+    }
+    const phoneRegex = /^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/;
+    if (!phoneRegex.test(phone)) {
+      await showWarning('올바른 전화번호 형식이 아닙니다.', '형식 오류');
+      return;
+    }
+    if (isSmsVerificationEnabled && phoneVerificationCode.length !== 6) {
+      await showWarning('인증번호 6자리를 입력해주세요.', '인증 필요');
+      return;
+    }
     try {
-      // TODO: 전화번호 저장 로직
-      // const updatedData = await api.put('/api/auth/me', { phone });
+      await api.put('/api/auth/me', {
+        phone,
+        ...(isSmsVerificationEnabled ? { verificationCode: phoneVerificationCode } : {}),
+      });
       setProfileData({ ...profileData, phone });
       setIsEditingPhone(false);
+      setPhoneVerificationCode('');
+      setPhoneCodeCountdown(0);
+      await showSuccess('연락처가 저장되었습니다.', '저장 완료');
     } catch (error) {
       console.error('전화번호 저장 실패:', error);
+      await showError(
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+          (error instanceof Error ? error.message : '연락처 저장에 실패했습니다.'),
+        '저장 실패',
+      );
     }
   };
 
@@ -724,8 +980,6 @@ const MyInfoPage = () => {
   }
 
   const joinDate = profileData.createdAt ? new Date(profileData.createdAt).toISOString().split('T')[0] : '';
-  const effectiveRanks = profileData.effectiveRanks || {};
-  const rankEntries = Object.entries(effectiveRanks);
 
   return (
     <div className="flex flex-col w-full bg-[var(--color-bg-primary)]">
@@ -736,50 +990,14 @@ const MyInfoPage = () => {
             내 정보
           </h1>
           <p className="text-[var(--color-text-secondary)] max-w-2xl">
-            프로필과 올코트플레이 랭크를 확인하고, 계정을 관리하세요.
+            프로필과 계정을 관리하세요.
           </p>
         </div>
       </header>
 
       <div className="max-w-4xl mx-auto w-full px-4 md:px-6 py-6 space-y-6 pb-12">
-      {/* 프로필 요약 (랭크 매치 참여 시에만 올코트플레이 랭크 패널 표시) */}
+      {/* 프로필 요약 */}
       <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] overflow-hidden shadow-sm">
-        {/* 올코트플레이 랭크 패널: 랭크 티어가 있는 사용자만 표시. 점수 있는 종목 자동 전환, 클릭 시 명예의전당 */}
-        {rankEntries.length > 0 && (
-          <button
-            type="button"
-            onClick={() => navigate('/hall-of-fame')}
-            className="w-full text-left px-6 py-4 md:py-5 bg-[var(--color-bg-secondary)]/60 border-b border-[var(--color-border-card)] hover:bg-[var(--color-bg-secondary)]/80 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] focus:ring-inset"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-3 min-w-0">
-                <span className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider flex items-center gap-1.5 shrink-0">
-                  <TrophyIcon className="w-4 h-4 text-amber-500" />
-                  올코트플레이 랭크
-                </span>
-                <div className="flex items-center gap-2 min-h-[2.25rem]" key={rankCycleIndex}>
-                  {(() => {
-                    const [sport, rank] = rankEntries[rankCycleIndex % rankEntries.length];
-                    return (
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold bg-gradient-to-r ${getAllcourtplayRankStyle(rank)} shadow-sm animate-[fadeIn_0.3s_ease-out]`}
-                        title={`${sport} ${rank}랭크`}
-                      >
-                        <TrophyIcon className="w-4 h-4 opacity-90" />
-                        {sport} <span className="opacity-95">{rank}</span>
-                      </span>
-                    );
-                  })()}
-                </div>
-              </div>
-              <span className="text-xs font-medium text-[var(--color-blue-primary)] flex items-center gap-1 shrink-0">
-                명예의전당 보기
-                <ChevronRightIcon className="w-4 h-4" />
-              </span>
-            </div>
-          </button>
-        )}
-
         <div className="p-6">
           <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">프로필 요약</h2>
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
@@ -1074,39 +1292,39 @@ const MyInfoPage = () => {
             ) : (
               <div className="space-y-2">
                 {profileData.socialAccounts?.kakao && (
-                <div className="flex items-center justify-between py-2 px-3 bg-[#FEE500] bg-opacity-10 rounded-lg">
+                <div className="flex items-center justify-between py-2 px-3 bg-[#FEE500] rounded-lg">
                   <div className="flex items-center space-x-2">
-                    <span className="text-sm font-medium text-[var(--color-text-primary)]">카카오톡</span>
+                    <span className="text-sm font-medium text-black">카카오톡</span>
                   </div>
                   <button
                     onClick={() => handleSocialDisconnect('kakao')}
-                    className="text-xs text-red-500 hover:underline"
+                    className="text-xs text-black/70 hover:text-black hover:underline transition-colors"
                   >
                     연결 해제
                   </button>
                 </div>
               )}
               {profileData.socialAccounts?.naver && (
-                <div className="flex items-center justify-between py-2 px-3 bg-[#03C75A] bg-opacity-10 rounded-lg">
+                <div className="flex items-center justify-between py-2 px-3 bg-[#03C75A] rounded-lg">
                   <div className="flex items-center space-x-2">
-                    <span className="text-sm font-medium text-[var(--color-text-primary)]">네이버</span>
+                    <span className="text-sm font-medium text-white">네이버</span>
                   </div>
                   <button
                     onClick={() => handleSocialDisconnect('naver')}
-                    className="text-xs text-red-500 hover:underline"
+                    className="text-xs text-white/80 hover:text-white hover:underline transition-colors"
                   >
                     연결 해제
                   </button>
                 </div>
               )}
               {profileData.socialAccounts?.google && (
-                <div className="flex items-center justify-between py-2 px-3 bg-gray-100 bg-opacity-10 rounded-lg">
+                <div className="flex items-center justify-between py-2 px-3 bg-white border border-[var(--color-border-card)] rounded-lg">
                   <div className="flex items-center space-x-2">
-                    <span className="text-sm font-medium text-[var(--color-text-primary)]">구글</span>
+                    <span className="text-sm font-medium text-black">구글</span>
                   </div>
                   <button
                     onClick={() => handleSocialDisconnect('google')}
-                    className="text-xs text-red-500 hover:underline"
+                    className="text-xs text-black/70 hover:text-black hover:underline transition-colors"
                   >
                     연결 해제
                   </button>
@@ -1145,29 +1363,64 @@ const MyInfoPage = () => {
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <PhoneIcon className="w-5 h-5 shrink-0 text-[var(--color-text-secondary)]" />
               {isEditingPhone ? (
-                <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="flex-1 min-w-[140px] px-3 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                    placeholder="010-1234-5678"
-                  />
-                  <button
-                    onClick={handlePhoneSave}
-                    className="px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium shrink-0"
-                  >
-                    저장
-                  </button>
-                  <button
-                    onClick={() => {
-                      setPhone(profileData.phone || '');
-                      setIsEditingPhone(false);
-                    }}
-                    className="px-4 py-2 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-lg hover:opacity-80 transition-opacity text-sm shrink-0"
-                  >
-                    취소
-                  </button>
+                <div className="flex flex-col gap-3 flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      value={phone}
+                      onChange={(e) => {
+                        const numbers = e.target.value.replace(/[^\d]/g, '');
+                        setPhone(formatPhoneNumber(numbers));
+                      }}
+                      className="flex-1 min-w-[140px] px-3 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                      placeholder={PHONE_PLACEHOLDER}
+                      maxLength={13}
+                    />
+                    {isSmsVerificationEnabled && (
+                      <button
+                        type="button"
+                        onClick={handleRequestPhoneVerification}
+                        disabled={isSendingPhoneCode || phoneCodeCountdown > 0}
+                        className="px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isSendingPhoneCode ? '발송 중...' : phoneCodeCountdown > 0 ? `${Math.floor(phoneCodeCountdown / 60)}:${String(phoneCodeCountdown % 60).padStart(2, '0')}` : '인증번호 발송'}
+                      </button>
+                    )}
+                  </div>
+                  {isSmsVerificationEnabled && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={phoneVerificationCode}
+                        onChange={(e) => setPhoneVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="인증번호 6자리"
+                        className="w-32 px-3 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                      />
+                      <span className="text-xs text-[var(--color-text-secondary)]">SMS로 발송된 인증번호를 입력하세요</span>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handlePhoneSave}
+                      className="px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium shrink-0"
+                    >
+                      저장
+                    </button>
+                    <button
+                      onClick={() => {
+                        setPhone(profileData.phone || '');
+                        setIsEditingPhone(false);
+                        setPhoneVerificationCode('');
+                        setPhoneCodeCountdown(0);
+                      }}
+                      className="px-4 py-2 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-lg hover:opacity-80 transition-opacity text-sm shrink-0"
+                    >
+                      취소
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="min-w-0 flex-1">
@@ -1181,7 +1434,12 @@ const MyInfoPage = () => {
             {!isEditingPhone && (
               <button
                 type="button"
-                onClick={() => setIsEditingPhone(true)}
+                onClick={() => {
+                  setPhone(profileData.phone || '');
+                  setPhoneVerificationCode('');
+                  setPhoneCodeCountdown(0);
+                  setIsEditingPhone(true);
+                }}
                 className="p-2 shrink-0 text-[var(--color-text-secondary)] hover:text-[var(--color-blue-primary)] hover:bg-[var(--color-bg-secondary)] rounded-lg transition-colors"
                 aria-label="휴대전화 번호 수정"
               >
@@ -1216,6 +1474,29 @@ const MyInfoPage = () => {
               {isSavingLocation ? '저장 중...' : '변경'}
             </button>
           </div>
+
+          {/* 비즈니스 계정 전환 (일반 회원용) */}
+          {!profileData.businessNumberVerified && (
+            <div className="py-4">
+              <div className="flex items-start gap-3">
+                <BuildingOfficeIcon className="w-5 h-5 shrink-0 text-[var(--color-text-secondary)] mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm text-[var(--color-text-secondary)] mb-0.5">비즈니스 계정 전환</div>
+                  <p className="text-sm text-[var(--color-text-secondary)] mb-3">
+                    시설·스포츠용품 등록, 이벤트매치 개최를 위해 사업자등록증으로 인증하세요. OCR로 자동 인식됩니다.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowBusinessConversionModal(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-semibold hover:opacity-90 transition-opacity text-sm"
+                  >
+                    <DocumentArrowUpIcon className="w-5 h-5" />
+                    사업자등록증으로 전환하기
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 사업자번호 (사업자 회원만) */}
           {profileData.businessNumber && profileData.businessNumberVerified && (
@@ -1301,11 +1582,11 @@ const MyInfoPage = () => {
         </div>
       </section>
 
-      {/* 활동 기록 요약 → 전용 페이지로 이동 */}
+      {/* 매치 기록 요약 → 전용 페이지로 이동 */}
       <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1">활동 기록</h2>
+            <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1">매치 기록</h2>
             <p className="text-sm text-[var(--color-text-secondary)]">
               참여한 매치 {activityStats.joinedGroups}건 · 생성한 매치 {activityStats.createdGroups}건
             </p>
@@ -1315,7 +1596,7 @@ const MyInfoPage = () => {
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all border-2 border-[var(--color-blue-primary)] text-[var(--color-blue-primary)] bg-transparent hover:bg-[var(--color-blue-primary)] hover:text-white text-sm"
           >
             <ChartBarIcon className="w-5 h-5" />
-            활동기록 보기
+            매치 기록 보기
           </button>
         </div>
       </section>
@@ -1323,7 +1604,7 @@ const MyInfoPage = () => {
       {/* 사업자번호 변경 모달 (2단계: 비밀번호 인증 → 새 사업자번호 입력) */}
       {showChangeBusinessNumberModal && (
         <div
-          className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/30 z-[1000] flex items-center justify-center p-4"
           onMouseDown={(e) => e.target === e.currentTarget && (modalMouseDownRef.current = { x: e.clientX, y: e.clientY })}
           onMouseUp={(e) => {
             if (e.target === e.currentTarget && modalMouseDownRef.current) {
@@ -1429,10 +1710,205 @@ const MyInfoPage = () => {
         </div>
       )}
 
+      {/* 비즈니스 계정 전환 모달 (OCR 조회 → 대조 → 전환 / 실패 시 직접입력) */}
+      {showBusinessConversionModal && (
+        <div
+          className="fixed inset-0 bg-black/30 z-[1000] flex items-center justify-center p-4"
+          onMouseDown={(e) => e.target === e.currentTarget && (modalMouseDownRef.current = { x: e.clientX, y: e.clientY })}
+          onMouseUp={(e) => {
+            if (e.target === e.currentTarget && modalMouseDownRef.current) {
+              const dx = e.clientX - modalMouseDownRef.current.x;
+              const dy = e.clientY - modalMouseDownRef.current.y;
+              if (Math.sqrt(dx * dx + dy * dy) < 5) closeBusinessConversionModal();
+              modalMouseDownRef.current = null;
+            }
+          }}
+        >
+          <div
+            className="bg-[var(--color-bg-card)] rounded-2xl shadow-2xl max-w-md w-full border border-[var(--color-border-card)] p-6"
+            onClick={(ev) => ev.stopPropagation()}
+            onMouseDown={(ev) => ev.stopPropagation()}
+            onMouseUp={(ev) => ev.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-[var(--color-text-primary)] flex items-center gap-2">
+                <BuildingOfficeIcon className="w-6 h-6 text-[var(--color-blue-primary)]" />
+                비즈니스 계정 전환
+                {businessConversionStep === 'compare' && <span className="text-sm font-normal text-[var(--color-text-secondary)]">(2/2)</span>}
+                {businessConversionStep === 'direct' && <span className="text-sm font-normal text-[var(--color-text-secondary)]">(직접 입력)</span>}
+              </h2>
+              <button
+                type="button"
+                onClick={closeBusinessConversionModal}
+                className="p-2 hover:bg-[var(--color-bg-secondary)] rounded-lg transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5 text-[var(--color-text-primary)]" />
+              </button>
+            </div>
+
+            {/* 1단계: 이미지 업로드 */}
+            {businessConversionStep === 'upload' && (
+              <>
+                <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+                  사업자등록증 이미지를 올리시면 OCR로 조회한 뒤, 등록된 실명과 대조합니다. 일치할 때만 전환할 수 있습니다.
+                </p>
+                {profileData?.realName?.trim() ? (
+                  <p className="text-sm text-[var(--color-text-primary)] mb-3">
+                    등록된 실명(대표자명): <strong>{profileData.realName}</strong>
+                  </p>
+                ) : (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">실명 (대표자명)</label>
+                    <input
+                      type="text"
+                      value={businessConversionRealName}
+                      onChange={(e) => setBusinessConversionRealName(e.target.value)}
+                      placeholder="사업자등록증의 대표자명과 동일하게 입력"
+                      className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                    />
+                  </div>
+                )}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">사업자등록증 이미지</label>
+                  <input
+                    ref={businessConversionFileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                    onChange={(e) => setBusinessConversionDocumentFile(e.target.files?.[0] ?? null)}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => businessConversionFileInputRef.current?.click()}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-4 border-2 border-dashed border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] hover:border-[var(--color-blue-primary)] hover:text-[var(--color-blue-primary)] transition-colors"
+                  >
+                    {businessConversionDocumentFile ? (
+                      <>
+                        <DocumentArrowUpIcon className="w-6 h-6" />
+                        <span>{businessConversionDocumentFile.name}</span>
+                      </>
+                    ) : (
+                      <>
+                        <PhotoIcon className="w-6 h-6" />
+                        <span>이미지 선택 (jpg, png 등)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button type="button" onClick={closeBusinessConversionModal} className="px-4 py-2 rounded-lg border border-[var(--color-border-card)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] transition-colors">취소</button>
+                  <button
+                    type="button"
+                    onClick={handleBusinessConversionSubmit}
+                    disabled={isConvertingBusiness || !businessConversionDocumentFile || (!profileData?.realName?.trim() && !businessConversionRealName.trim())}
+                    className="px-4 py-2 rounded-lg bg-[var(--color-blue-primary)] text-white font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isConvertingBusiness ? 'OCR 조회 중...' : 'OCR 조회'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* 2단계: OCR 결과 대조 */}
+            {businessConversionStep === 'compare' && businessConversionExtracted && (
+              <>
+                <p className="text-sm text-[var(--color-text-secondary)] mb-3">
+                  OCR로 추출한 정보와 등록된 실명을 대조했습니다.
+                </p>
+                <div className="mb-4 p-3 rounded-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] space-y-1 text-sm">
+                  <div className="text-[var(--color-text-primary)]">사업자번호: <strong>{businessConversionExtracted.businessNumber}</strong></div>
+                  {businessConversionExtracted.representativeName && (
+                    <div className="text-[var(--color-text-primary)]">대표자명: <strong>{businessConversionExtracted.representativeName}</strong></div>
+                  )}
+                  {profileData?.realName && (
+                    <div className="text-[var(--color-text-secondary)]">등록 실명: {profileData.realName}</div>
+                  )}
+                  {businessConversionMatch ? (
+                    <p className="text-green-600 dark:text-green-400 font-medium mt-2">일치합니다. 전환하기를 눌러 완료하세요.</p>
+                  ) : (
+                    <p className="text-amber-600 dark:text-amber-400 mt-2">대표자명이 일치하지 않습니다. 직접 입력으로 전환하거나 본인 명의 사업자등록증을 올려 주세요.</p>
+                  )}
+                </div>
+                <div className="flex gap-2 justify-end flex-wrap">
+                  <button type="button" onClick={() => { setBusinessConversionStep('upload'); setBusinessConversionExtracted(null); setBusinessConversionMatch(null); }} className="px-4 py-2 rounded-lg border border-[var(--color-border-card)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] transition-colors">다시 올리기</button>
+                  {!businessConversionMatch && (
+                    <button type="button" onClick={() => { setBusinessConversionStep('direct'); setBusinessConversionManual((m) => ({ ...m, businessNumber: businessConversionExtracted.businessNumber, representativeName: businessConversionExtracted.representativeName || '', openingDate: businessConversionExtracted.openingDate || '' })); }} className="px-4 py-2 rounded-lg border border-[var(--color-blue-primary)] text-[var(--color-blue-primary)] hover:bg-[var(--color-blue-primary)]/10 transition-colors">직접 입력으로 전환</button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleBusinessConversionConfirm}
+                    disabled={isConvertingBusiness || !businessConversionMatch}
+                    className="px-4 py-2 rounded-lg bg-[var(--color-blue-primary)] text-white font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isConvertingBusiness ? '전환 중...' : '전환하기'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* 3단계: 직접 입력 (OCR 실패 또는 대조 불일치 시) */}
+            {businessConversionStep === 'direct' && (
+              <>
+                <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+                  사업자번호·대표자명·개업일자를 입력하세요. 등록된 실명과 일치해야 전환됩니다.
+                </p>
+                {profileData?.realName?.trim() && (
+                  <p className="text-sm text-[var(--color-text-primary)] mb-3">등록된 실명: <strong>{profileData.realName}</strong></p>
+                )}
+                <div className="space-y-3 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">사업자번호 <span className="text-[var(--color-text-secondary)]">(XXX-XX-XXXXX)</span></label>
+                    <input
+                      type="text"
+                      value={businessConversionManual.businessNumber}
+                      onChange={(e) => setBusinessConversionManual((m) => ({ ...m, businessNumber: formatBusinessNumber(e.target.value) }))}
+                      placeholder="000-00-00000"
+                      className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">대표자명 <span className="text-[var(--color-text-secondary)]">(실명과 동일)</span></label>
+                    <input
+                      type="text"
+                      value={businessConversionManual.representativeName}
+                      onChange={(e) => setBusinessConversionManual((m) => ({ ...m, representativeName: e.target.value }))}
+                      placeholder={profileData?.realName || '실명과 동일하게 입력'}
+                      className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">개업일자 <span className="text-[var(--color-text-secondary)]">(선택, YYYYMMDD)</span></label>
+                    <input
+                      type="text"
+                      value={businessConversionManual.openingDate}
+                      onChange={(e) => setBusinessConversionManual((m) => ({ ...m, openingDate: e.target.value.replace(/\D/g, '').slice(0, 8) }))}
+                      placeholder="20200101"
+                      maxLength={8}
+                      className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button type="button" onClick={() => setBusinessConversionStep('upload')} className="px-4 py-2 rounded-lg border border-[var(--color-border-card)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] transition-colors">이미지로 다시 조회</button>
+                  <button
+                    type="button"
+                    onClick={handleBusinessConversionManualSubmit}
+                    disabled={isConvertingBusiness || businessConversionManual.businessNumber.replace(/\D/g, '').length !== 10}
+                    className="px-4 py-2 rounded-lg bg-[var(--color-blue-primary)] text-white font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isConvertingBusiness ? '전환 중...' : '전환하기'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 시설 등록 안내 모달 */}
       {showFacilityRegistrationModal && (
         <div 
-          className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/30 z-[1000] flex items-center justify-center p-4"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
               modalMouseDownRef.current = { x: e.clientX, y: e.clientY };
@@ -1558,7 +2034,7 @@ const MyInfoPage = () => {
       {/* 회원 탈퇴 확인 모달 */}
       {showWithdrawModal && (
         <div 
-          className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/30 z-[1000] flex items-center justify-center p-4"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
               modalMouseDownRef.current = { x: e.clientX, y: e.clientY };
@@ -1641,7 +2117,7 @@ const MyInfoPage = () => {
 
       {/* 포인트 내역 모달 */}
       {showPointHistoryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30" onClick={() => setShowPointHistoryModal(false)}>
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/30" onClick={() => setShowPointHistoryModal(false)}>
           <div className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] shadow-xl max-w-md w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-[var(--color-border-card)]">
               <h3 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">

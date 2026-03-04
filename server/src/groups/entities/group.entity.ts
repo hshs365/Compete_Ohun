@@ -124,6 +124,10 @@ export class Group {
   @Column({ type: 'int', nullable: true })
   finalScoreBlue: number | null;
 
+  /** 종목별 확장 데이터 (배드민턴: 급수/종목, 축구: 포지션 등). 종목 ID에 따라 필수값 검증 */
+  @Column({ type: 'jsonb', nullable: true })
+  sportSpecificData: Record<string, unknown> | null;
+
   // 메타 정보
   @CreateDateColumn()
   createdAt: Date;

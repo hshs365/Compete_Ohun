@@ -4,8 +4,12 @@ import { getCityCoordinates, getRegionCoordinates, getRegionZoomLevel, getCityFr
 import { api } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { MATCH_TYPE_THEME } from './HomeMatchTypeChoice';
+import { SPORT_ICONS } from '../constants/sports';
 
 type MatchType = 'general' | 'rank' | 'event';
+
+/** 지도 bounds (이 지역에서 재검색용) */
+export type MapBounds = { latMin: number; latMax: number; lngMin: number; lngMax: number } | null;
 
 interface NaverMapPanelProps {
   selectedGroup?: SelectedGroup | null;
@@ -25,8 +29,16 @@ interface NaverMapPanelProps {
   };
   /** 매치 종류에 따른 FAB 버튼 문구 (일반 매치 생성 / 랭크 매치 생성 / 이벤트매치 생성) */
   matchType?: MatchType;
-  /** 지도 기본 보기 단위 (사용자 주소 기준). 시≈5km, 구≈2km, 동≈500m */
-  mapViewLevel?: 'sido' | 'gu' | 'dong';
+  /** 하단 매치 목록 시트 높이(px). 있으면 지도 높이에서 제외하여 중심이 가려지지 않도록 함 */
+  bottomSheetHeight?: number;
+  /** 지도 bounds 변경 시 콜백 (이 지역에서 재검색용) */
+  onBoundsChange?: (bounds: MapBounds) => void;
+  /** 현재 지도 영역과 마지막 검색 영역이 다를 때 true → 재검색 버튼 노출 */
+  showReSearchButton?: boolean;
+  /** 이 지역에서 재검색 클릭 시 콜백 */
+  onReSearchClick?: () => void;
+  /** 사용자가 지도를 드래그/줌한 경우 호출 (재검색 버튼 노출 조건용) */
+  onMapInteraction?: () => void;
 }
 
 declare global {
@@ -44,12 +56,49 @@ const CREATE_BUTTON_LABEL: Record<MatchType, string> = {
   event: '이벤트매치 생성',
 };
 
-/** 지도 기본 보기 단위별 네이버 줌 레벨 (사용자 주소 기준) */
+/** 지도 기본 보기 단위별 네이버 줌 레벨. 구 ≈ 1km, 동 ≈ 500m 축척 */
 const MAP_VIEW_ZOOM_LEVELS: Record<'sido' | 'gu' | 'dong', number> = {
-  sido: 12, // 시 단위 ≈ 3km
-  gu: 13,   // 구 단위 ≈ 2km
-  dong: 16, // 동 단위 ≈ 500m
+  sido: 12,
+  gu: 14,
+  dong: 15,
 };
+
+/** 선택 지역 문자열에서 유효 지도 단위 추출 (드롭다운 단계에 따라 시/구/동) */
+function getEffectiveMapViewLevel(region: string | null): 'sido' | 'gu' | 'dong' {
+  if (!region || region === '전체') return 'sido';
+  const parts = region.trim().split(/\s+/).length;
+  return parts >= 3 ? 'dong' : parts >= 2 ? 'gu' : 'sido';
+}
+
+/** 마커 클러스터링: 줌 레벨 이하면 그리드로 묶음, 초과하면 개별 마커 */
+const CLUSTER_MAX_ZOOM = 15; // 이 줌 이상이면 개별 마커만 표시
+function clusterMarkers<T extends { coords: [number, number] }>(
+  items: T[],
+  zoom: number
+): { type: 'cluster'; items: T[]; center: [number, number] } | { type: 'single'; item: T }[] {
+  if (zoom >= CLUSTER_MAX_ZOOM || items.length <= 1) {
+    return items.map((item) => ({ type: 'single' as const, item }));
+  }
+  const gridSize = 0.02 * Math.pow(2, (CLUSTER_MAX_ZOOM - zoom) / 4);
+  const cells = new Map<string, T[]>();
+  items.forEach((item) => {
+    const [lat, lng] = item.coords;
+    const key = `${Math.floor(lat / gridSize)}_${Math.floor(lng / gridSize)}`;
+    if (!cells.has(key)) cells.set(key, []);
+    cells.get(key)!.push(item);
+  });
+  const result: ({ type: 'cluster'; items: T[]; center: [number, number] } | { type: 'single'; item: T })[] = [];
+  cells.forEach((cellItems) => {
+    if (cellItems.length > 1) {
+      const avgLat = cellItems.reduce((s, i) => s + i.coords[0], 0) / cellItems.length;
+      const avgLng = cellItems.reduce((s, i) => s + i.coords[1], 0) / cellItems.length;
+      result.push({ type: 'cluster', items: cellItems, center: [avgLat, avgLng] });
+    } else {
+      result.push({ type: 'single', item: cellItems[0] });
+    }
+  });
+  return result;
+}
 
 const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
   selectedGroup = null,
@@ -62,11 +111,16 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
   selectedCategory = null,
   mapLayers = {},
   matchType = 'general',
-  mapViewLevel = 'sido',
+  bottomSheetHeight = 0,
+  onBoundsChange,
+  showReSearchButton = false,
+  onReSearchClick,
+  onMapInteraction,
 }) => {
   const selectedRegion = propSelectedRegion ?? selectedCity;
-  const mapViewLevelRef = useRef(mapViewLevel);
-  mapViewLevelRef.current = mapViewLevel;
+  const effectiveMapViewLevel = getEffectiveMapViewLevel(selectedRegion);
+  const effectiveMapViewLevelRef = useRef(effectiveMapViewLevel);
+  effectiveMapViewLevelRef.current = effectiveMapViewLevel;
   const { user } = useAuth();
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -80,6 +134,10 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
   const selectedGroupRef = useRef<SelectedGroup | null>(selectedGroup); // 지도 초기화 시 최신 선택 매치 반영용
   const resizeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null); // ResizeObserver 디바운스
   const initializeMapRef = useRef<(() => void) | null>(null); // 상세 패널 열릴 때 지도 재생성 호출용
+  const onBoundsChangeRef = useRef(typeof onBoundsChange === 'function' ? onBoundsChange : null);
+  onBoundsChangeRef.current = onBoundsChange;
+  const onMapInteractionRef = useRef(typeof onMapInteraction === 'function' ? onMapInteraction : null);
+  onMapInteractionRef.current = onMapInteraction;
   const [defaultPosition, setDefaultPosition] = useState<[number, number]>([37.5665, 126.9780]);
   const [userResidenceSido, setUserResidenceSido] = useState<string | null>(null);
   const [userResidenceAddress, setUserResidenceAddress] = useState<string | null>(null);
@@ -690,7 +748,7 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
         return;
       }
       
-      // 줌 레벨 설정: 매치 상세 시 확대, '전체' 시 50km, 도시/사용자 위치 시 mapViewLevel(시/구/동) 적용
+      // 줌 레벨 설정: 매치 상세 시 확대, '전체' 시 50km, 선택 지역 또는 사용자 위치 시 해당 단위(시/구/동) 적용
       let mapZoom: number;
       if (groupForCenter) {
         mapZoom = 17; // 매치 위치로 확대
@@ -698,7 +756,7 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
         mapZoom = 8; // 50km 스케일
       } else {
         // 도시/구/동 선택 또는 사용자 위치: 선택 지역에 맞는 줌(시=10, 구=13, 동=16) 또는 검색 옵션 적용
-        mapZoom = getRegionZoomLevel(selectedRegion ?? '') || MAP_VIEW_ZOOM_LEVELS[mapViewLevelRef.current || 'sido'];
+        mapZoom = getRegionZoomLevel(selectedRegion ?? '') || MAP_VIEW_ZOOM_LEVELS[effectiveMapViewLevelRef.current];
       }
 
       // 지도 생성
@@ -780,6 +838,36 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
           };
           window.naver.maps.Event.addListener(map, 'zoom_changed', updateZoomLevel);
           updateZoomLevel(); // 초기 줌 레벨 설정
+
+          // 지도 이동/줌 시 bounds 전달 (이 지역에서 재검색용)
+          const notifyBounds = () => {
+            if (!mapRef.current || typeof mapRef.current.getBounds !== 'function') return;
+            const cb = onBoundsChangeRef.current;
+            if (typeof cb !== 'function') return;
+            const bounds = mapRef.current.getBounds();
+            if (!bounds) return;
+            const sw = bounds.getSW();
+            const ne = bounds.getNE();
+            if (sw && ne) {
+              cb({
+                latMin: Math.min(sw.lat(), ne.lat()),
+                latMax: Math.max(sw.lat(), ne.lat()),
+                lngMin: Math.min(sw.lng(), ne.lng()),
+                lngMax: Math.max(sw.lng(), ne.lng()),
+              });
+            }
+          };
+          let boundsDebounce: ReturnType<typeof setTimeout> | null = null;
+          let isFirstIdle = true;
+          window.naver.maps.Event.addListener(map, 'idle', () => {
+            if (boundsDebounce) clearTimeout(boundsDebounce);
+            boundsDebounce = setTimeout(() => {
+              boundsDebounce = null;
+              if (isFirstIdle) isFirstIdle = false;
+              else onMapInteractionRef.current?.();
+              notifyBounds();
+            }, 300);
+          });
         }
         
         // ⭐ 지도 컨테이너 크기 모니터링 (지도가 사라지는 문제 방지)
@@ -853,13 +941,12 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
                 // 무시
               }
             } else if (!selectedRegion) {
-              // selectedRegion가 null일 때 사용자 위치 사용 (mapViewLevel 적용)
+              // selectedRegion가 null일 때 사용자 위치 사용 (기본 줌 적용)
               const userLocation = getUserLocation().coords;
               const userCenter = new window.naver.maps.LatLng(userLocation[0], userLocation[1]);
               mapRef.current.setCenter(userCenter);
-              const zoomLevel = MAP_VIEW_ZOOM_LEVELS[mapViewLevelRef.current || 'sido'];
+              const zoomLevel = MAP_VIEW_ZOOM_LEVELS[effectiveMapViewLevelRef.current];
               mapRef.current.setZoom(zoomLevel);
-              // 지도 레벨을 localStorage에 저장
               try {
                 localStorage.setItem('mapLevel', zoomLevel.toString());
               } catch (e) {
@@ -964,7 +1051,7 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
                   const userLocation = getUserLocation().coords;
                   const userCenter = new window.naver.maps.LatLng(userLocation[0], userLocation[1]);
                   mapRef.current.setCenter(userCenter);
-                  const zoomLevel = MAP_VIEW_ZOOM_LEVELS[mapViewLevelRef.current || 'sido'];
+                  const zoomLevel = MAP_VIEW_ZOOM_LEVELS[effectiveMapViewLevelRef.current];
                   mapRef.current.setZoom(zoomLevel);
                   try {
                     localStorage.setItem('mapLevel', zoomLevel.toString());
@@ -1028,7 +1115,7 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
             const userLocation = getUserLocation().coords;
             const userCenter = new window.naver.maps.LatLng(userLocation[0], userLocation[1]);
             mapRef.current.setCenter(userCenter);
-            mapRef.current.setZoom(MAP_VIEW_ZOOM_LEVELS[mapViewLevelRef.current || 'sido']);
+            mapRef.current.setZoom(MAP_VIEW_ZOOM_LEVELS[effectiveMapViewLevelRef.current]);
           }
         }, 100);
       }
@@ -1061,7 +1148,7 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
             const userLocation = getUserLocation().coords;
             const userCenter = new window.naver.maps.LatLng(userLocation[0], userLocation[1]);
             mapRef.current.setCenter(userCenter);
-            mapRef.current.setZoom(MAP_VIEW_ZOOM_LEVELS[mapViewLevelRef.current || 'sido']);
+            mapRef.current.setZoom(MAP_VIEW_ZOOM_LEVELS[effectiveMapViewLevelRef.current]);
           }
         }, 400);
       });
@@ -1349,6 +1436,8 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
     });
     overlaysRef.current = [];
 
+    const currentZoom = typeof mapRef.current.getZoom === 'function' ? mapRef.current.getZoom() : 14;
+
     // 매치별 표시 좌표: 지오코딩 결과 우선, 없으면 API 좌표 fallback (시청 좌표는 제외)
     const groupsWithCoords: { group: SelectedGroup; coords: [number, number] }[] = [];
     allGroups.forEach((group) => {
@@ -1379,11 +1468,19 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
       }
     });
 
-    // 모든 모임 마커 다시 생성 (타입·마감별 색상, 클릭 시 상세보기)
-    groupsWithCoords.forEach(({ group, coords }) => {
+    // 클러스터링: 줌 레벨에 따라 밀집 지역 마커 그룹화
+    const clustered = clusterMarkers(groupsWithCoords, currentZoom);
+
+    const createSingleMarker = (item: { group: SelectedGroup; coords: [number, number] }) => {
+      const { group, coords } = item;
       const markerPosition = new window.naver.maps.LatLng(coords[0], coords[1]);
       const isSelected = selectedGroup && selectedGroup.id === group.id;
       const markerColor = getMatchMarkerColor(group);
+      const maxP = group.maxParticipants ?? 0;
+      const currentP = group.memberCount ?? group.participantCount ?? 0;
+      const remaining = Math.max(0, maxP - currentP);
+      const remainingText = maxP > 0 ? String(remaining) : '';
+      const sportIcon = SPORT_ICONS[group.category ?? ''] ?? '●';
 
       const marker = new window.naver.maps.Marker({
         position: markerPosition,
@@ -1391,24 +1488,37 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
         zIndex: isSelected ? 1000 : 100,
         icon: {
           content: `
-            <div style="
-              width: 24px;
-              height: 24px;
-              border-radius: 50%;
+            <div class="map-marker-sport" style="
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              gap: 2px;
+              min-width: 28px;
+              height: 26px;
+              padding: 0 6px;
+              border-radius: 13px;
               background: ${markerColor};
               border: 2px solid white;
               box-shadow: 0 1px 4px rgba(0,0,0,0.3);
               box-sizing: border-box;
-            " title="${group.name}"></div>
+              font-size: 11px;
+              font-weight: 700;
+              color: white;
+              line-height: 1;
+              white-space: nowrap;
+              animation: markerIconFadeIn 0.35s ease-out forwards;
+            " title="${group.name}">
+              <span style="font-size: 14px; line-height: 1;">${sportIcon}</span>
+              ${remainingText ? `<span>${remainingText}</span>` : ''}
+            </div>
           `,
-          size: new window.naver.maps.Size(24, 24),
-          anchor: new window.naver.maps.Point(12, 12),
+          size: new window.naver.maps.Size(remainingText ? 42 : 36, 28),
+          anchor: new window.naver.maps.Point(remainingText ? 21 : 18, 14),
         },
       });
 
       markersRef.current.push(marker);
 
-      // 라벨은 shouldShowLabelsBase(상세/카테고리 선택)일 때만 생성. 열림 여부는 줌 레벨(500m 이상)에 따라 결정
       if (shouldShowLabelsBase && mapRef.current) {
         const labelOverlay = createLabelOverlay(group.name, markerPosition);
         overlaysRef.current.push({ overlay: labelOverlay, lat: coords[0], lng: coords[1] });
@@ -1418,9 +1528,7 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
       }
 
       window.naver.maps.Event.addListener(marker, 'click', () => {
-        // 상세보기 열려 있을 때는 마커 클릭 무시
         if (selectedGroup) return;
-
         if (mapRef.current && mapContainerRef.current) {
           centerMapOnMarker(mapRef.current, mapContainerRef.current, coords[0], coords[1], 17);
         }
@@ -1440,6 +1548,53 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
           onGroupClick(group);
         }
       });
+    };
+
+    clustered.forEach((c) => {
+      if (c.type === 'cluster') {
+        const count = c.items.length;
+        const [lat, lng] = c.center;
+        const clusterColor = MATCH_TYPE_THEME.rank?.accentHex ?? '#d97706';
+        const marker = new window.naver.maps.Marker({
+          position: new window.naver.maps.LatLng(lat, lng),
+          map: mapRef.current,
+          zIndex: 90,
+          icon: {
+            content: `
+              <div style="
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 36px;
+                height: 36px;
+                padding: 0 8px;
+                border-radius: 18px;
+                background: ${clusterColor};
+                border: 3px solid white;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+                box-sizing: border-box;
+                font-size: 14px;
+                font-weight: 800;
+                color: white;
+                line-height: 1;
+                animation: markerIconFadeIn 0.35s ease-out forwards;
+              " title="${count}개 매치">${count}</div>
+            `,
+            size: new window.naver.maps.Size(44, 44),
+            anchor: new window.naver.maps.Point(22, 22),
+          },
+        });
+        markersRef.current.push(marker);
+        window.naver.maps.Event.addListener(marker, 'click', () => {
+          if (selectedGroup) return;
+          if (mapRef.current) {
+            mapRef.current.setCenter(new window.naver.maps.LatLng(lat, lng));
+            mapRef.current.setZoom(Math.min(currentZoom + 2, 18));
+          }
+        });
+      } else {
+        createSingleMarker(c.item);
+      }
     });
 
     // 모임이 없을 때 기본 마커
@@ -1487,7 +1642,7 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
         markersRef.current.push(userMarker);
       }
     }
-  }, [allGroups, selectedRegion, selectedGroup, selectedCategory, shouldShowLabelsBase, shouldShowLabels, mapReady, geocodedCoords, userResidenceSido, userResidenceAddress, defaultPosition, user, userAddressCoords]);
+  }, [allGroups, selectedRegion, selectedGroup, selectedCategory, shouldShowLabelsBase, shouldShowLabels, mapReady, geocodedCoords, userResidenceSido, userResidenceAddress, defaultPosition, user, userAddressCoords, mapZoomLevel]);
 
   // ⭐ 줌 레벨 변경 시 라벨 표시/숨김 (500m 축척 이상에서만 라벨 표시)
   useEffect(() => {
@@ -1595,11 +1750,11 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
         if (selectedGroupRef.current) return;
         if (!mapRef.current) return;
         mapRef.current.setCenter(userPosition);
-        mapRef.current.setZoom(MAP_VIEW_ZOOM_LEVELS[mapViewLevelRef.current || 'sido']);
+        mapRef.current.setZoom(MAP_VIEW_ZOOM_LEVELS[effectiveMapViewLevelRef.current]);
         if (typeof mapRef.current.refreshSize === 'function') mapRef.current.refreshSize();
         try {
-          localStorage.setItem('mapLevel', MAP_VIEW_ZOOM_LEVELS[mapViewLevelRef.current || 'sido'].toString());
-          console.log('📍 사용자 위치로 이동, 레벨:', MAP_VIEW_ZOOM_LEVELS[mapViewLevelRef.current || 'sido']);
+          localStorage.setItem('mapLevel', MAP_VIEW_ZOOM_LEVELS[effectiveMapViewLevelRef.current].toString());
+          console.log('📍 사용자 위치로 이동, 레벨:', MAP_VIEW_ZOOM_LEVELS[effectiveMapViewLevelRef.current]);
         } catch (e) {
           /* ignore */
         }
@@ -1724,18 +1879,22 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
     prevCategoryRef.current = selectedCategory;
   }, [selectedCategory, selectedRegion]); // selectedGroup 의존성 제거 (충돌 방지)
 
-  // ⭐ mapViewLevel 변경 시 도시/사용자 뷰일 때 지도 줌 갱신
+  // ⭐ selectedRegion 변경 시 해당 지역(시/구/동)으로 지도 중심·줌 갱신 (매치 상세/전체 뷰 제외, 목록에 매치 없어도 동작)
   useEffect(() => {
     if (selectedGroup || !mapRef.current || !window.naver?.maps) return;
-    if (selectedRegion === '전체') return; // '전체'는 50km 고정
-    const zoomLevel = MAP_VIEW_ZOOM_LEVELS[mapViewLevel];
+    if (selectedRegion === '전체' || !selectedRegion) return;
+    const coords = getRegionCoordinates(selectedRegion) ?? getCityCoordinates(selectedRegion as KoreanCity);
+    if (!coords) return;
+    const center = new window.naver.maps.LatLng(coords[0], coords[1]);
+    const zoomLevel = getRegionZoomLevel(selectedRegion) ?? MAP_VIEW_ZOOM_LEVELS[effectiveMapViewLevel];
+    mapRef.current.setCenter(center);
     mapRef.current.setZoom(zoomLevel);
     try {
       localStorage.setItem('mapLevel', zoomLevel.toString());
     } catch (e) {
       /* ignore */
     }
-  }, [mapViewLevel]);
+  }, [selectedRegion, selectedGroup, effectiveMapViewLevel]);
   
   // ⭐ 상세 패널 애니메이션 완료 후 한 번만 재조정 (최적화)
   useEffect(() => {
@@ -1776,18 +1935,33 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
         borderRadius: 'var(--map-radius, 0.75rem)'
       }}
     >
-      {/* 지도 컨테이너 - 네이버 지도 API 요구사항에 맞는 DOM 구조 */}
+      {/* 지도 컨테이너 - bottomSheetHeight만큼 하단 제외하여 중심점이 가려지지 않도록 */}
       <div
         id="map"
         ref={mapContainerRef}
-        className="rounded-r-xl"
+        className="rounded-r-xl transition-[height] duration-200"
         style={{ 
           width: '100%',
-          height: '100%',
+          height: bottomSheetHeight > 0 ? `calc(100% - ${bottomSheetHeight}px)` : '100%',
           maxWidth: '100%',
           overflow: 'hidden'
         }}
       />
+
+      {/* 이 지역에서 재검색 버튼 */}
+      {showReSearchButton && onReSearchClick && (
+        <button
+          type="button"
+          onClick={onReSearchClick}
+          className="absolute top-4 left-1/2 -translate-x-1/2 z-[900] px-4 py-2.5 rounded-xl bg-[var(--color-bg-card)] border border-[var(--color-border-card)] shadow-lg text-sm font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] transition-colors flex items-center gap-2"
+          aria-label="이 지역에서 재검색"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          이 지역에서 재검색
+        </button>
+      )}
 
       {/* 매치 종류별 생성 버튼 — 둥근 모서리, 매치 타입 테마 색상 */}
       {onCreateGroupClick && (

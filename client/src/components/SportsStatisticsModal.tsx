@@ -1,29 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { XMarkIcon, ChartBarIcon, MapPinIcon, CalendarIcon, ClockIcon, TrophyIcon, FireIcon } from '@heroicons/react/24/outline';
 import { api } from '../utils/api';
-import { SPORTS_LIST } from '../constants/sports';
-import { extractCityFromAddress } from '../utils/locationUtils';
 import FootballStatsRadar from './FootballStatsRadar';
 
 interface SportsStatisticsModalProps {
   userId: number;
   isOpen: boolean;
   onClose: () => void;
-}
-
-interface GroupData {
-  id: number;
-  category: string;
-  location: string;
-  meetingTime: string | null;
-  participantCount: number;
-  createdAt: string;
+  /** 종목별 보기 시 선택된 종목 (축구, 풋살 등). 없으면 전체 통계 */
+  currentSport?: string;
 }
 
 const FOOTBALL_STAT_KEYS = ['멘탈', '수비', '공격', '피지컬', '스피드', '테크닉'] as const;
 const defaultFootballStats: Record<string, number> = Object.fromEntries(FOOTBALL_STAT_KEYS.map((k) => [k, 0]));
 
-const SportsStatisticsModal: React.FC<SportsStatisticsModalProps> = ({ userId, isOpen, onClose }) => {
+const SportsStatisticsModal: React.FC<SportsStatisticsModalProps> = ({ userId, isOpen, onClose, currentSport }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [footballStats, setFootballStats] = useState<Record<string, number>>(defaultFootballStats);
   const [footballStatsLoading, setFootballStatsLoading] = useState(false);
@@ -33,6 +24,7 @@ const SportsStatisticsModal: React.FC<SportsStatisticsModalProps> = ({ userId, i
     monthlyStats: {} as Record<string, number>,
     weeklyStats: {} as Record<string, number>,
     timeStats: {} as Record<string, number>,
+    matchTypeStats: {} as Record<string, number>,
     totalGroups: 0,
     totalParticipations: 0,
     favoriteCategory: '',
@@ -60,112 +52,34 @@ const SportsStatisticsModal: React.FC<SportsStatisticsModalProps> = ({ userId, i
   const fetchStatistics = async () => {
     try {
       setIsLoading(true);
-      
-      // 사용자가 참여한 모든 모임 가져오기
-      // TODO: 백엔드에 사용자별 모임 조회 API가 있으면 사용
-      const allGroupsResponse = await api.get<{ groups: GroupData[]; total: number }>('/api/groups?limit=1000');
-      const allGroups = allGroupsResponse.groups || [];
+      const res = await api.get<{
+        matchTypeStats: Record<string, number>;
+        monthlyStats: Record<string, number>;
+        categoryStats: Record<string, number>;
+        regionStats: Record<string, number>;
+        weeklyStats: Record<string, number>;
+        timeStats: Record<string, number>;
+        totalParticipations: number;
+        totalCreations: number;
+        totalGroups: number;
+      }>('/api/groups/my-activity-stats');
 
-      // 사용자가 참여한 모임 필터링 (병렬 처리로 성능 개선)
-      const userGroupsPromises = allGroups.slice(0, 100).map(async (group) => {
-        try {
-          const groupDetail = await api.get<any>(`/api/groups/${group.id}`);
-          if (groupDetail.isUserParticipant || groupDetail.creatorId === userId) {
-            return group;
-          }
-        } catch (error) {
-          // 개별 모임 조회 실패 시 무시
-        }
-        return null;
-      });
-
-      const userGroupsResults = await Promise.allSettled(userGroupsPromises);
-      const userGroups = userGroupsResults
-        .filter((result) => result.status === 'fulfilled' && result.value !== null)
-        .map((result) => (result as PromiseFulfilledResult<GroupData>).value);
-
-      // 통계 계산
-      const categoryStats: Record<string, number> = {};
-      const regionStats: Record<string, number> = {};
-      const monthlyStats: Record<string, number> = {};
-      const weeklyStats: Record<string, number> = {};
-      const timeStats: Record<string, number> = {};
-
-      userGroups.forEach((group) => {
-        // 카테고리별 통계
-        if (group.category) {
-          categoryStats[group.category] = (categoryStats[group.category] || 0) + 1;
-        }
-
-        // 지역별 통계
-        if (group.location) {
-          const city = extractCityFromAddress(group.location);
-          if (city && city !== '전체') {
-            regionStats[city] = (regionStats[city] || 0) + 1;
-          }
-        }
-
-        // 월별 통계
-        if (group.createdAt) {
-          const date = new Date(group.createdAt);
-          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-          monthlyStats[monthKey] = (monthlyStats[monthKey] || 0) + 1;
-        }
-
-        // 주별 통계 (요일)
-        if (group.meetingTime) {
-          try {
-            const meetingDate = new Date(group.meetingTime);
-            const dayOfWeek = meetingDate.getDay();
-            const days = ['일', '월', '화', '수', '목', '금', '토'];
-            weeklyStats[days[dayOfWeek]] = (weeklyStats[days[dayOfWeek]] || 0) + 1;
-          } catch (e) {
-            // 날짜 파싱 실패 시 무시
-          }
-        }
-
-        // 시간대별 통계
-        if (group.meetingTime) {
-          try {
-            const meetingDate = new Date(group.meetingTime);
-            const hour = meetingDate.getHours();
-            let timeSlot = '';
-            if (hour >= 6 && hour < 12) {
-              timeSlot = '오전 (6-12시)';
-            } else if (hour >= 12 && hour < 18) {
-              timeSlot = '오후 (12-18시)';
-            } else if (hour >= 18 && hour < 22) {
-              timeSlot = '저녁 (18-22시)';
-            } else {
-              timeSlot = '밤 (22-6시)';
-            }
-            timeStats[timeSlot] = (timeStats[timeSlot] || 0) + 1;
-          } catch (e) {
-            // 날짜 파싱 실패 시 무시
-          }
-        }
-      });
-
-      // 가장 많이 참여한 카테고리
-      const favoriteCategory = Object.entries(categoryStats).sort((a, b) => b[1] - a[1])[0]?.[0] || '없음';
-      
-      // 가장 많이 참여한 지역
-      const favoriteRegion = Object.entries(regionStats).sort((a, b) => b[1] - a[1])[0]?.[0] || '없음';
-      
-      // 가장 많이 참여한 시간대
-      const favoriteTime = Object.entries(timeStats).sort((a, b) => b[1] - a[1])[0]?.[0] || '없음';
+      const favoriteCategory = Object.entries(res.categoryStats || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || '없음';
+      const favoriteRegion = Object.entries(res.regionStats || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || '없음';
+      const favoriteTime = Object.entries(res.timeStats || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || '없음';
 
       setStatistics({
-        categoryStats,
-        regionStats,
-        monthlyStats,
-        weeklyStats,
-        timeStats,
-        totalGroups: userGroups.length,
-        totalParticipations: userGroups.length,
+        categoryStats: res.categoryStats || {},
+        regionStats: res.regionStats || {},
+        monthlyStats: res.monthlyStats || {},
+        weeklyStats: res.weeklyStats || {},
+        timeStats: res.timeStats || {},
+        totalGroups: res.totalGroups ?? 0,
+        totalParticipations: res.totalParticipations ?? 0,
         favoriteCategory,
         favoriteRegion,
         favoriteTime,
+        matchTypeStats: res.matchTypeStats || {},
       });
     } catch (error) {
       console.error('통계 데이터 조회 실패:', error);
@@ -184,7 +98,7 @@ const SportsStatisticsModal: React.FC<SportsStatisticsModalProps> = ({ userId, i
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm"
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/30 backdrop-blur-sm"
       onClick={handleOverlayClick}
     >
       <div 
@@ -252,6 +166,71 @@ const SportsStatisticsModal: React.FC<SportsStatisticsModalProps> = ({ userId, i
                   </div>
                 </div>
               </div>
+
+              {/* 매치 유형별 비율 (도넛 차트) */}
+              {Object.keys(statistics.matchTypeStats || {}).length > 0 && (() => {
+                const mt = statistics.matchTypeStats;
+                const labels: Record<string, string> = {
+                  participated_normal: '참여 일반매치',
+                  participated_rank: '참여 랭크매치',
+                  participated_event: '참여 이벤트매치',
+                  created_normal: '생성 일반매치',
+                  created_rank: '생성 랭크매치',
+                  created_event: '생성 이벤트매치',
+                };
+                const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#ef4444'];
+                const entries = Object.entries(mt).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+                const total = entries.reduce((s, [, v]) => s + v, 0);
+                let acc = 0;
+                const circumference = 2 * Math.PI * 40;
+                const segments = entries.map(([k, v], i) => {
+                  const pct = total > 0 ? (v / total) * 100 : 0;
+                  const start = acc;
+                  acc += pct;
+                  return { key: k, count: v, pct, start, color: colors[i % colors.length] };
+                });
+                return (
+                  <div className="bg-[var(--color-bg-primary)] rounded-xl p-4 border border-[var(--color-border-card)]">
+                    <h3 className="text-lg font-bold text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
+                      <ChartBarIcon className="w-5 h-5 text-blue-500" />
+                      매치 유형별 비율
+                    </h3>
+                    <div className="flex flex-col md:flex-row gap-6 items-center">
+                      <div className="relative w-40 h-40 shrink-0">
+                        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                          {segments.map((s) => (
+                            <circle
+                              key={s.key}
+                              cx="50"
+                              cy="50"
+                              r="40"
+                              fill="none"
+                              stroke={s.color}
+                              strokeWidth="20"
+                              strokeDasharray={`${(s.pct / 100) * circumference} ${circumference}`}
+                              strokeDashoffset={`${-(s.start / 100) * circumference}`}
+                              className="transition-all"
+                            />
+                          ))}
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-2xl font-bold text-[var(--color-text-primary)]">{total}</span>
+                          <span className="text-sm text-[var(--color-text-secondary)] ml-0.5">건</span>
+                        </div>
+                      </div>
+                      <div className="flex-1 grid grid-cols-2 gap-2">
+                        {segments.map((s) => (
+                          <div key={s.key} className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                            <span className="text-sm text-[var(--color-text-primary)] truncate">{labels[s.key] ?? s.key}</span>
+                            <span className="text-sm font-bold text-[var(--color-text-primary)]">{s.count} ({Math.round(s.pct)}%)</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* 운동 카테고리별 통계 */}
               <div className="bg-[var(--color-bg-primary)] rounded-xl p-4 border border-[var(--color-border-card)]">

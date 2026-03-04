@@ -31,6 +31,8 @@ import {
   RANK_POINTS_LOSS,
   pointsToGrade,
 } from '../constants/rank-grade';
+import { PENALTY_THRESHOLD_FOR_MATCH_RESTRICTION, PENALTY_POINTS_PER_REPORT, MANNER_SCORE_THRESHOLD } from '../constants/penalty';
+import { validateSportSpecificData } from '../constants/sport-specific';
 
 /** 주소/시도 문자열에서 지역 키 추출 (예: 서울, 대전, 경기). 알림 지역 매칭용 */
 const REGION_KEYS = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종', '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
@@ -143,19 +145,33 @@ export class GroupsService {
   }
 
   async create(createGroupDto: CreateGroupDto, creatorId: number): Promise<Group> {
-    // 현재 지원 종목: 축구만 (추후 종목 추가 예정)
-    const allowedCategories = ['축구'];
+    const allowedCategories = ['축구', '풋살', '농구', '테니스', '배드민턴'];
     if (!createGroupDto.category || !allowedCategories.includes(createGroupDto.category)) {
-      throw new BadRequestException('현재 지원하는 종목은 축구입니다.');
+      throw new BadRequestException(`현재 지원하는 종목은 ${allowedCategories.join(', ')}입니다.`);
+    }
+
+    const validation = validateSportSpecificData(
+      createGroupDto.category,
+      createGroupDto.sportSpecificData,
+    );
+    if (!validation.valid) {
+      throw new BadRequestException(validation.message ?? '종목별 필수 데이터가 누락되었습니다.');
     }
 
     // 이벤트매치인 경우 사장님 권한 체크
     const groupType = createGroupDto.type || 'normal';
+    const creator = await this.usersService.findById(creatorId);
+    if (!creator) {
+      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    }
+    // 패널티 점수 체크 (신고 누적 시 매치 생성·참가 제한)
+    const creatorPenalty = creator.penaltyScore ?? 0;
+    if (creatorPenalty >= PENALTY_THRESHOLD_FOR_MATCH_RESTRICTION) {
+      throw new ForbiddenException(
+        '신고가 누적되어 매치 생성이 제한된 상태입니다. 운영 정책을 확인해 주세요.',
+      );
+    }
     if (groupType === 'event') {
-      const creator = await this.usersService.findById(creatorId);
-      if (!creator) {
-        throw new NotFoundException('사용자를 찾을 수 없습니다.');
-      }
       if (!creator.isAdmin && !creator.businessNumberVerified) {
         throw new ForbiddenException('이벤트매치는 체육관 사장님이나 스포츠샵 사장님으로 등록된 사용자만 개최할 수 있습니다.');
       }
@@ -188,6 +204,25 @@ export class GroupsService {
       : createGroupDto.facilityId != null
         ? [createGroupDto.facilityId]
         : [];
+    // meetingTime이 없고 meetingDateTime이 있으면 meetingTime 문자열 생성 (용병 구하기 등 - 목록 필터에 필요)
+    let meetingTimeStr = createGroupDto.meetingTime?.trim() || null;
+    if (!meetingTimeStr && meetingDateTime) {
+      const meeting = meetingDateTime instanceof Date ? meetingDateTime : new Date(meetingDateTime);
+      const y = meeting.getFullYear();
+      const m = meeting.getMonth() + 1;
+      const d = meeting.getDate();
+      const h = meeting.getHours();
+      const min = meeting.getMinutes();
+      const startPart = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')} ${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+      const rawEnd = createGroupDto.meetingEndTime;
+      if (rawEnd && typeof rawEnd === 'string' && rawEnd.trim().length >= 5) {
+        meetingTimeStr = `${startPart} ~ ${rawEnd.trim().slice(0, 5)}`;
+      } else {
+        const endH = (h + 2) % 24;
+        meetingTimeStr = `${startPart} ~ ${String(endH).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+      }
+    }
+
     const group = this.groupRepository.create({
       ...createGroupDto,
       type: groupType,
@@ -196,7 +231,9 @@ export class GroupsService {
       equipment: createGroupDto.equipment || [],
       participants: [], // 명시적으로 빈 배열 설정 (cascade 문제 방지)
       meetingDateTime,
+      meetingTime: meetingTimeStr ?? createGroupDto.meetingTime ?? null,
       facilityId: null, // 인원 마감 시 1→2→3순위로 확정 후 설정
+      sportSpecificData: createGroupDto.sportSpecificData ?? null,
     });
 
     const savedGroup = await this.groupRepository.save(group);
@@ -365,6 +402,25 @@ export class GroupsService {
       this.logger.warn('매치장 팔로워 알림 발송 실패:', err);
     }
 
+    // 용병 구하기 글: 해당 종목 용병 알림 수신 유저에게 알림
+    const isMercenaryRecruit = (createGroupDto as CreateGroupDto & { isMercenaryRecruit?: boolean }).isMercenaryRecruit;
+    if (isMercenaryRecruit && savedGroup.category) {
+      try {
+        const eligibleIds = await this.usersService.findMercenaryEligibleUserIds(savedGroup.category, creatorId);
+        for (const userId of eligibleIds) {
+          await this.notificationsService.createNotification(
+            userId,
+            NotificationType.MERCENARY_RECRUIT,
+            '용병 구인 알림',
+            `[${savedGroup.category}] ${savedGroup.name} - 용병을 구해요!`,
+            { groupId: savedGroup.id, groupName: savedGroup.name, category: savedGroup.category },
+          );
+        }
+      } catch (err) {
+        this.logger.warn('용병 구하기 알림 발송 실패:', err);
+      }
+    }
+
     // participants 관계를 undefined로 설정하여 반환 (cascade 문제 방지)
     if (groupWithSettings) {
       (groupWithSettings as any).participants = undefined;
@@ -401,6 +457,12 @@ export class GroupsService {
       latitude,
       longitude,
       radiusKm = 3,
+      latMin,
+      latMax,
+      lngMin,
+      lngMax,
+      filterDate,
+      sportSpecificFilter,
     } = queryDto;
     const skip = (page - 1) * limit;
 
@@ -438,6 +500,26 @@ export class GroupsService {
       );
     }
 
+    // 지도 bounds 필터 (이 지역에서 재검색)
+    if (latMin != null && latMax != null && lngMin != null && lngMax != null) {
+      queryBuilder.andWhere(
+        'group.latitude BETWEEN :boundsLatMin AND :boundsLatMax AND group.longitude BETWEEN :boundsLngMin AND :boundsLngMax',
+        { boundsLatMin: latMin, boundsLatMax: latMax, boundsLngMin: lngMin, boundsLngMax: lngMax },
+      );
+    }
+
+    // 날짜 필터 (특정 날짜 매치만) — DATE 비교로 타임존 영향 제거
+    if (filterDate) {
+      const trimmed = String(filterDate).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        queryBuilder.andWhere('group.meetingDateTime IS NOT NULL');
+        queryBuilder.andWhere(
+          `DATE("group"."meetingDateTime") = :filterDate`,
+          { filterDate: trimmed },
+        );
+      }
+    }
+
     // 모임 타입 필터
     if (queryDto.type) {
       queryBuilder.andWhere('group.type = :type', { type: queryDto.type });
@@ -446,6 +528,35 @@ export class GroupsService {
     // 카테고리 필터
     if (category && category !== '전체') {
       queryBuilder.andWhere('group.category = :category', { category });
+    }
+
+    // 종목별 동적 필터 (sport_specific_data)
+    // 참고: "group"은 PostgreSQL 예약어이므로 따옴표로 감싸야 함
+    if (sportSpecificFilter) {
+      try {
+        const filterObj = JSON.parse(sportSpecificFilter) as Record<string, unknown>;
+        if (filterObj && typeof filterObj === 'object') {
+          for (const [key, val] of Object.entries(filterObj)) {
+            if (val === undefined || val === null || val === '') continue;
+            const safeKey = key.replace(/[^a-zA-Z0-9_]/g, '');
+            if (Array.isArray(val) && val.length > 0) {
+              // jsonb 배열 overlap: && 연산자 (공통 원소 있으면 true)
+              const jsonArr = JSON.stringify((val as string[]).map((v) => String(v)));
+              queryBuilder.andWhere(
+                `("group"."sportSpecificData"->'${safeKey}') && CAST(:ssf_${safeKey} AS jsonb)`,
+                { [`ssf_${safeKey}`]: jsonArr },
+              );
+            } else if (typeof val === 'string' && val) {
+              queryBuilder.andWhere(
+                `"group"."sportSpecificData"->>'${safeKey}' = :ssf_${safeKey}`,
+                { [`ssf_${safeKey}`]: val },
+              );
+            }
+          }
+        }
+      } catch {
+        // JSON 파싱 실패 시 무시
+      }
     }
 
     // 검색어 필터
@@ -529,10 +640,24 @@ export class GroupsService {
           console.error('랭커 확인 실패:', error);
         }
 
+        // 매치장 제외 참가자 수 (용병 구하기 등에서 생성자가 참가자 테이블에 없을 수 있음)
+        const totalParticipants = await this.participantRepository.count({
+          where: { groupId: group.id },
+        });
+        const creatorIsParticipant = group.creatorId
+          ? await this.participantRepository.findOne({
+              where: { groupId: group.id, userId: group.creatorId },
+            })
+          : null;
+        const participantCountExcludingCreator = creatorIsParticipant
+          ? totalParticipants - 1
+          : totalParticipants;
+
         return {
           ...group,
           recentJoinCount: recentParticipants,
           hasRanker,
+          participantCountExcludingCreator,
         };
       }),
     );
@@ -607,6 +732,12 @@ export class GroupsService {
         group.participantCount = syncedCount;
       }
 
+      // 매치장 제외 참가자 수 (용병 구하기 등에서 생성자가 group_participants에 없을 수 있음)
+      const participantCountExcludingCreator = group.participants?.filter(
+        (p) => p.userId !== group.creatorId,
+      ).length ?? 0;
+      (group as any).participantCountExcludingCreator = participantCountExcludingCreator;
+
       // 사용자가 참가했는지 확인 (선택적) - 레코드 존재 = 참가
       if (userId) {
         const isParticipant = group.participants?.some(
@@ -663,6 +794,8 @@ export class GroupsService {
             nickname: group.creator.nickname,
             tag: group.creator.tag ?? null,
             profileImageUrl: group.creator.profileImageUrl ?? null,
+            mannerScore: (group.creator as any).mannerScore ?? 80,
+            noShowCount: (group.creator as any).noShowCount ?? 0,
           }
         : null;
 
@@ -757,7 +890,7 @@ export class GroupsService {
     await this.groupRepository
       .createQueryBuilder()
       .update(Group)
-      .set(updateGroupDto)
+      .set(updateGroupDto as any)
       .where('id = :id', { id })
       .execute();
     
@@ -782,6 +915,100 @@ export class GroupsService {
       .set({ isActive: false })
       .where('id = :id', { id })
       .execute();
+  }
+
+  /**
+   * 랭크 점수 평균 균형에 따라 참가 시 배정될 팀(레드/블루)을 제안합니다.
+   * 포지션 지정 매치(랭크/팀)가 아니면 기본 'red'를 반환합니다.
+   */
+  async getSuggestedTeamForJoin(groupId: number, userId: number): Promise<{ team: 'red' | 'blue' }> {
+    const numericGroupId = Number(groupId);
+    const numericUserId = Number(userId);
+    if (!numericGroupId || isNaN(numericGroupId) || !numericUserId || isNaN(numericUserId)) {
+      return { team: 'red' };
+    }
+    const group = await this.findOne(numericGroupId, numericUserId);
+    if (!group) return { team: 'red' };
+
+    const settings = group.gameSettings as GroupGameSettings | undefined;
+    const isPositionMatch =
+      settings &&
+      (settings.gameType === 'team' || (group.type === 'rank' && settings.gameType === 'individual'));
+    if (!isPositionMatch || !settings?.positions?.length) {
+      return { team: 'red' };
+    }
+
+    const category = group.category || '축구';
+    const participantPositions = await this.participantPositionRepository.find({
+      where: { groupId: numericGroupId },
+    });
+
+    let redSum = 0;
+    let redCount = 0;
+    let blueSum = 0;
+    let blueCount = 0;
+
+    for (const p of group.participants || []) {
+      const pos = participantPositions.find((pp) => pp.userId === p.userId);
+      const team = (pos?.team === 'blue' ? 'blue' : 'red') as 'red' | 'blue';
+      const points =
+        (p.user as any)?.ohunRankPoints?.[category]?.points ?? RANK_INITIAL_POINTS;
+      if (team === 'red') {
+        redSum += points;
+        redCount += 1;
+      } else {
+        blueSum += points;
+        blueCount += 1;
+      }
+    }
+
+    const joiningUser = await this.usersService.findById(numericUserId);
+    const joiningPoints =
+      joiningUser?.ohunRankPoints?.[category]?.points ?? RANK_INITIAL_POINTS;
+
+    const redAvg = redCount ? redSum / redCount : 0;
+    const blueAvg = blueCount ? blueSum / blueCount : 0;
+
+    if (redCount === 0 && blueCount === 0) {
+      return { team: 'red' };
+    }
+
+    const newRedAvgIfRed = (redSum + joiningPoints) / (redCount + 1);
+    const newBlueAvgIfBlue = (blueSum + joiningPoints) / (blueCount + 1);
+    const gapIfRed = Math.abs(newRedAvgIfRed - blueAvg);
+    const gapIfBlue = Math.abs(newBlueAvgIfBlue - redAvg);
+
+    return { team: gapIfRed <= gapIfBlue ? 'red' : 'blue' };
+  }
+
+  /** 팀만 지정된 경우 해당 팀에서 인원이 가장 적은 포지션 코드를 반환 (첫 빈 슬롯) */
+  private async resolveFirstEmptyPositionCode(
+    groupId: number,
+    team: string,
+  ): Promise<{ positionCode: string; slotLabel: string | null }> {
+    const positions = (await this.gameSettingsRepository.findOne({
+      where: { groupId },
+    }))?.positions;
+    const positionCodes = Array.isArray(positions) && positions.length
+      ? positions
+      : ['GK', 'DF', 'MF', 'FW'];
+    const existing = await this.participantPositionRepository.find({
+      where: { groupId, team },
+    });
+    const countByPos: Record<string, number> = {};
+    for (const code of positionCodes) {
+      countByPos[code] = existing.filter((e) => e.positionCode === code).length;
+    }
+    let minCode = positionCodes[0];
+    let minCount = countByPos[minCode] ?? 0;
+    for (const code of positionCodes) {
+      const c = countByPos[code] ?? 0;
+      if (c < minCount) {
+        minCount = c;
+        minCode = code;
+      }
+    }
+    return { positionCode: minCode, slotLabel: null };
   }
 
   async joinGroup(groupId: number, userId: number, positionCode?: string, team?: string, slotLabel?: string): Promise<Group> {
@@ -868,6 +1095,22 @@ export class GroupsService {
       const user = await this.usersService.findById(numericUserId);
       if (!user) {
         throw new NotFoundException('사용자를 찾을 수 없습니다.');
+      }
+
+      // 패널티 점수 체크 (신고 누적 시 매치 참여 제한)
+      const penalty = user.penaltyScore ?? 0;
+      if (penalty >= PENALTY_THRESHOLD_FOR_MATCH_RESTRICTION) {
+        throw new ForbiddenException(
+          '신고가 누적되어 매치 참가가 제한된 상태입니다. 운영 정책을 확인해 주세요.',
+        );
+      }
+
+      // Penalty Guard: 신뢰도 점수 임계값 미만이면 용병/참가 제한
+      const mannerScore = user.mannerScore ?? 80;
+      if (mannerScore < MANNER_SCORE_THRESHOLD) {
+        throw new ForbiddenException(
+          `신뢰도 점수(${mannerScore}점)가 낮아 매치 참가가 제한되었습니다. 매너를 개선해 주세요.`,
+        );
       }
 
       // 성별 제한 체크
@@ -981,20 +1224,27 @@ export class GroupsService {
           insertSuccess = true;
           console.log('✅ 참가자 레코드 저장 완료 (createQueryBuilder)');
           // 포지션 지정 매치일 때 포지션 저장 (team 또는 랭크 포지션 지정 개인)
-          if (positionCode) {
-            const settings = await this.gameSettingsRepository.findOne({ where: { groupId: numericGroupId } });
-            const isPositionMatch =
-              settings &&
-              (!settings.positions?.length || settings.positions.includes(positionCode)) &&
-              (settings.gameType === 'team' || (group.type === 'rank' && settings.gameType === 'individual'));
-            if (isPositionMatch) {
+          const settings = await this.gameSettingsRepository.findOne({ where: { groupId: numericGroupId } });
+          const isPositionMatch =
+            settings &&
+            (settings.gameType === 'team' || (group.type === 'rank' && settings.gameType === 'individual'));
+          if (isPositionMatch) {
+            let finalPositionCode = positionCode;
+            let finalSlotLabel = slotLabel ?? null;
+            let finalTeam = team ?? 'red';
+            if (!finalPositionCode && finalTeam) {
+              const resolved = await this.resolveFirstEmptyPositionCode(numericGroupId, finalTeam);
+              finalPositionCode = resolved.positionCode;
+              finalSlotLabel = resolved.slotLabel;
+            }
+            if (finalPositionCode && (!settings.positions?.length || settings.positions.includes(finalPositionCode))) {
               await this.participantPositionRepository.save(
                 this.participantPositionRepository.create({
                   groupId: numericGroupId,
                   userId: numericUserId,
-                  positionCode,
-                  slotLabel: slotLabel ?? null,
-                  team: team ?? 'red',
+                  positionCode: finalPositionCode,
+                  slotLabel: finalSlotLabel,
+                  team: finalTeam,
                   isPreferred: false,
                 }),
               );
@@ -1045,20 +1295,27 @@ export class GroupsService {
           if (insertResult && Array.isArray(insertResult) && insertResult.length > 0) {
             insertSuccess = true;
             console.log('✅ 참가자 레코드 저장 완료 (Raw SQL)');
-            if (positionCode) {
-              const settings = await this.gameSettingsRepository.findOne({ where: { groupId: numericGroupId } });
-              const isPositionMatch =
-                settings &&
-                (!settings.positions?.length || settings.positions.includes(positionCode)) &&
-                (settings.gameType === 'team' || (group.type === 'rank' && settings.gameType === 'individual'));
-              if (isPositionMatch) {
+            const settings = await this.gameSettingsRepository.findOne({ where: { groupId: numericGroupId } });
+            const isPositionMatch =
+              settings &&
+              (settings.gameType === 'team' || (group.type === 'rank' && settings.gameType === 'individual'));
+            if (isPositionMatch) {
+              let finalPositionCode = positionCode;
+              let finalSlotLabel = slotLabel ?? null;
+              let finalTeam = team ?? 'red';
+              if (!finalPositionCode && finalTeam) {
+                const resolved = await this.resolveFirstEmptyPositionCode(numericGroupId, finalTeam);
+                finalPositionCode = resolved.positionCode;
+                finalSlotLabel = resolved.slotLabel;
+              }
+              if (finalPositionCode && (!settings.positions?.length || settings.positions.includes(finalPositionCode))) {
                 await this.participantPositionRepository.save(
                   this.participantPositionRepository.create({
                     groupId: numericGroupId,
                     userId: numericUserId,
-                    positionCode,
-                    slotLabel: slotLabel ?? null,
-                    team: team ?? 'red',
+                    positionCode: finalPositionCode,
+                    slotLabel: finalSlotLabel,
+                    team: finalTeam,
                     isPreferred: false,
                   }),
                 );
@@ -1702,9 +1959,109 @@ export class GroupsService {
       for (const g of groups) {
         const pos = positions.find((pp) => pp.groupId === g.id);
         (g as any).myPositionCode = pos?.positionCode ?? null;
+        (g as any).myTeam = pos?.team ?? null;
       }
     }
     return groups;
+  }
+
+  /**
+   * 운동 통계: 매치 유형별 비율(도넛차트), 월별 활동 추이, 종목별 참여
+   * - matchTypeStats: participated_normal/rank/event, created_normal/rank/event
+   * - monthlyStats: YYYY-MM -> count (meetingDateTime 또는 createdAt 기준)
+   * - categoryStats: 종목 -> count
+   * - regionStats, weeklyStats, timeStats: 차트용 부가 데이터
+   */
+  async getMyActivityStats(userId: number): Promise<{
+    matchTypeStats: Record<string, number>;
+    monthlyStats: Record<string, number>;
+    categoryStats: Record<string, number>;
+    regionStats: Record<string, number>;
+    weeklyStats: Record<string, number>;
+    timeStats: Record<string, number>;
+    totalParticipations: number;
+    totalCreations: number;
+    totalGroups: number;
+  }> {
+    const [participations, creations] = await Promise.all([
+      this.findMyParticipations(userId),
+      this.findMyCreationsCompleted(userId),
+    ]);
+
+    const matchTypeStats: Record<string, number> = {
+      participated_normal: 0,
+      participated_rank: 0,
+      participated_event: 0,
+      created_normal: 0,
+      created_rank: 0,
+      created_event: 0,
+    };
+    const monthlyStats: Record<string, number> = {};
+    const categoryStats: Record<string, number> = {};
+    const regionStats: Record<string, number> = {};
+    const weeklyStats: Record<string, number> = {};
+    const timeStats: Record<string, number> = {};
+
+    const toMonthKey = (d: Date | null | undefined): string | null => {
+      if (!d) return null;
+      const dt = d instanceof Date ? d : new Date(d);
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+    };
+
+    const extractRegion = (addr: string | null | undefined): string | null => {
+      if (!addr) return null;
+      for (const key of REGION_KEYS) {
+        if (addr.includes(key)) return key;
+      }
+      return null;
+    };
+
+    const getTimeSlot = (hour: number): string => {
+      if (hour >= 6 && hour < 12) return '오전 (6-12시)';
+      if (hour >= 12 && hour < 18) return '오후 (12-18시)';
+      if (hour >= 18 && hour < 22) return '저녁 (18-22시)';
+      return '밤 (22-6시)';
+    };
+
+    const processGroup = (g: Group) => {
+      const month = toMonthKey(g.meetingDateTime ?? g.createdAt);
+      if (month) monthlyStats[month] = (monthlyStats[month] ?? 0) + 1;
+      const region = extractRegion(g.location);
+      if (region) regionStats[region] = (regionStats[region] ?? 0) + 1;
+      const dt = g.meetingDateTime ?? g.createdAt;
+      if (dt) {
+        const d = dt instanceof Date ? dt : new Date(dt);
+        const days = ['일', '월', '화', '수', '목', '금', '토'];
+        weeklyStats[days[d.getDay()]] = (weeklyStats[days[d.getDay()]] ?? 0) + 1;
+        timeStats[getTimeSlot(d.getHours())] = (timeStats[getTimeSlot(d.getHours())] ?? 0) + 1;
+      }
+    };
+
+    for (const g of participations) {
+      const type = g.type || 'normal';
+      matchTypeStats[`participated_${type}`] = (matchTypeStats[`participated_${type}`] ?? 0) + 1;
+      if (g.category) categoryStats[g.category] = (categoryStats[g.category] ?? 0) + 1;
+      processGroup(g);
+    }
+
+    for (const g of creations) {
+      const type = g.type || 'normal';
+      matchTypeStats[`created_${type}`] = (matchTypeStats[`created_${type}`] ?? 0) + 1;
+      if (g.category) categoryStats[g.category] = (categoryStats[g.category] ?? 0) + 1;
+      processGroup(g);
+    }
+
+    return {
+      matchTypeStats,
+      monthlyStats,
+      categoryStats,
+      regionStats,
+      weeklyStats,
+      timeStats,
+      totalParticipations: participations.length,
+      totalCreations: creations.length,
+      totalGroups: participations.length + creations.length,
+    };
   }
 
   async closeGroup(groupId: number, userId: number): Promise<Group> {
@@ -2099,6 +2456,7 @@ export class GroupsService {
       }
     }
 
+    const mannerOrReportTargetIds = new Set<number>();
     for (const cat of categories) {
       const selectedId = answers[cat.key];
       if (optionalKeys.has(cat.key) && (selectedId == null || !Number.isInteger(selectedId))) continue;
@@ -2114,6 +2472,27 @@ export class GroupsService {
           selectedUserId: selectedId,
         }),
       );
+      // 매너칭찬·신고 대상의 매너점수 재계산 대상으로 등록
+      if ((cat.key === '매너' || cat.key === '신고') && selectedId != null) {
+        mannerOrReportTargetIds.add(selectedId);
+      }
+      // 신고 선택 시 피신고자의 패널티 점수 증가
+      if (cat.key === '신고' && selectedId != null) {
+        try {
+          await this.usersService.incrementPenaltyScore(selectedId, PENALTY_POINTS_PER_REPORT);
+        } catch (e) {
+          this.logger.warn(`패널티 점수 증가 실패 (userId=${selectedId}):`, e);
+        }
+      }
+    }
+
+    // 매너칭찬·신고 받은 유저들의 매너점수 재계산
+    for (const targetId of mannerOrReportTargetIds) {
+      try {
+        await this.userScoreService.recalculateAllScores(targetId);
+      } catch (e) {
+        this.logger.warn(`매너점수 재계산 실패 (userId=${targetId}):`, e);
+      }
     }
 
     await this.pointsService.addTransaction(

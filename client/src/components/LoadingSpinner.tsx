@@ -20,9 +20,9 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   };
 
   const containerClasses = fullScreen
-    ? 'fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-bg-primary)]'
+    ? 'fixed inset-0 z-[1000] flex items-center justify-center bg-[var(--color-bg-primary)]'
     : overlay
-    ? 'absolute inset-0 z-50 flex items-center justify-center bg-[var(--color-bg-primary)]/80 backdrop-blur-sm'
+    ? 'absolute inset-0 z-[1000] flex items-center justify-center bg-[var(--color-bg-primary)]/80 backdrop-blur-sm'
     : 'flex items-center justify-center';
 
   return (

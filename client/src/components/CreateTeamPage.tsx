@@ -102,15 +102,15 @@ const CreateTeamPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!logoFile) {
-      await showError('팀 로고를 등록해주세요.', '입력 필요');
+      await showError('용병 클럽 로고를 등록해주세요.', '입력 필요');
       return;
     }
     if (!teamName.trim()) {
-      await showError('팀명을 입력해주세요.', '입력 필요');
+      await showError('용병 클럽명을 입력해주세요.', '입력 필요');
       return;
     }
     if (!region) {
-      await showError('팀 소재지를 선택해주세요.', '입력 필요');
+      await showError('용병 클럽 소재지를 선택해주세요.', '입력 필요');
       return;
     }
     setIsSubmitting(true);
@@ -129,11 +129,11 @@ const CreateTeamPage = () => {
       }
 
       const team = await api.post<{ id: number }>('/api/teams', formData);
-      await showSuccess('팀이 생성되었습니다.', '팀 생성 완료');
+      await showSuccess('용병 클럽이 생성되었습니다.', '용병 클럽 생성 완료');
       navigate(team?.id ? `/teams/${team.id}` : '/teams');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : '팀 생성에 실패했습니다.';
-      await showError(message, '팀 생성 실패');
+      const message = err instanceof Error ? err.message : '용병 클럽 생성에 실패했습니다.';
+      await showError(message, '용병 클럽 생성 실패');
     } finally {
       setIsSubmitting(false);
     }
@@ -149,13 +149,13 @@ const CreateTeamPage = () => {
             className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] mb-4 transition-colors"
           >
             <ChevronLeftIcon className="w-4 h-4" />
-            팀 목록으로
+            용병 클럽 목록으로
           </Link>
           <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)] mb-2">
-            팀 만들기
+            용병클럽 만들기
           </h1>
           <p className="text-[var(--color-text-secondary)]">
-            팀 정보를 입력하고 함께할 멤버를 초대하세요. 생성하시는 분이 팀장이 됩니다.
+            용병 클럽 정보를 입력하고 함께할 멤버를 초대하세요. 생성하시는 분이 용병 클럽장이 됩니다.
           </p>
         </div>
       </header>
@@ -169,13 +169,13 @@ const CreateTeamPage = () => {
               기본 정보
             </h2>
             <p className="text-sm text-[var(--color-text-secondary)] mb-6">
-              팀을 대표하는 이름과 로고, 종목·소재지를 입력하세요.
+              용병 클럽을 대표하는 이름과 로고, 종목·소재지를 입력하세요.
             </p>
 
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                  팀 로고 <span className="text-[var(--color-text-secondary)]">(필수)</span>
+                  용병 클럽 로고 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                 </label>
                 <div className="flex items-center gap-4">
                   <label className="w-24 h-24 rounded-2xl border-2 border-dashed border-[var(--color-border-card)] flex items-center justify-center overflow-hidden cursor-pointer hover:border-[var(--color-blue-primary)] transition-colors shrink-0">
@@ -188,20 +188,20 @@ const CreateTeamPage = () => {
                   </label>
                   <div className="text-sm text-[var(--color-text-secondary)]">
                     <p>클릭하여 로고 등록</p>
-                    <p className="mt-1">JPG, PNG, GIF, WEBP (최대 2MB)</p>
+                    <p className="mt-1">정사각형(1:1) 권장. JPG, PNG, GIF, WEBP (최대 2MB)</p>
                   </div>
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                  팀명 <span className="text-[var(--color-text-secondary)]">(필수)</span>
+                  용병 클럽명 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                 </label>
                 <input
                   type="text"
                   value={teamName}
                   onChange={(e) => setTeamName(e.target.value)}
-                  placeholder="팀 이름을 입력하세요"
+                  placeholder="용병 클럽 이름을 입력하세요"
                   maxLength={50}
                   className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
                 />
@@ -224,7 +224,7 @@ const CreateTeamPage = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                    팀 소재지 <span className="text-[var(--color-text-secondary)]">(필수)</span>
+                    용병 클럽 소재지 <span className="text-[var(--color-text-secondary)]">(필수)</span>
                   </label>
                   <select
                     value={region}
@@ -241,19 +241,19 @@ const CreateTeamPage = () => {
 
               <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-[var(--color-bg-secondary)] text-sm text-[var(--color-text-secondary)]">
                 <ShieldCheckIcon className="w-5 h-5 shrink-0" />
-                <span>생성하시는 분이 팀장이 됩니다.</span>
+                <span>생성하시는 분이 용병 클럽장이 됩니다.</span>
               </div>
             </div>
           </section>
 
-          {/* 섹션 2: 팀 구성 */}
+          {/* 섹션 2: 용병 클럽 구성 */}
           <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 md:p-8 shadow-sm">
             <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1 flex items-center gap-2">
               <UserGroupIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
-              팀 구성
+              용병 클럽 구성
             </h2>
             <p className="text-sm text-[var(--color-text-secondary)] mb-6">
-              감독, 코치, 연락처를 입력하면 팀원들이 연락하기 편합니다.
+              감독, 코치, 연락처를 입력하면 용병 클럽원들이 연락하기 편합니다.
             </p>
 
             <div className="space-y-4">
@@ -288,7 +288,7 @@ const CreateTeamPage = () => {
                   type="text"
                   value={contact}
                   onChange={(e) => setContact(e.target.value)}
-                  placeholder="팀 대표 연락처 (선택)"
+                  placeholder="용병 클럽 대표 연락처 (선택)"
                   maxLength={50}
                   className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
                 />
@@ -296,19 +296,19 @@ const CreateTeamPage = () => {
             </div>
           </section>
 
-          {/* 섹션 3: 팀 소개 */}
+          {/* 섹션 3: 용병 클럽 소개 */}
           <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 md:p-8 shadow-sm">
             <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1 flex items-center gap-2">
               <DocumentTextIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
-              팀 소개
+              용병 클럽 소개
             </h2>
             <p className="text-sm text-[var(--color-text-secondary)] mb-6">
-              팀의 성격, 목표, 활동 방식을 간단히 소개해주세요.
+              용병 클럽의 성격, 목표, 활동 방식을 간단히 소개해주세요.
             </p>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="팀 소개를 입력하세요 (선택)"
+              placeholder="용병 클럽 소개를 입력하세요 (선택)"
               rows={4}
               maxLength={500}
               className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] resize-none"
@@ -316,14 +316,14 @@ const CreateTeamPage = () => {
             <p className="mt-2 text-xs text-[var(--color-text-secondary)]">{description.length}/500</p>
           </section>
 
-          {/* 섹션 4: 팀원 초대 */}
-          <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 md:p-8 shadow-sm">
+{/* 섹션 4: 용병 클럽원 초대 */}
+            <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 md:p-8 shadow-sm">
             <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1 flex items-center gap-2">
               <UserPlusIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
-              팀원 초대
+              용병 클럽원 초대
             </h2>
             <p className="text-sm text-[var(--color-text-secondary)] mb-6">
-              팔로우 중인 유저를 검색해 팀 생성과 함께 초대할 수 있습니다.
+              팔로우 중인 유저를 검색해 용병 클럽 생성과 함께 초대할 수 있습니다.
             </p>
 
             <div className="space-y-4">
@@ -392,7 +392,7 @@ const CreateTeamPage = () => {
               disabled={isSubmitting}
               className="flex-1 sm:flex-[2] py-4 rounded-xl font-semibold text-white bg-[var(--color-blue-primary)] hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed transition-opacity shadow-lg"
             >
-              {isSubmitting ? '생성 중...' : '팀 만들기'}
+              {isSubmitting ? '생성 중...' : '용병클럽 만들기'}
             </button>
           </div>
         </div>

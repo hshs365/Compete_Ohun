@@ -1009,11 +1009,8 @@ const Step3CommonSettings: React.FC<Step3CommonSettingsProps> = ({
                           const day = String(d.getDate()).padStart(2, '0');
                           return `${y}-${m}-${day}`;
                         })()}
-                        className="w-full pl-3 pr-9 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-sm date-input-dark date-input-with-icon"
+                        className="w-full pl-3 pr-2 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-sm date-input-dark"
                       />
-                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
-                        <CalendarIcon className="w-4 h-4" />
-                      </span>
                     </div>
                     {reservationDate && (
                       <div className="mt-2">
@@ -1097,11 +1094,8 @@ const Step3CommonSettings: React.FC<Step3CommonSettingsProps> = ({
                     const day = String(d.getDate()).padStart(2, '0');
                     return `${y}-${m}-${day}`;
                   })()}
-                  className="w-full pl-4 pr-10 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark date-input-with-icon"
+                  className="w-full pl-4 pr-3 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
-                  <CalendarIcon className="w-5 h-5" />
-                </span>
               </div>
               <select
                 required
@@ -1175,11 +1169,8 @@ const Step3CommonSettings: React.FC<Step3CommonSettingsProps> = ({
                   const min = String(d.getMinutes()).padStart(2, '0');
                   return `${y}-${m}-${day}T${h}:${min}`;
                 })()}
-                className="w-full pl-4 pr-10 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark date-input-with-icon"
+                className="w-full pl-4 pr-3 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
-                <CalendarIcon className="w-5 h-5" />
-              </span>
             </div>
           )}
           <p className="text-xs text-[var(--color-text-secondary)] mt-2">

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 export interface User {
   id: number;
@@ -16,6 +16,26 @@ export interface User {
   residenceSigungu?: string | null;
   /** 전체 주소 (도로명/지번 + 상세주소). 회원가입/내 정보 저장값 */
   residenceAddress?: string | null;
+  /** 신뢰도 점수 (매너 점수). Penalty Guard에서 사용 */
+  mannerScore?: number;
+  /** 노쇼 누적 횟수 */
+  noShowCount?: number;
+  /** 용병 활동 상태. 'active'일 때만 구인자 검색에 노출 */
+  mercenaryActivityStatus?: 'active' | 'paused';
+  /** 종목별 용병 알림 수신 활성화. 해당 종목 true일 때 용병 구하기 알림 수신 */
+  mercenaryActiveBySport?: Record<string, boolean>;
+  /** 용병 활동 가능 시간표 */
+  mercenaryAvailability?: Array<{
+    dayOfWeek: number;
+    timeSlots: Array<{ start: string; end: string }>;
+  }>;
+  /** 관심/주력 종목 */
+  interestedSports?: string[];
+  /** 스포츠별 선호 포지션 */
+  sportPositions?: { sport: string; positions: string[] }[];
+  /** 종목별 올코트플레이 랭크 (급수) */
+  ohunRanks?: Record<string, string>;
+  effectiveRanks?: Record<string, string>;
 }
 
 // 닉네임과 태그를 조합하여 표시하는 헬퍼 함수
@@ -87,6 +107,7 @@ const getApiBaseUrl = (): string => {
 const API_BASE_URL = getApiBaseUrl();
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(() => {
     // 자동 로그인이 활성화되어 있으면 localStorage에서, 아니면 sessionStorage에서 가져오기
@@ -169,8 +190,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    checkAuth();
-  }, []);
+    // OAuth 콜백 페이지에서는 기존 토큰으로 /api/auth/me 호출 시 401 발생 가능 → 건너뜀
+    if (location.pathname === '/auth/oauth/callback') {
+      setIsLoading(false);
+      return;
+    }
+    void checkAuth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   // 로그인
   const login = async (email: string, password: string, rememberMe: boolean = false) => {
@@ -282,12 +309,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     navigate('/login');
   };
-
-  // 초기 인증 상태 확인
-  useEffect(() => {
-    checkAuth();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   return (
     <AuthContext.Provider

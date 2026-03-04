@@ -24,7 +24,15 @@ export const ALLCOURTPLAY_RANK_STYLES: Record<AllcourtplayRank, string> = {
 };
 
 export function getAllcourtplayRankStyle(rank: string): string {
+  if (rank === 'none') return 'from-slate-500 to-slate-600 text-slate-200';
   const r = rank?.toUpperCase();
   if (r && r in ALLCOURTPLAY_RANK_STYLES) return ALLCOURTPLAY_RANK_STYLES[r as AllcourtplayRank];
   return ALLCOURTPLAY_RANK_STYLES.F;
+}
+
+/** 랭크 표시 텍스트 (none → 급수 없음, 배드민턴 A~E → A조~E조) */
+export function getRankDisplayLabel(sport: string, rank: string): string {
+  if (rank === 'none') return '급수 없음';
+  if (sport === '배드민턴' && /^[A-E]$/i.test(rank)) return `${rank.toUpperCase()}조`;
+  return rank;
 }

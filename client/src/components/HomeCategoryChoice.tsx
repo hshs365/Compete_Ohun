@@ -1,20 +1,39 @@
 import React from 'react';
-import { SPORTS_LIST } from '../constants/sports';
+import { SPORTS_LIST, SPORT_ICONS } from '../constants/sports';
 
-/** 종목별 카드 테마 — 스포티·날렵한 톤 (추후 카드 배경 디자인 추가 시 사용) */
-const SPORT_CARD_THEME: Record<string, { bg: string; border: string; text: string }> = {
+/** 종목별 칩 테마 — 다크/라이트 모드 배경에서 분리되는 그라데이션·보더 */
+const SPORT_CHIP_THEME: Record<string, { gradient: string; border: string; text: string; activeGlow: string }> = {
   축구: {
-    bg: 'from-green-900 to-green-950',
-    border: 'border-green-400 hover:border-green-300',
-    text: 'text-green-100',
+    gradient: 'bg-gradient-to-br from-emerald-600/90 to-emerald-800/95 dark:from-emerald-500/30 dark:to-emerald-700/40',
+    border: 'border-2 border-emerald-400/60 dark:border-emerald-400/50',
+    text: 'text-white dark:text-emerald-100',
+    activeGlow: 'shadow-[0_0_12px_rgba(52,211,153,0.5)] dark:shadow-[0_0_16px_rgba(52,211,153,0.4)]',
   },
-  // 추후 종목 추가 시 여기에 추가
+  풋살: {
+    gradient: 'bg-gradient-to-br from-teal-600/90 to-teal-800/95 dark:from-teal-500/30 dark:to-teal-700/40',
+    border: 'border-2 border-teal-400/60 dark:border-teal-400/50',
+    text: 'text-white dark:text-teal-100',
+    activeGlow: 'shadow-[0_0_12px_rgba(45,212,191,0.5)] dark:shadow-[0_0_16px_rgba(45,212,191,0.4)]',
+  },
+  농구: {
+    gradient: 'bg-gradient-to-br from-orange-600/90 to-orange-800/95 dark:from-orange-500/30 dark:to-orange-700/40',
+    border: 'border-2 border-orange-400/60 dark:border-orange-400/50',
+    text: 'text-white dark:text-orange-100',
+    activeGlow: 'shadow-[0_0_12px_rgba(251,146,60,0.5)] dark:shadow-[0_0_16px_rgba(251,146,60,0.4)]',
+  },
+  테니스: {
+    gradient: 'bg-gradient-to-br from-lime-600/90 to-lime-800/95 dark:from-lime-500/30 dark:to-lime-700/40',
+    border: 'border-2 border-lime-400/60 dark:border-lime-400/50',
+    text: 'text-white dark:text-lime-100',
+    activeGlow: 'shadow-[0_0_12px_rgba(132,204,22,0.5)] dark:shadow-[0_0_16px_rgba(132,204,22,0.4)]',
+  },
 };
 
-const DEFAULT_CARD_THEME = {
-  bg: 'from-gray-800 to-gray-900',
-  border: 'border-gray-400 hover:border-gray-300',
-  text: 'text-gray-100',
+const DEFAULT_CHIP_THEME = {
+  gradient: 'bg-gradient-to-br from-slate-600/90 to-slate-800/95 dark:from-slate-500/30 dark:to-slate-700/40',
+  border: 'border-2 border-slate-400/60 dark:border-slate-400/50',
+  text: 'text-white dark:text-slate-100',
+  activeGlow: 'shadow-[0_0_12px_rgba(148,163,184,0.4)] dark:shadow-[0_0_16px_rgba(148,163,184,0.3)]',
 };
 
 interface HomeCategoryChoiceProps {
@@ -22,14 +41,14 @@ interface HomeCategoryChoiceProps {
 }
 
 /**
- * 종목 선택 화면 — 3분할 화면처럼 카드형으로 표시.
- * 카드 클릭 시 해당 종목 선택 후 다음 단계(매치 종류 선택)로 진행.
- * 추후 각 종목 카드에 백그라운드 디자인(예: 축구 일러스트) 추가 가능.
+ * 종목 선택 화면 — 이미지(아이콘) + 텍스트 칩 형태.
+ * 그라데이션·보더로 배경과 분리, 탭 시 스케일 애니메이션.
  */
 const HomeCategoryChoice: React.FC<HomeCategoryChoiceProps> = ({ onSelect }) => {
-  const sports = SPORTS_LIST;
+  const sports = [...SPORTS_LIST];
 
   const handleCardClick = (sport: string) => {
+    if (navigator.vibrate) navigator.vibrate(8);
     onSelect(sport);
   };
 
@@ -42,25 +61,28 @@ const HomeCategoryChoice: React.FC<HomeCategoryChoiceProps> = ({ onSelect }) => 
       </div>
       <div className="flex flex-wrap justify-center gap-4 p-4 overflow-auto max-w-2xl md:max-w-3xl mx-auto">
         {sports.map((sport) => {
-          const theme = SPORT_CARD_THEME[sport] ?? DEFAULT_CARD_THEME;
+          const theme = SPORT_CHIP_THEME[sport] ?? DEFAULT_CHIP_THEME;
+          const icon = SPORT_ICONS[sport] ?? '●';
           return (
             <button
               key={sport}
               type="button"
               onClick={() => handleCardClick(sport)}
               className={`
-                w-[160px] min-h-[120px] md:w-[180px] md:min-h-[130px]
-                flex flex-col items-center justify-center gap-2 p-4
-                bg-gradient-to-b ${theme.bg} border-2 ${theme.border}
-                rounded-lg md:rounded-xl
-                transition-all duration-200 hover:scale-[1.02] hover:shadow-2xl hover:brightness-110
-                relative overflow-hidden
+                flex items-center gap-3 px-6 py-4 rounded-xl md:rounded-2xl
+                ${theme.gradient} ${theme.border}
+                transition-all duration-200
+                hover:scale-[1.03] active:scale-[0.98]
+                hover:shadow-xl ${theme.activeGlow}
+                focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-400/60
               `}
-              data-sport-card
+              data-sport-chip
               data-sport={sport}
             >
-              {/* 추후 종목별 배경 디자인(예: 축구 공·피치)을 여기 배경으로 넣을 수 있음 */}
-              <span className={`text-xl md:text-2xl font-bold ${theme.text} relative z-10`}>
+              <span className="text-3xl md:text-4xl" aria-hidden>
+                {icon}
+              </span>
+              <span className={`text-lg md:text-xl font-bold ${theme.text}`}>
                 {sport}
               </span>
             </button>

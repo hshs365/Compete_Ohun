@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EnvelopeIcon, LockClosedIcon, EyeIcon, EyeSlashIcon, PhoneIcon, CheckCircleIcon, UserIcon, ArrowPathIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../contexts/AuthContext';
+import { formatPhoneNumber, PHONE_PLACEHOLDER } from '../utils/phoneFormat';
 import type { RegisterData } from '../contexts/AuthContext';
 import { SPORTS_LIST } from '../constants/sports';
 import { api } from '../utils/api';
 import Tooltip from './Tooltip';
+import AppLogo from './AppLogo';
 import { showError, showSuccess, showWarning } from '../utils/swal';
 
 // Daum Postcode API 타입 선언
@@ -79,14 +81,6 @@ const RegisterPage = () => {
       return () => clearTimeout(timer);
     }
   }, [countdown]);
-
-  // 전화번호 형식 자동 변환 (하이픈 추가)
-  const formatPhoneNumber = (value: string) => {
-    const numbers = value.replace(/[^\d]/g, '');
-    if (numbers.length <= 3) return numbers;
-    if (numbers.length <= 7) return `${numbers.slice(0, 3)}-${numbers.slice(3)}`;
-    return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7, 11)}`;
-  };
 
   // 인증번호 발송
   const handleRequestVerification = async () => {
@@ -276,15 +270,14 @@ const RegisterPage = () => {
 
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg-primary)] px-4 py-12 overflow-y-auto">
-      <div className="w-full max-w-2xl my-8">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg-primary)] px-4 py-6 overflow-y-auto">
+      <div className="w-full max-w-2xl my-4">
         <div className="bg-[var(--color-bg-card)] rounded-2xl shadow-lg border border-[var(--color-border-card)] p-8">
-          <h1 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2 text-center">
-            회원가입
-          </h1>
-          <p className="text-[var(--color-text-secondary)] text-center mb-8">
-            운동 매치 플랫폼에 가입하세요
-          </p>
+          <div className="text-center mb-4">
+            <AppLogo className="h-24 w-auto max-w-[200px] mx-auto object-contain" />
+            <p className="mt-2 text-[var(--color-text-secondary)] text-base font-medium">운동 매치, 여기서 시작하다</p>
+            <h1 className="text-2xl font-bold text-[var(--color-text-primary)] mt-3 mb-1">회원가입</h1>
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* 이메일 */}
@@ -427,7 +420,7 @@ const RegisterPage = () => {
               <div>
                 <label className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-primary)] mb-2">
                   연락처 <span className="text-[var(--color-text-secondary)]">(필수)</span>
-                  <Tooltip content="전화번호는 자동으로 하이픈(-)이 추가됩니다. 숫자만 입력해주세요." />
+                  <Tooltip content="- 없이 입력하면 자동으로 추가됩니다." />
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -443,7 +436,7 @@ const RegisterPage = () => {
                     className={`flex-1 px-4 py-2 border rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] ${
                       errors.phone ? 'border-red-500' : 'border-[var(--color-border-card)]'
                     }`}
-                    placeholder="010-1234-5678"
+                    placeholder={PHONE_PLACEHOLDER}
                     maxLength={13}
                     disabled={isPhoneVerifiedEffective}
                   />
@@ -465,7 +458,7 @@ const RegisterPage = () => {
                     <p className="text-sm text-red-500 mb-2">{errors.phone}</p>
                     <div className="p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                       <p className="text-xs text-blue-600 dark:text-blue-400">
-                        전화번호는 자동으로 하이픈(-)이 추가됩니다. 숫자만 입력해주세요.
+                        - 없이 입력하면 자동으로 추가됩니다.
                       </p>
                     </div>
                   </div>

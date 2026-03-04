@@ -376,7 +376,7 @@ const Step2GameSettings: React.FC<Step2GameSettingsProps> = ({
               {/* 모임장 포지션 선택용 구장 모달 */}
               {showCreatorPitchModal && (
                 <div
-                  className="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4"
+                  className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-4"
                   style={{ background: 'rgba(0,0,0,0.82)' }}
                   onClick={() => setShowCreatorPitchModal(false)}
                   role="dialog"

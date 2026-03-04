@@ -143,7 +143,7 @@ const Step2PositionSettings: React.FC<Step2PositionSettingsProps> = ({
               로그인 정보를 불러올 수 없습니다. 새로고침 후 다시 시도해 주세요.
             </p>
           )}
-          <div className="w-full rounded-xl overflow-hidden border border-[var(--color-border-card)] bg-[var(--color-bg-primary)] min-h-[280px] flex items-center justify-center">
+          <div className="w-full rounded-xl overflow-hidden border border-[var(--color-border-card)] bg-[var(--color-bg-primary)] min-h-[280px] max-h-[50vh] flex items-center justify-center isolate">
             <TacticalPitch
               value={tacticalValue}
               onChange={(placement) => {
@@ -160,7 +160,7 @@ const Step2PositionSettings: React.FC<Step2PositionSettingsProps> = ({
               dragItemLabel={user?.nickname?.trim() ? user.nickname : '모임장'}
               dragItemImageUrl={creatorProfileImage}
               teamAccent={creatorPitchTeam}
-              size="default"
+              size="modal"
               leaderOnly
               showStadiumLines
               footballStats={footballStats ?? undefined}

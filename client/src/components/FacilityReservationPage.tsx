@@ -10,6 +10,7 @@ import {
   MagnifyingGlassIcon,
   PencilSquareIcon,
   TrashIcon,
+  CalendarDaysIcon,
 } from '@heroicons/react/24/outline';
 import { KOREAN_CITIES, getRegionDisplayName, getUserCity } from '../utils/locationUtils';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
@@ -43,17 +44,27 @@ interface Facility {
   longitude?: number | null;
   reservationSlotHours?: number;
   availableSports?: string[];
+  indoorOutdoor?: string | null;
   source?: 'public';
   /** 공공데이터 관리기관명 */
   managerName?: string | null;
 }
+
+const getDefaultFilterDate = () => {
+  const d = new Date();
+  return d.toISOString().slice(0, 10);
+};
+const getDefaultFilterTime = () => '18:00';
 
 const FacilityReservationPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [selectedSport, setSelectedSport] = useState<string>('전체');
   const [selectedArea, setSelectedArea] = useState<string>('전체');
+  const [selectedIndoorOutdoor, setSelectedIndoorOutdoor] = useState<string>('전체');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterDate, setFilterDate] = useState<string>(getDefaultFilterDate);
+  const [filterTime, setFilterTime] = useState<string>(getDefaultFilterTime);
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [userProfile, setUserProfile] = useState<{ businessNumberVerified?: boolean; isAdmin?: boolean } | null>(null);
@@ -98,14 +109,26 @@ const FacilityReservationPage = () => {
       if (searchQuery.trim()) queryParams.append('search', searchQuery.trim());
       if (selectedSport && selectedSport !== '전체') queryParams.append('category', selectedSport);
       if (selectedArea && selectedArea !== '전체') queryParams.append('area', selectedArea);
+      if (selectedIndoorOutdoor && selectedIndoorOutdoor !== '전체') queryParams.append('indoorOutdoor', selectedIndoorOutdoor);
       queryParams.append('page', '1');
       queryParams.append('limit', '9');
 
       const publicParams = queryParams.toString();
 
+      const dbParams = new URLSearchParams(publicParams);
+      if (filterDate && filterTime) {
+        dbParams.append('availableDate', filterDate);
+        dbParams.append('availableTime', filterTime);
+        const [sh, sm] = filterTime.split(':').map(Number);
+        const endMinutes = (sh * 60 + (sm || 0)) + 120;
+        const eh = Math.floor(endMinutes / 60) % 24;
+        const em = endMinutes % 60;
+        dbParams.append('availableEndTime', `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`);
+      }
+
       try {
         const [dbRes, publicRes] = await Promise.allSettled([
-          api.get<{ facilities: Facility[]; total: number }>(`/api/facilities?${publicParams}`),
+          api.get<{ facilities: Facility[]; total: number }>(`/api/facilities?${dbParams.toString()}`),
           api.get<{ facilities: Facility[]; total: number; hasMore: boolean }>(
             `/api/facilities/public?${publicParams}`
           ),
@@ -137,7 +160,7 @@ const FacilityReservationPage = () => {
     };
 
     if (viewMode === 'all') fetchFacilities();
-  }, [viewMode, selectedSport, selectedArea, searchQuery]);
+  }, [viewMode, selectedSport, selectedArea, selectedIndoorOutdoor, searchQuery, filterDate, filterTime]);
 
   // 공공 시설 더 불러오기 (페이지네이션)
   const loadMorePublic = async () => {
@@ -149,6 +172,7 @@ const FacilityReservationPage = () => {
       if (searchQuery.trim()) queryParams.append('search', searchQuery.trim());
       if (selectedSport && selectedSport !== '전체') queryParams.append('category', selectedSport);
       if (selectedArea && selectedArea !== '전체') queryParams.append('area', selectedArea);
+      if (selectedIndoorOutdoor && selectedIndoorOutdoor !== '전체') queryParams.append('indoorOutdoor', selectedIndoorOutdoor);
       queryParams.append('page', String(nextPage));
       queryParams.append('limit', '9');
 
@@ -188,8 +212,14 @@ const FacilityReservationPage = () => {
     fetchMyFacilities();
   }, [viewMode, user]);
 
-  // 필터링된 시설 목록 (전체 vs 내 시설)
-  const filteredFacilities = viewMode === 'my' ? myFacilities : facilities;
+  // 필터링된 시설 목록 (전체 vs 내 시설). 실내/실외 선택 시 공공데이터 시설(indoorOutdoor 없음)은 제외
+  const filteredFacilities = (() => {
+    const list = viewMode === 'my' ? myFacilities : facilities;
+    if (viewMode === 'all' && selectedIndoorOutdoor && selectedIndoorOutdoor !== '전체') {
+      return list.filter((f) => f.indoorOutdoor === selectedIndoorOutdoor);
+    }
+    return list;
+  })();
   const isLoadingList = viewMode === 'my' ? isLoadingMy : isLoading;
 
   const handleDeleteFacility = async (facility: Facility) => {
@@ -282,48 +312,89 @@ const FacilityReservationPage = () => {
               </button>
             </div>
           )}
-          {/* 검색 바 (전체 시설일 때만 표시) */}
+          {/* 검색·필터 (전체 시설일 때만 표시) — 정렬 통일 */}
           {viewMode === 'all' && (
-            <div className="relative max-w-xl mb-6">
-              <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--color-text-secondary)]" />
-              <input
-                type="text"
-                placeholder="시설명으로 검색..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full py-3 pl-12 pr-4 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-              />
+            <div className="space-y-4">
+              <div className="relative max-w-xl">
+                <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--color-text-secondary)]" />
+                <input
+                  type="text"
+                  placeholder="시설명으로 검색..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full py-3 pl-12 pr-4 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-[var(--color-text-primary)] w-12 shrink-0">종목</span>
+                  <select
+                    value={selectedSport}
+                    onChange={(e) => setSelectedSport(e.target.value)}
+                    className="py-2.5 pl-4 pr-10 min-w-[100px] border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] appearance-none bg-no-repeat bg-[length:1rem_1rem] bg-[right_0.75rem_center]"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")` }}
+                  >
+                    <option value="전체">전체</option>
+                    <option value="축구">축구</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-[var(--color-text-primary)] w-12 shrink-0">지역</span>
+                  <select
+                    value={selectedArea}
+                    onChange={(e) => setSelectedArea(e.target.value)}
+                    className="py-2.5 pl-4 pr-10 min-w-[120px] border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] appearance-none bg-no-repeat bg-[length:1rem_1rem] bg-[right_0.75rem_center]"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")` }}
+                  >
+                    {KOREAN_CITIES.map((city) => (
+                      <option key={city} value={city}>{getRegionDisplayName(city)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-[var(--color-text-primary)] w-16 shrink-0">실내/실외</span>
+                  <select
+                    value={selectedIndoorOutdoor}
+                    onChange={(e) => setSelectedIndoorOutdoor(e.target.value)}
+                    className="py-2.5 pl-4 pr-10 min-w-[100px] border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] appearance-none bg-no-repeat bg-[length:1rem_1rem] bg-[right_0.75rem_center]"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")` }}
+                  >
+                    <option value="전체">전체</option>
+                    <option value="indoor">실내</option>
+                    <option value="outdoor">실외</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium text-[var(--color-text-primary)] w-12 shrink-0">날짜</span>
+                  <span className="inline-flex items-center gap-2 py-2.5 text-sm text-[var(--color-text-primary)]">
+                    <CalendarDaysIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
+                    날짜·시간
+                  </span>
+                  <input
+                    type="date"
+                    value={filterDate}
+                    onChange={(e) => setFilterDate(e.target.value)}
+                    min={getDefaultFilterDate()}
+                    className="py-2.5 px-3 min-w-[140px] border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
+                  />
+                  <select
+                    value={filterTime}
+                    onChange={(e) => setFilterTime(e.target.value)}
+                    className="py-2.5 pl-3 pr-8 min-w-[90px] border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                  >
+                    {Array.from({ length: 24 }, (_, i) => {
+                      const h = String(i).padStart(2, '0');
+                      return ['00', '30'].map((m) => (
+                        <option key={`${h}-${m}`} value={`${h}:${m}`}>
+                          {h}:{m}
+                        </option>
+                      ));
+                    }).flat()}
+                  </select>
+                  <span className="text-xs text-[var(--color-text-secondary)]">(2시간 가용)</span>
+                </div>
+              </div>
             </div>
-          )}
-          {/* 필터 (전체 시설일 때만 표시) */}
-          {viewMode === 'all' && (
-          <div className="flex flex-wrap items-end gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-[var(--color-text-primary)]">종목</span>
-              <select
-                value={selectedSport}
-                onChange={(e) => setSelectedSport(e.target.value)}
-                className="py-2.5 pl-4 pr-10 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] appearance-none bg-no-repeat bg-[length:1rem_1rem] bg-[right_0.75rem_center]"
-                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")` }}
-              >
-                <option value="전체">전체</option>
-                <option value="축구">축구</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-[var(--color-text-primary)]">지역</span>
-              <select
-                value={selectedArea}
-                onChange={(e) => setSelectedArea(e.target.value)}
-                className="py-2.5 pl-4 pr-10 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] appearance-none bg-no-repeat bg-[length:1rem_1rem] bg-[right_0.75rem_center]"
-                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")` }}
-              >
-                {KOREAN_CITIES.map((city) => (
-                  <option key={city} value={city}>{getRegionDisplayName(city)}</option>
-                ))}
-              </select>
-            </div>
-          </div>
           )}
         </div>
       </header>
@@ -405,6 +476,11 @@ const FacilityReservationPage = () => {
                     <span className="px-2 py-1 bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] text-xs rounded">
                       {facility.type}
                     </span>
+                    {facility.indoorOutdoor && (
+                      <span className="px-2 py-1 bg-sky-500/20 text-sky-400 border border-sky-500/40 text-xs rounded">
+                        {facility.indoorOutdoor === 'indoor' ? '실내' : '실외'}
+                      </span>
+                    )}
                   </div>
                   <h3 className="text-xl font-bold text-[var(--color-text-primary)]">{facility.name}</h3>
                 </div>
@@ -422,25 +498,23 @@ const FacilityReservationPage = () => {
                   </div>
                 )}
 
-                {/* 주소 */}
+                {/* 주소 — 시각적 대비 개선 */}
                 <div className="flex items-start gap-2 mb-2">
-                  <MapPinIcon className="w-4 h-4 text-[var(--color-text-secondary)] mt-1 flex-shrink-0" />
-                  <p className="text-sm text-[var(--color-text-secondary)] flex-1">{facility.address}</p>
+                  <MapPinIcon className="w-4 h-4 text-[var(--color-text-primary)] mt-1 flex-shrink-0" aria-hidden />
+                  <p className="text-sm text-[var(--color-text-primary)] font-medium flex-1 leading-relaxed">{facility.address}</p>
                 </div>
 
-                {/* 전화번호 (값 있을 때만 표시, 공공데이터는 미제공인 경우 많음) */}
+                {/* 전화번호·운영시간 — 가독성 개선 */}
                 {facility.phone && (
                   <div className="flex items-center gap-2 mb-2">
-                    <PhoneIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
-                    <p className="text-sm text-[var(--color-text-secondary)]">{facility.phone}</p>
+                    <PhoneIcon className="w-4 h-4 text-[var(--color-text-primary)]" aria-hidden />
+                    <p className="text-sm text-[var(--color-text-primary)]">{facility.phone}</p>
                   </div>
                 )}
-
-                {/* 운영시간 (값 있을 때만 표시) */}
                 {facility.operatingHours && (
                   <div className="flex items-center gap-2 mb-2">
-                    <ClockIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
-                    <p className="text-sm text-[var(--color-text-secondary)]">{facility.operatingHours}</p>
+                    <ClockIcon className="w-4 h-4 text-[var(--color-text-primary)]" aria-hidden />
+                    <p className="text-sm text-[var(--color-text-primary)]">{facility.operatingHours}</p>
                   </div>
                 )}
 
@@ -468,13 +542,13 @@ const FacilityReservationPage = () => {
                   </div>
                 )}
 
-                {/* 가격 및 수정/삭제 (공공 시설은 가격·버튼 영역 미표시) */}
+                {/* 가격·예약 상태 — 시각적 대비 개선 */}
                 {facility.source !== 'public' && (
-                  <div className="flex items-center justify-between pt-3 border-t border-[var(--color-border-card)]">
+                  <div className="flex items-center justify-between pt-3 border-t-2 border-[var(--color-border-card)]">
                     {facility.price ? (
                       <p className="text-lg font-bold text-[var(--color-blue-primary)]">{facility.price}</p>
                     ) : (
-                      <p className="text-sm text-[var(--color-text-secondary)]">가격 문의</p>
+                      <p className="text-sm font-semibold text-[var(--color-text-primary)] bg-[var(--color-bg-secondary)] px-3 py-1 rounded-lg">가격 문의</p>
                     )}
                     <div className="flex items-center gap-2">
                       {viewMode === 'my' ? (

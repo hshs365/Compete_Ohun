@@ -532,7 +532,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
 
   return (
     <div 
-      className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/30 z-[1000] flex items-center justify-center p-4"
       onMouseDown={(e) => {
         // 모달 내용이 아닌 배경을 클릭한 경우에만 기록
         if (e.target === e.currentTarget) {
@@ -690,11 +690,8 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, on
                   }
                 }}
                 min={new Date().toISOString().slice(0, 16)} // 현재 시간 이후만 선택 가능
-                className="w-full pl-4 pr-10 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark date-input-with-icon"
+                className="w-full pl-4 pr-3 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-text-primary)] opacity-90" aria-hidden>
-                <CalendarIcon className="w-5 h-5" />
-              </span>
             </div>
             <p className="text-xs text-[var(--color-text-secondary)] mt-2">
               📅 날짜와 시간을 한 번에 선택할 수 있습니다. 매치 일정이 없으면 비워두세요.

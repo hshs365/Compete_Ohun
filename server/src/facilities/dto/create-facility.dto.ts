@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsNumber, IsArray, IsOptional, IsLatitude, IsLongitude, MaxLength, MinLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsArray, IsOptional, IsLatitude, IsLongitude, IsIn, MaxLength, MinLength } from 'class-validator';
 
 export class CreateFacilityDto {
   @IsString()
@@ -11,6 +11,13 @@ export class CreateFacilityDto {
   @IsNotEmpty()
   @MaxLength(50)
   type: string;
+
+  /** 실내/실외 구분. indoor=실내, outdoor=실외 */
+  @IsOptional()
+  @IsString()
+  @IsIn(['indoor', 'outdoor'])
+  @MaxLength(20)
+  indoorOutdoor?: 'indoor' | 'outdoor';
 
   @IsString()
   @IsNotEmpty()

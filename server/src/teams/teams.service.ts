@@ -190,8 +190,8 @@ export class TeamsService {
   }
 
   /** 팀 둘러보기: 종목·지역·검색으로 필터 */
-  browseTeams(sport: string, region?: string, search?: string, excludeRegion?: string): TeamMembership[] {
-    let list = this.mockTeams.filter((t) => t.sport === sport);
+  browseTeams(sport?: string, region?: string, search?: string, excludeRegion?: string): TeamMembership[] {
+    let list = sport && sport.trim() ? this.mockTeams.filter((t) => t.sport === sport) : [...this.mockTeams];
     if (region) {
       list = list.filter((t) => t.region === region);
     }

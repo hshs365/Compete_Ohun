@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import TimeRangeSlider from './TimeRangeSlider';
 import {
   ArrowLeftIcon,
   MapPinIcon,
@@ -13,6 +14,7 @@ import {
   ChevronRightIcon,
 } from '@heroicons/react/24/outline';
 import { api } from '../utils/api';
+import { PHONE_PLACEHOLDER } from '../utils/phoneFormat';
 import NaverMap from './NaverMap';
 import Tooltip from './Tooltip';
 import { showError, showSuccess, showWarning } from '../utils/swal';
@@ -79,6 +81,7 @@ const FacilityRegisterPage = () => {
   const [formData, setFormData] = useState({
     name: '',
     type: '체육센터',
+    indoorOutdoor: '' as '' | 'indoor' | 'outdoor',
     address: '',
     coordinates: getUserLocation(),
     phone: '',
@@ -305,9 +308,11 @@ const FacilityRegisterPage = () => {
         ? '00:00 - 24:00'
         : (formData.operatingHoursStart && formData.operatingHoursEnd
           ? `${formData.operatingHoursStart} - ${formData.operatingHoursEnd}` : undefined);
-      const priceValue = formData.price?.replace(/,/g, '');
+      const priceValue = formData.price?.replace(/,/g, '').trim();
       const priceString = priceValue
-        ? `${formData.priceType === 'hourly' ? '시간당' : formData.priceType === 'daily' ? '일일' : formData.priceType === 'monthly' ? '월간' : '패키지'} ${formData.price}원`
+        ? formData.priceType === 'package'
+          ? `패키지 ${formData.price}${formData.price.endsWith('원') ? '' : '원'}`
+          : `${formData.priceType === 'hourly' ? '시간당' : formData.priceType === 'daily' ? '일일' : '월간'} ${formData.price}원`
         : undefined;
       await api.post('/api/facilities', {
         name: formData.name,
@@ -322,6 +327,7 @@ const FacilityRegisterPage = () => {
         description: formData.description || undefined,
         amenities: formData.amenities,
         availableSports: formData.availableSports,
+        ...(formData.indoorOutdoor && { indoorOutdoor: formData.indoorOutdoor }),
         ...(formData.imageUrls.length > 0 && { images: formData.imageUrls }),
       });
       await showSuccess('시설이 등록되었습니다.', '시설 등록');
@@ -351,8 +357,8 @@ const FacilityRegisterPage = () => {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto w-full px-4 md:px-6 py-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <main className="max-w-4xl mx-auto w-full px-4 md:px-6 py-6 pb-24">
+        <form onSubmit={handleSubmit} className="space-y-6" id="facility-register-form">
           <div className="bg-[var(--color-bg-card)] border border-[var(--color-border-card)] rounded-2xl p-6">
             <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">시설 정보</h2>
             <div className="space-y-4">
@@ -378,6 +384,18 @@ const FacilityRegisterPage = () => {
                   className="w-full px-4 py-2.5 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
                 >
                   {facilityTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">실내/실외</label>
+                <select
+                  value={formData.indoorOutdoor}
+                  onChange={(e) => handleChange('indoorOutdoor', e.target.value as '' | 'indoor' | 'outdoor')}
+                  className="w-full px-4 py-2.5 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                >
+                  <option value="">선택</option>
+                  <option value="indoor">실내</option>
+                  <option value="outdoor">실외</option>
                 </select>
               </div>
               <div>
@@ -479,7 +497,7 @@ const FacilityRegisterPage = () => {
               <div>
                 <label className="flex items-center gap-2 text-sm font-medium text-[var(--color-text-primary)] mb-1">
                   <PhoneIcon className="w-4 h-4" />전화번호 <span className="text-[var(--color-text-secondary)] font-normal">(선택)</span>
-                  <Tooltip content="전화번호는 자동으로 하이픈이 추가됩니다. 숫자만 입력해주세요." />
+                  <Tooltip content="- 없이 입력하면 자동으로 추가됩니다." />
                 </label>
                 <input
                   type="tel"
@@ -500,7 +518,7 @@ const FacilityRegisterPage = () => {
                     handleChange('phone', formatted);
                   }}
                   className="w-full px-4 py-2.5 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                  placeholder="전화번호를 입력해주세요"
+                  placeholder={PHONE_PLACEHOLDER}
                   maxLength={13}
                 />
               </div>
@@ -523,64 +541,15 @@ const FacilityRegisterPage = () => {
                     야간/새벽 운영 시 종료를 &quot;오전 12시&quot;(자정) 또는 &quot;오전 2시&quot; 등으로 선택할 수 있습니다.
                   </p>
                   )}
-                  <div className={`flex items-center gap-2 mt-1 ${formData.is24Hours ? 'opacity-50 pointer-events-none' : ''}`}>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-[var(--color-text-secondary)] shrink-0">시작</span>
-                      <select
-                        value={formData.operatingHoursStart.split(':')[0]}
-                        onChange={(e) => {
-                          const m = (formData.operatingHoursStart.split(':')[1] === '30') ? '30' : '00';
-                          handleChange('operatingHoursStart', `${e.target.value}:${m}`);
-                        }}
-                        className="w-20 px-2 py-1.5 text-sm border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                      >
-                        {HOUR_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                      <span className="text-[var(--color-text-primary)] font-medium">:</span>
-                      <select
-                        value={(formData.operatingHoursStart.split(':')[1] === '30') ? '30' : '00'}
-                        onChange={(e) => {
-                          const h = formData.operatingHoursStart.split(':')[0];
-                          handleChange('operatingHoursStart', `${h}:${e.target.value}`);
-                        }}
-                        className="w-14 px-2 py-1.5 text-sm border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                      >
-                        {MINUTE_OPTIONS_30.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <span className="text-[var(--color-text-secondary)]">~</span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-[var(--color-text-secondary)] shrink-0">종료</span>
-                      <select
-                        value={formData.operatingHoursEnd.split(':')[0]}
-                        onChange={(e) => {
-                          const m = (formData.operatingHoursEnd.split(':')[1] === '30') ? '30' : '00';
-                          handleChange('operatingHoursEnd', `${e.target.value}:${m}`);
-                        }}
-                        className="w-20 px-2 py-1.5 text-sm border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                      >
-                        {HOUR_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                      <span className="text-[var(--color-text-primary)] font-medium">:</span>
-                      <select
-                        value={(formData.operatingHoursEnd.split(':')[1] === '30') ? '30' : '00'}
-                        onChange={(e) => {
-                          const h = formData.operatingHoursEnd.split(':')[0];
-                          handleChange('operatingHoursEnd', `${h}:${e.target.value}`);
-                        }}
-                        className="w-14 px-2 py-1.5 text-sm border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                      >
-                        {MINUTE_OPTIONS_30.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                    </div>
+                  <div className={`mt-1 ${formData.is24Hours ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <TimeRangeSlider
+                      startTime={formData.operatingHoursStart}
+                      endTime={formData.operatingHoursEnd}
+                      onChange={(start, end) =>
+                        setFormData((prev) => ({ ...prev, operatingHoursStart: start, operatingHoursEnd: end }))
+                      }
+                      pointColor="#3b82f6"
+                    />
                   </div>
                 </div>
                 <div>
@@ -615,19 +584,36 @@ const FacilityRegisterPage = () => {
                     </button>
                   ))}
                 </div>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={formData.price}
-                    onChange={(e) => {
-                      const numbers = e.target.value.replace(/[^\d]/g, '');
-                      handleChange('price', numbers ? parseInt(numbers, 10).toLocaleString() : '');
-                    }}
-                    className="w-full px-4 py-2.5 pr-12 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                    placeholder="가격을 입력해주세요"
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--color-text-secondary)] text-sm">원</span>
-                </div>
+                {formData.priceType === 'package' ? (
+                  <div className="space-y-1">
+                    <input
+                      type="text"
+                      value={formData.price}
+                      onChange={(e) => handleChange('price', e.target.value)}
+                      className="w-full px-4 py-2.5 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                      placeholder="예: 10회 150,000원 / 1개월 정액 200,000원"
+                    />
+                    <p className="text-xs text-[var(--color-text-secondary)]">패키지 요금은 자유 형식으로 입력해 주세요.</p>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={formData.price}
+                      onChange={(e) => {
+                        const numbers = e.target.value.replace(/[^\d]/g, '');
+                        handleChange('price', numbers ? parseInt(numbers, 10).toLocaleString() : '');
+                      }}
+                      className="w-full px-4 py-2.5 pr-12 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                      placeholder={
+                        formData.priceType === 'hourly' ? '예: 20,000 (시간당 금액)' :
+                        formData.priceType === 'daily' ? '예: 50,000 (일일 금액)' :
+                        formData.priceType === 'monthly' ? '예: 200,000 (월간 금액)' : '가격을 입력해주세요'
+                      }
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--color-text-secondary)] text-sm">원</span>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">시설 설명 <span className="text-[var(--color-text-secondary)] font-normal">(선택)</span></label>
@@ -674,24 +660,29 @@ const FacilityRegisterPage = () => {
                 </div>
               </div>
             </div>
-            <div className="mt-6 flex gap-3 pt-4 border-t border-[var(--color-border-card)]">
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-6 py-2.5 rounded-xl bg-[var(--color-blue-primary)] text-white font-medium hover:opacity-90 disabled:opacity-50"
-              >
-                {isSubmitting ? '등록 중...' : '시설 등록'}
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/facility-reservation')}
-                className="px-6 py-2.5 rounded-xl border border-[var(--color-border-card)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)]"
-              >
-                취소
-              </button>
-            </div>
           </div>
         </form>
+
+        {/* Sticky 저장 버튼 영역 */}
+        <div className="fixed bottom-0 left-0 right-0 py-4 px-4 bg-[var(--color-bg-card)] border-t border-[var(--color-border-card)] shadow-[0_-4px_12px_rgba(0,0,0,0.08)] z-40">
+          <div className="max-w-4xl mx-auto flex gap-3 justify-end">
+            <button
+              type="button"
+              onClick={() => navigate('/facility-reservation')}
+              className="px-6 py-2.5 rounded-xl border border-[var(--color-border-card)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)]"
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              form="facility-register-form"
+              disabled={isSubmitting}
+              className="px-6 py-2.5 rounded-xl bg-[var(--color-blue-primary)] text-white font-medium hover:opacity-90 disabled:opacity-50"
+            >
+              {isSubmitting ? '등록 중...' : '시설 등록'}
+            </button>
+          </div>
+        </div>
       </main>
     </div>
   );

@@ -17,7 +17,12 @@ interface Ranker {
   year: number;
   badge?: string;
   avatar?: string;
+  groupsParticipated?: number;
+  mannerScore?: number;
+  sportsCount?: number;
 }
+
+const LIMIT = 30;
 
 const HallOfFamePage = () => {
   const currentYear = new Date().getFullYear();
@@ -26,58 +31,97 @@ const HallOfFamePage = () => {
   const [selectedSport, setSelectedSport] = useState<string>('전체');
   const [selectedRanker, setSelectedRanker] = useState<Ranker | null>(null);
   const [rankings, setRankings] = useState<Ranker[]>([]);
-  const [myRank, setMyRank] = useState<{ rank: number | null; score: number } | null>(null);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [myRank, setMyRank] = useState<{ rank: number | null; score: number; groupsParticipated?: number; mannerScore?: number; sportsCount?: number } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const loadMoreRef = React.useRef<HTMLDivElement>(null);
 
   const years = Array.from({ length: 6 }, (_, i) => currentYear - i);
+  const hasMore = rankings.length < total;
 
-  useEffect(() => {
-    const fetchRankings = async () => {
-      setLoading(true);
-      try {
-        const params = new URLSearchParams({
-          year: selectedYear.toString(),
-          region: selectedRegion,
-          sport: selectedSport,
-          page: '1',
-          limit: '50',
-        });
-        const response = await api.get(`/api/users/hall-of-fame?${params.toString()}`);
-        const data = response.data;
-        const formattedRankings: Ranker[] = data.rankings.map((r: any, index: number) => ({
-          id: r.id,
-          rank: r.rank,
-          nickname: r.nickname,
-          tag: r.tag,
-          score: r.score,
-          sportCategory: r.sportCategory,
-          region: r.region,
-          year: r.year,
-          avatar: r.avatar,
-        }));
-        setRankings(formattedRankings);
+  const formatRanker = (r: any): Ranker => ({
+    id: r.id,
+    rank: r.rank,
+    nickname: r.nickname,
+    tag: r.tag,
+    score: r.score,
+    sportCategory: r.sportCategory,
+    region: r.region,
+    year: r.year,
+    avatar: r.avatar,
+    groupsParticipated: r.groupsParticipated,
+    mannerScore: r.mannerScore,
+    sportsCount: r.sportsCount,
+  });
+
+  const fetchRankings = async (pageNum: number, append: boolean) => {
+    if (pageNum === 1) setLoading(true);
+    else setLoadingMore(true);
+    try {
+      const params = new URLSearchParams({
+        year: selectedYear.toString(),
+        region: selectedRegion,
+        sport: selectedSport,
+        page: pageNum.toString(),
+        limit: LIMIT.toString(),
+      });
+      const response = await api.get(`/api/users/hall-of-fame?${params.toString()}`);
+      const data = response.data;
+      const formatted: Ranker[] = (data.rankings || []).map(formatRanker);
+      setTotal(data.total ?? 0);
+      if (append) setRankings((prev) => [...prev, ...formatted]);
+      else setRankings(formatted);
+      setPage(pageNum);
+      if (pageNum === 1) {
         try {
           const myRankResponse = await api.get(`/api/users/hall-of-fame/my-rank?${params.toString()}`);
-          setMyRank({ rank: myRankResponse.data.rank, score: myRankResponse.data.score });
+          setMyRank({
+            rank: myRankResponse.data.rank,
+            score: myRankResponse.data.score,
+            groupsParticipated: myRankResponse.data.groupsParticipated,
+            mannerScore: myRankResponse.data.mannerScore,
+            sportsCount: myRankResponse.data.sportsCount,
+          });
         } catch {
           setMyRank(null);
         }
-      } catch (error) {
-        console.error('랭킹 데이터 가져오기 실패:', error);
-        setRankings([]);
-      } finally {
-        setLoading(false);
       }
-    };
-    fetchRankings();
+    } catch (error) {
+      console.error('랭킹 데이터 가져오기 실패:', error);
+      if (!append) setRankings([]);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRankings(1, false);
   }, [selectedYear, selectedRegion, selectedSport]);
+
+  useEffect(() => {
+    if (!loadMoreRef.current || !hasMore || loadingMore) return;
+    const el = loadMoreRef.current;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasMore && !loadingMore) {
+          fetchRankings(page + 1, true);
+        }
+      },
+      { rootMargin: '200px', threshold: 0.1 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, page, selectedYear, selectedRegion, selectedSport]);
 
   const topThree = rankings.slice(0, 3);
   const restRankings = rankings.slice(3);
-  const first = topThree[0];
-  const second = topThree[1];
-  const third = topThree[2];
+  const first = topThree[0] ?? null;
+  const second = topThree[1] ?? null;
+  const third = topThree[2] ?? null;
 
   return (
     <div className="flex flex-col w-full bg-[var(--color-bg-primary)] relative">
@@ -108,7 +152,7 @@ const HallOfFamePage = () => {
             </h1>
           </div>
           <p className="text-[var(--color-text-secondary)] max-w-2xl">
-            가장 활동적이고 뛰어난 운동인들의 기록입니다. 당신도 여기에 이름을 올리세요.
+            참가 횟수, 활동한 종목 수, 매너점수를 합산한 최고의 용병을 소개합니다.
           </p>
         </div>
       </header>
@@ -193,160 +237,187 @@ const HallOfFamePage = () => {
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-white/10 border-t-cyan-400 mb-4" />
               <p className="text-[var(--color-text-secondary)]">로딩 중...</p>
             </div>
-          ) : rankings.length === 0 ? (
-            <div className="py-20 text-center text-[var(--color-text-secondary)]">
-              <TrophyOutlineIcon className="w-16 h-16 mx-auto mb-4 opacity-30" />
-              <p className="text-lg">선택한 조건에 해당하는 랭킹이 없습니다.</p>
-            </div>
           ) : (
             <>
-              {/* 포디움: 2위(왼쪽), 1위(가운데), 3위(오른쪽) */}
-              {topThree.length >= 3 && (
-                <section className="mb-12">
-                  <div className="flex items-end justify-center gap-2 md:gap-4 max-w-4xl mx-auto" style={{ minHeight: '320px' }}>
-                    {/* 2위 */}
-                    <div
-                      className="flex-1 flex flex-col items-center order-1 md:order-1 cursor-pointer"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedRanker(second)}
-                      onKeyDown={(e) => e.key === 'Enter' && setSelectedRanker(second)}
-                    >
+              {/* 포디움: 항상 1·2·3위 무대 표시 (유저 없으면 빈 자리 + 도전 유도 문구) */}
+              <section className="mb-12">
+                <div className="flex items-end justify-center gap-2 md:gap-4 max-w-4xl mx-auto" style={{ minHeight: '320px' }}>
+                  {/* 2위 */}
+                  <div
+                    className={`flex-1 flex flex-col items-center order-1 md:order-1 ${second ? 'cursor-pointer' : ''}`}
+                    role={second ? 'button' : undefined}
+                    tabIndex={second ? 0 : undefined}
+                    onClick={() => second && setSelectedRanker(second)}
+                    onKeyDown={second ? (e) => e.key === 'Enter' && setSelectedRanker(second) : undefined}
+                  >
+                    <div className="relative mb-3" style={{ marginBottom: '0.75rem' }}>
                       <div
-                        className="relative mb-3 transition-transform hover:scale-105"
-                        style={{ marginBottom: '0.75rem' }}
+                        className="w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center text-2xl font-bold border-4 border-white/20 overflow-hidden bg-slate-600/80"
+                        style={{ boxShadow: '0 0 20px rgba(203, 213, 225, 0.3)' }}
                       >
-                        <div
-                          className="w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center text-2xl font-bold border-4 border-white/20 overflow-hidden bg-slate-600/80"
-                          style={{ boxShadow: '0 0 20px rgba(203, 213, 225, 0.3)' }}
-                        >
-                          {second.avatar ? (
+                        {second ? (
+                          second.avatar ? (
                             <img src={second.avatar} alt="" className="w-full h-full object-cover" />
                           ) : (
                             <span className="text-white">{second.nickname.charAt(0)}</span>
-                          )}
-                        </div>
-                        <div className="absolute -top-1 -right-1 w-9 h-9 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center shadow-lg border-2 border-white/30">
-                          <span className="text-white font-black text-lg">2</span>
-                        </div>
+                          )
+                        ) : (
+                          <TrophyOutlineIcon className="w-10 h-10 text-white/40" />
+                        )}
                       </div>
-                      <p className="text-sm md:text-base font-bold text-[var(--color-text-primary)] truncate max-w-full px-1 text-center">
-                        {second.nickname}
-                        {second.tag && <span className="text-[var(--color-text-secondary)] font-normal ml-1">{second.tag}</span>}
-                      </p>
-                      <p className="text-lg md:text-xl font-black text-cyan-400 mt-1">{second.score.toLocaleString()} RP</p>
-                      <div
-                        className="w-full mt-4 rounded-t-xl flex flex-col items-center justify-end pt-4 pb-2"
-                        style={{
-                          height: '140px',
-                          background: 'linear-gradient(180deg, rgba(148, 163, 184, 0.25) 0%, rgba(71, 85, 105, 0.4) 100%)',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          borderBottom: 'none',
-                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
-                        }}
-                      >
-                        <span className="text-2xl">🥈</span>
-                        <span className="text-xs font-semibold text-white/90 mt-1">2nd</span>
+                      <div className="absolute -top-1 -right-1 w-9 h-9 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center shadow-lg border-2 border-white/30">
+                        <span className="text-white font-black text-lg">2</span>
                       </div>
                     </div>
-
-                    {/* 1위 (가운데, 가장 크게 + 글로우) */}
+                    {second ? (
+                      <>
+                        <p className="text-sm md:text-base font-bold text-[var(--color-text-primary)] truncate max-w-full px-1 text-center">
+                          {second.nickname}
+                          {second.tag && <span className="text-[var(--color-text-secondary)] font-normal ml-1">{second.tag}</span>}
+                        </p>
+                        <p className="text-lg md:text-xl font-black text-cyan-400 mt-1">{second.score.toLocaleString()} pts</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium text-[var(--color-text-secondary)] text-center px-1">아직 2위가 없어요</p>
+                        <p className="text-xs text-white/60 mt-0.5">도전해 보세요!</p>
+                      </>
+                    )}
                     <div
-                      className="flex-1 flex flex-col items-center order-0 md:order-2 cursor-pointer"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedRanker(first)}
-                      onKeyDown={(e) => e.key === 'Enter' && setSelectedRanker(first)}
+                      className="w-full mt-4 rounded-t-xl flex flex-col items-center justify-end pt-4 pb-2"
+                      style={{
+                        height: '140px',
+                        background: 'linear-gradient(180deg, rgba(148, 163, 184, 0.25) 0%, rgba(71, 85, 105, 0.4) 100%)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderBottom: 'none',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
+                      }}
+                    >
+                      <span className="text-2xl">🥈</span>
+                      <span className="text-xs font-semibold text-white/90 mt-1">2nd</span>
+                    </div>
+                  </div>
+
+                  {/* 1위 (가운데) */}
+                  <div
+                    className={`flex-1 flex flex-col items-center order-0 md:order-2 ${first ? 'cursor-pointer' : ''}`}
+                    role={first ? 'button' : undefined}
+                    tabIndex={first ? 0 : undefined}
+                    onClick={() => first && setSelectedRanker(first)}
+                    onKeyDown={first ? (e) => e.key === 'Enter' && setSelectedRanker(first) : undefined}
+                  >
+                    <div
+                      className="relative mb-3"
+                      style={first ? { filter: 'drop-shadow(0 0 24px rgba(250, 204, 21, 0.5)) drop-shadow(0 0 48px rgba(250, 204, 21, 0.25))' } : undefined}
                     >
                       <div
-                        className="relative mb-3 transition-transform hover:scale-105"
+                        className="w-28 h-28 md:w-32 md:h-32 rounded-full flex items-center justify-center text-3xl font-bold border-4 border-amber-400/50 overflow-hidden bg-gradient-to-br from-amber-500/90 to-yellow-600/90"
                         style={{
-                          filter: 'drop-shadow(0 0 24px rgba(250, 204, 21, 0.5)) drop-shadow(0 0 48px rgba(250, 204, 21, 0.25))',
+                          boxShadow: '0 0 0 4px rgba(250, 204, 21, 0.2), 0 0 40px rgba(250, 204, 21, 0.4)',
                         }}
                       >
-                        <div
-                          className="w-28 h-28 md:w-32 md:h-32 rounded-full flex items-center justify-center text-3xl font-bold border-4 border-amber-400/50 overflow-hidden bg-gradient-to-br from-amber-500/90 to-yellow-600/90"
-                          style={{
-                            boxShadow: '0 0 0 4px rgba(250, 204, 21, 0.2), 0 0 40px rgba(250, 204, 21, 0.4)',
-                          }}
-                        >
-                          {first.avatar ? (
+                        {first ? (
+                          first.avatar ? (
                             <img src={first.avatar} alt="" className="w-full h-full object-cover" />
                           ) : (
                             <span className="text-white">{first.nickname.charAt(0)}</span>
-                          )}
-                        </div>
-                        <div className="absolute -top-1 -right-1 w-11 h-11 rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center shadow-lg border-2 border-amber-200/50">
-                          <span className="text-white font-black text-xl">1</span>
-                        </div>
+                          )
+                        ) : (
+                          <TrophyOutlineIcon className="w-14 h-14 text-white/50" />
+                        )}
                       </div>
-                      <p className="text-base md:text-lg font-bold text-[var(--color-text-primary)] truncate max-w-full px-1 text-center">
-                        {first.nickname}
-                        {first.tag && <span className="text-[var(--color-text-secondary)] font-normal ml-1">{first.tag}</span>}
-                      </p>
-                      <p className="text-xl md:text-2xl font-black bg-gradient-to-r from-amber-400 to-yellow-500 bg-clip-text text-transparent mt-1">
-                        {first.score.toLocaleString()} RP
-                      </p>
-                      <div
-                        className="w-full mt-4 rounded-t-xl flex flex-col items-center justify-end pt-4 pb-2"
-                        style={{
-                          height: '180px',
-                          background: 'linear-gradient(180deg, rgba(250, 204, 21, 0.2) 0%, rgba(245, 158, 11, 0.35) 100%)',
-                          border: '1px solid rgba(250, 204, 21, 0.3)',
-                          borderBottom: 'none',
-                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), 0 0 24px rgba(250, 204, 21, 0.15)',
-                        }}
-                      >
-                        <span className="text-4xl">🥇</span>
-                        <span className="text-sm font-bold text-amber-200 mt-1">1st</span>
+                      <div className="absolute -top-1 -right-1 w-11 h-11 rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center shadow-lg border-2 border-amber-200/50">
+                        <span className="text-white font-black text-xl">1</span>
                       </div>
                     </div>
-
-                    {/* 3위 */}
+                    {first ? (
+                      <>
+                        <p className="text-base md:text-lg font-bold text-[var(--color-text-primary)] truncate max-w-full px-1 text-center">
+                          {first.nickname}
+                          {first.tag && <span className="text-[var(--color-text-secondary)] font-normal ml-1">{first.tag}</span>}
+                        </p>
+                        <p className="text-xl md:text-2xl font-black bg-gradient-to-r from-amber-400 to-yellow-500 bg-clip-text text-transparent mt-1">
+                          {first.score.toLocaleString()} pts
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-base font-bold text-amber-200/90 text-center px-1">아직 1위가 없어요</p>
+                        <p className="text-sm text-amber-200/70 mt-0.5">여기에 이름을 올려 보세요!</p>
+                      </>
+                    )}
                     <div
-                      className="flex-1 flex flex-col items-center order-2 md:order-3 cursor-pointer"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedRanker(third)}
-                      onKeyDown={(e) => e.key === 'Enter' && setSelectedRanker(third)}
+                      className="w-full mt-4 rounded-t-xl flex flex-col items-center justify-end pt-4 pb-2"
+                      style={{
+                        height: '180px',
+                        background: 'linear-gradient(180deg, rgba(250, 204, 21, 0.2) 0%, rgba(245, 158, 11, 0.35) 100%)',
+                        border: '1px solid rgba(250, 204, 21, 0.3)',
+                        borderBottom: 'none',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), 0 0 24px rgba(250, 204, 21, 0.15)',
+                      }}
                     >
-                      <div className="relative mb-3 transition-transform hover:scale-105" style={{ marginBottom: '0.75rem' }}>
-                        <div
-                          className="w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center text-2xl font-bold border-4 border-white/20 overflow-hidden bg-amber-800/80"
-                          style={{ boxShadow: '0 0 20px rgba(217, 119, 6, 0.3)' }}
-                        >
-                          {third.avatar ? (
+                      <span className="text-4xl">🥇</span>
+                      <span className="text-sm font-bold text-amber-200 mt-1">1st</span>
+                    </div>
+                  </div>
+
+                  {/* 3위 */}
+                  <div
+                    className={`flex-1 flex flex-col items-center order-2 md:order-3 ${third ? 'cursor-pointer' : ''}`}
+                    role={third ? 'button' : undefined}
+                    tabIndex={third ? 0 : undefined}
+                    onClick={() => third && setSelectedRanker(third)}
+                    onKeyDown={third ? (e) => e.key === 'Enter' && setSelectedRanker(third) : undefined}
+                  >
+                    <div className="relative mb-3" style={{ marginBottom: '0.75rem' }}>
+                      <div
+                        className="w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center text-2xl font-bold border-4 border-white/20 overflow-hidden bg-amber-800/80"
+                        style={{ boxShadow: '0 0 20px rgba(217, 119, 6, 0.3)' }}
+                      >
+                        {third ? (
+                          third.avatar ? (
                             <img src={third.avatar} alt="" className="w-full h-full object-cover" />
                           ) : (
                             <span className="text-white">{third.nickname.charAt(0)}</span>
-                          )}
-                        </div>
-                        <div className="absolute -top-1 -right-1 w-9 h-9 rounded-full bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center shadow-lg border-2 border-white/30">
-                          <span className="text-white font-black text-lg">3</span>
-                        </div>
+                          )
+                        ) : (
+                          <TrophyOutlineIcon className="w-10 h-10 text-white/40" />
+                        )}
                       </div>
-                      <p className="text-sm md:text-base font-bold text-[var(--color-text-primary)] truncate max-w-full px-1 text-center">
-                        {third.nickname}
-                        {third.tag && <span className="text-[var(--color-text-secondary)] font-normal ml-1">{third.tag}</span>}
-                      </p>
-                      <p className="text-lg md:text-xl font-black text-amber-400/90 mt-1">{third.score.toLocaleString()} RP</p>
-                      <div
-                        className="w-full mt-4 rounded-t-xl flex flex-col items-center justify-end pt-4 pb-2"
-                        style={{
-                          height: '120px',
-                          background: 'linear-gradient(180deg, rgba(217, 119, 6, 0.25) 0%, rgba(180, 83, 9, 0.4) 100%)',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          borderBottom: 'none',
-                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
-                        }}
-                      >
-                        <span className="text-2xl">🥉</span>
-                        <span className="text-xs font-semibold text-white/90 mt-1">3rd</span>
+                      <div className="absolute -top-1 -right-1 w-9 h-9 rounded-full bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center shadow-lg border-2 border-white/30">
+                        <span className="text-white font-black text-lg">3</span>
                       </div>
                     </div>
+                    {third ? (
+                      <>
+                        <p className="text-sm md:text-base font-bold text-[var(--color-text-primary)] truncate max-w-full px-1 text-center">
+                          {third.nickname}
+                          {third.tag && <span className="text-[var(--color-text-secondary)] font-normal ml-1">{third.tag}</span>}
+                        </p>
+                        <p className="text-lg md:text-xl font-black text-amber-400/90 mt-1">{third.score.toLocaleString()} pts</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium text-[var(--color-text-secondary)] text-center px-1">아직 3위가 없어요</p>
+                        <p className="text-xs text-white/60 mt-0.5">도전해 보세요!</p>
+                      </>
+                    )}
+                    <div
+                      className="w-full mt-4 rounded-t-xl flex flex-col items-center justify-end pt-4 pb-2"
+                      style={{
+                        height: '120px',
+                        background: 'linear-gradient(180deg, rgba(217, 119, 6, 0.25) 0%, rgba(180, 83, 9, 0.4) 100%)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderBottom: 'none',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
+                      }}
+                    >
+                      <span className="text-2xl">🥉</span>
+                      <span className="text-xs font-semibold text-white/90 mt-1">3rd</span>
+                    </div>
                   </div>
-                </section>
-              )}
+                </div>
+              </section>
 
               {/* 4위~ 카드 리스트 (글래스모피즘 + 호버 리프트) */}
               {restRankings.length > 0 && (
@@ -393,50 +464,24 @@ const HallOfFamePage = () => {
                         </div>
                         <div className="flex-shrink-0 text-right">
                           <p className="text-xl md:text-2xl font-black bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
-                            {ranker.score.toLocaleString()} RP
+                            {ranker.score.toLocaleString()} pts
                           </p>
+                          {(ranker.groupsParticipated != null || ranker.mannerScore != null || ranker.sportsCount != null) && (
+                            <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
+                              참가 {ranker.groupsParticipated ?? 0}회 · 종목 {ranker.sportsCount ?? 0} · 매너 {ranker.mannerScore ?? 0}
+                            </p>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
-                </section>
-              )}
-
-              {/* 1~3명만 있을 때 리스트 없이 포디움만 있는 경우: 1~2명이면 포디움 비표시하고 리스트로만 */}
-              {topThree.length > 0 && topThree.length < 3 && (
-                <section>
-                  <div className="grid grid-cols-1 gap-3">
-                    {rankings.map((ranker) => (
-                      <div
-                        key={ranker.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setSelectedRanker(ranker)}
-                        onKeyDown={(e) => e.key === 'Enter' && setSelectedRanker(ranker)}
-                        className="group flex items-center gap-4 p-4 md:p-5 rounded-xl border border-white/10 transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-xl hover:shadow-cyan-500/10"
-                        style={{
-                          background: 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)',
-                          backdropFilter: 'blur(12px)',
-                        }}
-                      >
-                        <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-lg bg-white/5 text-[var(--color-text-secondary)] font-bold text-lg">
-                          {ranker.rank}
-                        </div>
-                        <div className="flex-shrink-0">
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500/80 to-purple-600/80 flex items-center justify-center text-white font-bold overflow-hidden">
-                            {ranker.avatar ? <img src={ranker.avatar} alt="" className="w-full h-full object-cover" /> : ranker.nickname.charAt(0)}
-                          </div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-[var(--color-text-primary)]">{ranker.nickname}{ranker.tag && <span className="text-[var(--color-text-secondary)] ml-1">{ranker.tag}</span>}</p>
-                          <p className="text-xs text-[var(--color-text-secondary)]">{ranker.sportCategory} · {getRegionDisplayName(ranker.region)}</p>
-                        </div>
-                        <div className="flex-shrink-0 text-right">
-                          <p className="text-xl font-black bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">{ranker.score.toLocaleString()} RP</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  {hasMore && (
+                    <div ref={loadMoreRef} className="flex justify-center py-6">
+                      {loadingMore && (
+                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-white/20 border-t-cyan-400" />
+                      )}
+                    </div>
+                  )}
                 </section>
               )}
             </>
@@ -459,14 +504,19 @@ const HallOfFamePage = () => {
               <UserCircleIcon className="w-7 h-7 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider">My Rank</p>
+              <p className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider">내 용병 지수</p>
               <p className="text-lg font-bold text-[var(--color-text-primary)]">
                 {myRank.rank != null ? `${myRank.rank}위` : '순위 없음'}
-                <span className="text-[var(--color-text-secondary)] font-normal ml-2">({myRank.score.toLocaleString()} RP)</span>
+                <span className="text-[var(--color-text-secondary)] font-normal ml-2">({myRank.score.toLocaleString()} pts)</span>
               </p>
+              {(myRank.groupsParticipated != null || myRank.mannerScore != null || myRank.sportsCount != null) && (
+                <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
+                  참가 {myRank.groupsParticipated ?? 0}회 · 종목 {myRank.sportsCount ?? 0} · 매너 {myRank.mannerScore ?? 0}
+                </p>
+              )}
             </div>
             <div className="flex-shrink-0 px-4 py-2 rounded-lg bg-cyan-500/20 border border-cyan-400/30">
-              <span className="text-cyan-400 font-black text-lg">{myRank.score.toLocaleString()} RP</span>
+              <span className="text-cyan-400 font-black text-lg">{myRank.score.toLocaleString()} pts</span>
             </div>
           </div>
         </div>

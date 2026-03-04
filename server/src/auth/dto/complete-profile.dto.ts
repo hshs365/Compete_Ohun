@@ -24,6 +24,22 @@ export class CompleteProfileDto {
   residenceSigungu: string;
 
   @IsOptional()
+  @IsString()
+  residenceAddress?: string;
+
+  /** 네이버 미제공 시 사용자가 직접 입력 */
+  @IsOptional()
+  @IsString()
+  realName?: string;
+
+  /** 휴대전화 (필수) - 가입자 구분용 */
+  @IsString()
+  @Matches(/^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/, {
+    message: '올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)',
+  })
+  phone: string;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   interestedSports?: string[];

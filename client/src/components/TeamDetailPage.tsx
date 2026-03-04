@@ -40,7 +40,7 @@ const TeamDetailPage = () => {
         const data = await api.get<TeamDetail>(`/api/teams/${teamId}`);
         setTeam(data);
       } catch (error) {
-        console.error('팀 상세 로드 실패:', error);
+        console.error('용병 클럽 상세 로드 실패:', error);
         setTeam(null);
       } finally {
         setIsLoading(false);
@@ -53,7 +53,7 @@ const TeamDetailPage = () => {
   if (isLoading) {
     return (
       <div className="p-4 md:p-6 max-w-4xl mx-auto w-full pb-12">
-        <LoadingSpinner fullScreen={false} message="팀 정보를 불러오는 중..." />
+        <LoadingSpinner fullScreen={false} message="용병 클럽 정보를 불러오는 중..." />
       </div>
     );
   }
@@ -62,7 +62,7 @@ const TeamDetailPage = () => {
     return (
       <div className="p-4 md:p-6 max-w-4xl mx-auto w-full pb-12">
         <div className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-8 text-center text-[var(--color-text-secondary)]">
-          팀 정보를 찾을 수 없습니다.
+          용병 클럽 정보를 찾을 수 없습니다.
         </div>
         <div className="mt-4 text-center">
           <Link
@@ -70,7 +70,7 @@ const TeamDetailPage = () => {
             className="inline-flex items-center gap-2 text-sm text-[var(--color-blue-primary)] hover:underline"
           >
             <ArrowLeftIcon className="w-4 h-4" />
-            팀 목록으로 돌아가기
+            용병 클럽 목록으로 돌아가기
           </Link>
         </div>
       </div>
@@ -88,11 +88,11 @@ const TeamDetailPage = () => {
           className="inline-flex items-center gap-2 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
         >
           <ArrowLeftIcon className="w-4 h-4" />
-          팀 목록
+          용병 클럽 목록
         </Link>
       </div>
 
-      {/* 팀 헤더: 로고 + 팀명 */}
+      {/* 용병 클럽 헤더: 로고 + 용병 클럽명 */}
       <div className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 mb-6">
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
           <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -121,14 +121,14 @@ const TeamDetailPage = () => {
         </div>
       </div>
 
-      {/* 팀 정보 */}
+      {/* 용병 클럽 정보 */}
       <section className="mb-6">
         <h2 className="text-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">
-          팀 정보
+          용병 클럽 정보
         </h2>
         <div className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-5 space-y-4">
           <p className="text-[var(--color-text-primary)]">
-            {team.description || '팀 소개가 아직 등록되지 않았습니다.'}
+            {team.description || '용병 클럽 소개가 아직 등록되지 않았습니다.'}
           </p>
           <div className="grid gap-2 text-sm">
             {team.region && (

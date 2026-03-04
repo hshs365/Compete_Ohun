@@ -1093,9 +1093,9 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
   const modalAccentHex = MATCH_TYPE_THEME[modalMatchType]?.accentHex ?? MATCH_TYPE_THEME.general.accentHex;
 
   return (
-    <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/30 z-[1000] flex items-center justify-center p-4" aria-modal="true">
       <div
-        className="bg-[var(--color-bg-card)] rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-[var(--color-border-card)]"
+        className="bg-[var(--color-bg-card)] rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-x-hidden overflow-y-auto border border-[var(--color-border-card)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
@@ -1130,7 +1130,7 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
         </div>
 
         {/* 폼 내용 */}
-        <div className="p-4 md:p-6">
+        <div className="p-4 md:p-6 min-h-0">
           {/* Step 1: 지역 선택 — 항상 맨 앞 단계 */}
           {currentStep === regionStep && (
             <StepRegion

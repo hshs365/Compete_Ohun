@@ -10,6 +10,11 @@ export class UpdateProfileDto {
   @IsString()
   phone?: string;
 
+  /** 연락처 수정 시 SMS 인증번호 (phone 변경 시 필수) */
+  @IsOptional()
+  @IsString()
+  verificationCode?: string;
+
   @IsOptional()
   @IsArray()
   @IsString({ each: true })

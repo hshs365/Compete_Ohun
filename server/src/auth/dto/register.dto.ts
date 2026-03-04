@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsString, MinLength, IsEnum, IsIn, IsOptional, IsArray, IsBoolean, Matches, ValidateIf } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsEnum, IsIn, IsOptional, IsArray, IsBoolean, Matches } from 'class-validator';
 import { Gender, SkillLevel } from '../../users/entities/user.entity';
 
 export class RegisterDto {
@@ -14,14 +14,12 @@ export class RegisterDto {
   })
   password: string;
 
-  /** 연락처. SMS 인증 비활성화 시 선택 입력(빈 값 허용) */
-  @IsOptional()
-  @ValidateIf((o) => o.phone != null && o.phone !== '')
+  /** 연락처 (베타: 필수, 중복 가입 방지) */
   @IsString()
   @Matches(/^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/, {
     message: '올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)',
   })
-  phone?: string;
+  phone: string;
 
   @IsOptional()
   @IsString()

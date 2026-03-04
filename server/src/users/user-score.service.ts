@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan, LessThanOrEqual } from 'typeorm';
+import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { UserScoreHistory, ScoreType } from './entities/user-score-history.entity';
 import { UserActivityLog, ActivityType } from './entities/user-activity-log.entity';
@@ -9,6 +9,16 @@ import { UserSeasonScore } from './entities/user-season-score.entity';
 import { GroupParticipant } from '../groups/entities/group-participant.entity';
 import { Group } from '../groups/entities/group.entity';
 import { GroupEvaluation } from '../groups/entities/group-evaluation.entity';
+import { MatchReview } from '../groups/entities/match-review.entity';
+
+/** 매너점수 기본값 (가입 시) */
+export const MANNER_SCORE_DEFAULT = 80;
+
+/** 신고 5회당 매너점수 감점 */
+export const MANNER_PENALTY_PER_5_REPORTS = 10;
+
+/** 노쇼 신고 1회당 매너점수 감점 (즉시 옐로카드 강등) */
+export const MANNER_PENALTY_NO_SHOW = 41;
 
 @Injectable()
 export class UserScoreService {
@@ -29,6 +39,8 @@ export class UserScoreService {
     private groupRepository: Repository<Group>,
     @InjectRepository(GroupEvaluation)
     private evaluationRepository: Repository<GroupEvaluation>,
+    @InjectRepository(MatchReview)
+    private matchReviewRepository: Repository<MatchReview>,
   ) {}
 
   /**
@@ -45,33 +57,25 @@ export class UserScoreService {
   }
 
   /**
-   * 매너점수 계산 (성실 참가, 지각/불참 감점)
+   * 매너점수 계산
+   * - 기본 80점
+   * - 매너칭찬 1회당 +1점
+   * - 누적 신고 5회당 -10점
+   * - 노쇼 신고 1회당 -41점 (즉시 옐로카드 강등)
    */
   async calculateMannerScore(userId: number): Promise<number> {
-    const participations = await this.participantRepository.find({
-      where: { userId },
+    const user = await this.userRepository.findOne({ where: { id: userId }, select: ['noShowCount'] });
+    const noShowCount = user?.noShowCount ?? 0;
+    const mannerCount = await this.matchReviewRepository.count({
+      where: { selectedUserId: userId, categoryKey: '매너' },
     });
-
-    let score = 100; // 기본 점수 100점
-    let lateCount = 0;
-    let absentCount = 0;
-    let completedCount = 0;
-
-    for (const participation of participations) {
-      if (participation.wasLate) lateCount++;
-      if (participation.wasAbsent) absentCount++;
-      if (participation.wasCompleted) completedCount++;
-    }
-
-    // 지각: -5점, 불참: -10점
-    score -= lateCount * 5;
-    score -= absentCount * 10;
-    
-    // 완주: +2점
-    score += completedCount * 2;
-
-    // 최소 0점, 최대 200점
-    return Math.max(0, Math.min(score, 200));
+    const reportCount = await this.matchReviewRepository.count({
+      where: { selectedUserId: userId, categoryKey: '신고' },
+    });
+    const reportPenalty = Math.floor(reportCount / 5) * MANNER_PENALTY_PER_5_REPORTS;
+    const noShowPenalty = noShowCount * MANNER_PENALTY_NO_SHOW;
+    const score = MANNER_SCORE_DEFAULT + mannerCount - reportPenalty - noShowPenalty;
+    return Math.max(0, Math.min(score, 200)); // 최소 0, 최대 200
   }
 
   /**

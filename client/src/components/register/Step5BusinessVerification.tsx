@@ -7,6 +7,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { api } from '../../utils/api';
 import { showError, showSuccess, showWarning } from '../../utils/swal';
+import { compressImageForOcr } from '../../utils/imageCompress';
 
 interface Step5BusinessVerificationProps {
   /** 앞서 인증한 실명 (Step 4). OCR 대표자명과 일치해야 검증 통과 */
@@ -51,9 +52,24 @@ const Step5BusinessVerification: React.FC<Step5BusinessVerificationProps> = ({
 
     setIsVerifying(true);
     onBusinessNumberVerified(false);
+    let fileToUpload: File;
+    try {
+      fileToUpload = await compressImageForOcr(documentFile, 10 * 1024 * 1024);
+      // Blob 기반 File이 전송 중 무효화되는 ERR_UPLOAD_FILE_CHANGED 방지: 버퍼로 복사한 새 File 사용
+      const buffer = await fileToUpload.arrayBuffer();
+      fileToUpload = new File([buffer], fileToUpload.name, { type: fileToUpload.type });
+    } catch (compressErr) {
+      setIsVerifying(false);
+      await showError(
+        compressErr instanceof Error ? compressErr.message : '이미지 압축에 실패했습니다. 10MB 이하 이미지를 사용해 주세요.',
+        '압축 실패',
+      );
+      return;
+    }
+
     try {
       const formData = new FormData();
-      formData.append('document', documentFile);
+      formData.append('document', fileToUpload);
       formData.append('realName', realName.trim());
 
       const res = await api.request<{

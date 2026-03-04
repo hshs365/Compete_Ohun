@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { XMarkIcon, BellIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, BellIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { api } from '../utils/api';
+import { useNotification } from '../contexts/NotificationContext';
+import { useAuth } from '../contexts/AuthContext';
 
-interface Notification {
+export interface Notification {
   id: number;
   title: string;
   message: string;
-  type: 'group_join' | 'group_leave' | 'group_closed' | 'group_deleted' | 'group_cancelled' | 'group_waitlist_spot_open' | 'referee_rank_match_in_region' | 'creator_new_match' | 'new_follower' | 'facility_reservation' | 'system';
+  type: 'group_join' | 'group_leave' | 'group_closed' | 'group_deleted' | 'group_cancelled' | 'group_waitlist_spot_open' | 'referee_rank_match_in_region' | 'creator_new_match' | 'mercenary_recruit' | 'new_follower' | 'facility_reservation' | 'system';
   isRead: boolean;
   createdAt: string;
   metadata?: Record<string, any>;
@@ -17,18 +19,22 @@ interface NotificationPanelProps {
   notifications?: Notification[];
 }
 
+const IMPORTANT_TYPES: Notification['type'][] = ['group_cancelled', 'group_deleted'];
+
+function isImportant(type: Notification['type']) {
+  return IMPORTANT_TYPES.includes(type);
+}
+
 const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: propNotifications }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { isDrawerOpen, closeDrawer, setUnreadCount: setContextUnreadCount } = useNotification();
   const [notifications, setNotifications] = useState<Notification[]>(propNotifications || []);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
 
-  // 백엔드에서 알림 가져오기 (읽은 알림 포함)
   const fetchNotifications = async () => {
     try {
       setIsLoading(true);
-      // limit을 늘려서 더 많은 알림을 가져오고, 읽은 알림도 포함
       const response = await api.get<{ notifications: Notification[]; total: number }>('/api/notifications?limit=100');
       setNotifications(response.notifications || []);
     } catch (error) {
@@ -38,41 +44,54 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
     }
   };
 
-  // 읽지 않은 알림 개수 가져오기
   const fetchUnreadCount = async () => {
     try {
       const response = await api.get<{ count: number }>('/api/notifications/unread-count');
-      setUnreadCount(response.count || 0);
+      const count = response.count || 0;
+      setContextUnreadCount(count);
     } catch (error) {
       console.error('읽지 않은 알림 개수 가져오기 실패:', error);
     }
   };
 
-  // 알림 읽음 처리
   const markAsRead = async (notificationId: number) => {
     try {
       await api.patch(`/api/notifications/${notificationId}/read`);
       setNotifications((prev) =>
         prev.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n))
       );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
+      setContextUnreadCount((prev: number) => Math.max(0, prev - 1));
     } catch (error) {
       console.error('알림 읽음 처리 실패:', error);
     }
   };
 
-  // 초기 로드 및 주기적 업데이트
+  const markAllAsRead = async () => {
+    try {
+      await api.patch('/api/notifications/read-all');
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setContextUnreadCount(0);
+    } catch (error) {
+      console.error('모두 읽음 처리 실패:', error);
+    }
+  };
+
   useEffect(() => {
+    // 로그인한 경우에만 알림 API 호출 (401 방지)
+    if (!user) {
+      setNotifications([]);
+      setContextUnreadCount(0);
+      return;
+    }
+
     fetchNotifications();
     fetchUnreadCount();
 
-    // 10초마다 알림 업데이트 (더 빠른 반응을 위해)
     const interval = setInterval(() => {
       fetchNotifications();
       fetchUnreadCount();
     }, 10000);
 
-    // 커스텀 이벤트 리스너: 모임 참가 등으로 인한 알림 즉시 업데이트
     const handleNotificationUpdate = () => {
       fetchNotifications();
       fetchUnreadCount();
@@ -84,9 +103,8 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
       clearInterval(interval);
       window.removeEventListener('notificationUpdate', handleNotificationUpdate);
     };
-  }, []);
+  }, [user]);
 
-  // prop으로 전달된 알림이 변경되면 업데이트
   useEffect(() => {
     if (propNotifications) {
       setNotifications(propNotifications);
@@ -96,86 +114,28 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
   const removeNotification = async (id: number) => {
     try {
       await api.delete(`/api/notifications/${id}`);
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
-      // 읽지 않은 알림이었다면 개수 감소
       const notification = notifications.find((n) => n.id === id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
       if (notification && !notification.isRead) {
-        setUnreadCount((prev) => Math.max(0, prev - 1));
+        setContextUnreadCount((prev: number) => Math.max(0, prev - 1));
       }
     } catch (error) {
       console.error('알림 삭제 실패:', error);
     }
   };
 
-  const hasNotifications = notifications.length > 0;
-
-  const getNotificationStyles = (type: Notification['type']) => {
-    const styles = {
-      group_join: {
-        bg: 'bg-green-500 dark:bg-green-600',
-        border: 'border-green-600 dark:border-green-700',
-        text: 'text-white',
-      },
-      group_leave: {
-        bg: 'bg-yellow-500 dark:bg-yellow-600',
-        border: 'border-yellow-600 dark:border-yellow-700',
-        text: 'text-white',
-      },
-      group_closed: {
-        bg: 'bg-orange-500 dark:bg-orange-600',
-        border: 'border-orange-600 dark:border-orange-700',
-        text: 'text-white',
-      },
-      group_deleted: {
-        bg: 'bg-red-500 dark:bg-red-600',
-        border: 'border-red-600 dark:border-red-700',
-        text: 'text-white',
-      },
-      group_waitlist_spot_open: {
-        bg: 'bg-amber-500 dark:bg-amber-600',
-        border: 'border-amber-600 dark:border-amber-700',
-        text: 'text-white',
-      },
-      facility_reservation: {
-        bg: 'bg-blue-500 dark:bg-blue-600',
-        border: 'border-blue-600 dark:border-blue-700',
-        text: 'text-white',
-      },
-      new_follower: {
-        bg: 'bg-indigo-500 dark:bg-indigo-600',
-        border: 'border-indigo-600 dark:border-indigo-700',
-        text: 'text-white',
-      },
-      referee_rank_match_in_region: {
-        bg: 'bg-purple-500 dark:bg-purple-600',
-        border: 'border-purple-600 dark:border-purple-700',
-        text: 'text-white',
-      },
-      creator_new_match: {
-        bg: 'bg-amber-500 dark:bg-amber-600',
-        border: 'border-amber-600 dark:border-amber-700',
-        text: 'text-white',
-      },
-      group_cancelled: {
-        bg: 'bg-red-500 dark:bg-red-600',
-        border: 'border-red-600 dark:border-red-700',
-        text: 'text-white',
-      },
-      system: {
-        bg: 'bg-gray-500 dark:bg-gray-600',
-        border: 'border-gray-600 dark:border-gray-700',
-        text: 'text-white',
-      },
-    };
-    return styles[type] || styles.system;
+  const getNotificationStyles = (forImportant: boolean) => {
+    const cardBase = 'bg-neutral-700/90 dark:bg-neutral-800/95 border border-neutral-600/50 dark:border-neutral-600/40 text-[var(--color-text-primary)]';
+    if (forImportant) {
+      return `${cardBase} border-l-4 border-l-red-500`;
+    }
+    return cardBase;
   };
 
-  /** 알림 클릭 시 타입·metadata에 맞는 페이지로 이동 (취소된 매치는 이동 없음) */
   const handleNotificationClick = (n: Notification) => {
     if (!n.isRead) markAsRead(n.id);
-    setIsExpanded(false);
-    // 취소된 매치 알림: 상세로 가지 않고 클릭 동작 없음
     if (n.type === 'group_cancelled') return;
+    closeDrawer();
     const meta = n.metadata || {};
     switch (n.type) {
       case 'group_join':
@@ -184,121 +144,148 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
       case 'group_waitlist_spot_open':
       case 'referee_rank_match_in_region':
       case 'creator_new_match':
-        if (meta.groupId != null) {
-          navigate(`/?group=${meta.groupId}`);
-        }
+      case 'mercenary_recruit':
+        if (meta.groupId != null) navigate(`/?group=${meta.groupId}`);
         break;
       case 'new_follower':
-        if (meta.followerId != null) {
-          navigate('/followers', { state: { openUserId: meta.followerId } });
-        }
+        if (meta.followerId != null) navigate('/followers', { state: { openUserId: meta.followerId } });
         break;
       default:
         break;
     }
   };
 
-  return (
-    <div className="fixed top-20 left-1/2 -translate-x-1/2 md:left-auto md:translate-x-0 md:right-6 z-[9999] flex flex-row-reverse items-start md:items-start gap-2 pointer-events-none">
-      {/* 알림 아이콘 버튼 - 항상 표시 */}
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="relative w-12 h-12 bg-[var(--color-bg-card)] border border-[var(--color-border-card)] rounded-full shadow-lg flex items-center justify-center hover:bg-[var(--color-bg-secondary)] transition-colors pointer-events-auto"
-        aria-label="알림"
+  const importantList = notifications.filter((n) => isImportant(n.type));
+  const normalList = notifications.filter((n) => !isImportant(n.type));
+
+  const renderNotificationItem = (notification: Notification, important: boolean) => {
+    const cardClass = getNotificationStyles(important);
+    const isCancelled = notification.type === 'group_cancelled';
+
+    return (
+      <div
+        key={notification.id}
+        role="button"
+        tabIndex={0}
+        onClick={() => handleNotificationClick(notification)}
+        onKeyDown={(e) => e.key === 'Enter' && handleNotificationClick(notification)}
+        className={`${cardClass} rounded-lg p-3 flex items-start gap-3 transition-colors ${!notification.isRead ? 'ring-1 ring-red-400/40' : 'opacity-90'} ${isCancelled ? 'cursor-default' : 'cursor-pointer hover:bg-neutral-600/90 dark:hover:bg-neutral-700/90'}`}
       >
-        <BellIcon className="w-6 h-6 text-[var(--color-text-primary)]" />
-        {/* 읽지 않은 알림이 있을 때 빨간색 배지 */}
-        {unreadCount > 0 && (
-          <span className="absolute top-0 right-0 w-5 h-5 bg-red-500 rounded-full border-2 border-[var(--color-bg-card)] flex items-center justify-center text-white text-xs font-bold">
-            {unreadCount > 9 ? '9+' : unreadCount}
-          </span>
+        {important ? (
+          <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-500" />
+        ) : (
+          <BellIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--color-text-secondary)]" />
         )}
-      </button>
-
-      {/* 알림 목록 - 확장 시 왼쪽으로 표시 */}
-      {isExpanded && (
-        <div className="bg-[var(--color-bg-card)] border border-[var(--color-border-card)] rounded-lg shadow-xl max-h-[600px] overflow-hidden flex flex-col pointer-events-auto max-w-sm w-full md:max-w-md">
-          {/* 헤더 */}
-          <div className="p-4 border-b border-[var(--color-border-card)] flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">알림</h3>
-            <div className="flex items-center gap-2">
-              {unreadCount > 0 && (
-                <span className="text-xs text-[var(--color-text-secondary)]">
-                  읽지 않음: {unreadCount}개
-                </span>
-              )}
-              <button
-                onClick={() => setIsExpanded(false)}
-                className="p-1 hover:bg-[var(--color-bg-secondary)] rounded transition-colors"
-                aria-label="알림 패널 닫기"
-              >
-                <XMarkIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-              </button>
-            </div>
-          </div>
-
-          {/* 알림 목록 스크롤 영역 */}
-          <div className="overflow-y-auto flex-1">
-            {isLoading ? (
-              <div className="p-4 text-center">
-                <p className="text-sm text-[var(--color-text-secondary)]">알림을 불러오는 중...</p>
-              </div>
-            ) : notifications.length > 0 ? (
-              <div className="flex flex-col">
-                {notifications.map((notification) => {
-                  const styles = getNotificationStyles(notification.type);
-                  const isCancelled = notification.type === 'group_cancelled';
-                  return (
-                    <div
-                      key={notification.id}
-                      className={`${styles.bg} ${styles.border} ${styles.text} border-b border-t-0 border-l-0 border-r-0 last:border-b-0 p-4 flex items-start gap-3 transition-opacity ${!notification.isRead ? 'ring-2 ring-white/50' : 'opacity-80'} ${isCancelled ? 'cursor-default' : 'cursor-pointer hover:opacity-90'}`}
-                      onClick={() => handleNotificationClick(notification)}
-                    >
-                      <BellIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="text-xs font-semibold opacity-90">{notification.title}</p>
-                          {notification.isRead && (
-                            <span className="text-xs opacity-60">(읽음)</span>
-                          )}
-                        </div>
-                        <p className="text-sm font-medium break-words">{notification.message}</p>
-                        <p className="text-xs opacity-75 mt-1">
-                          {new Date(notification.createdAt).toLocaleString('ko-KR', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeNotification(notification.id);
-                        }}
-                        className="flex-shrink-0 p-1 hover:bg-black/20 rounded transition-colors"
-                        aria-label="알림 삭제"
-                      >
-                        <XMarkIcon className="w-4 h-4" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="p-8 text-center">
-                <BellIcon className="w-12 h-12 text-[var(--color-text-secondary)] mx-auto mb-3 opacity-50" />
-                <p className="text-sm text-[var(--color-text-secondary)]">알림이 없습니다.</p>
-              </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-xs font-semibold">{notification.title}</p>
+            {notification.isRead && (
+              <span className="text-xs opacity-60">(읽음)</span>
             )}
           </div>
+          <p className="text-sm break-words">{notification.message}</p>
+          <p className="text-xs opacity-75 mt-1">
+            {new Date(notification.createdAt).toLocaleString('ko-KR', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </p>
         </div>
-      )}
-    </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            removeNotification(notification.id);
+          }}
+          className="flex-shrink-0 p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+          aria-label="알림 삭제"
+        >
+          <XMarkIcon className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  };
+
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  return (
+    <>
+      {/* 백드롭: blur + 딤, 클릭 시 닫기 */}
+      <div
+        role="presentation"
+        className={`fixed inset-0 z-[9998] bg-black/25 transition-opacity duration-300 md:bg-transparent ${isDrawerOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        style={{ backdropFilter: isDrawerOpen ? 'blur(10px)' : 'none', WebkitBackdropFilter: isDrawerOpen ? 'blur(10px)' : 'none' }}
+        onClick={closeDrawer}
+        aria-hidden
+      />
+
+      {/* 우측 슬라이드 드로어: 진한 무채색 배경 */}
+      <aside
+        className={`fixed top-0 right-0 h-full w-full max-w-sm sm:max-w-md bg-neutral-800/98 dark:bg-neutral-900/98 border-l border-neutral-600/50 shadow-2xl z-[9999] flex flex-col transition-transform duration-300 ease-out ${isDrawerOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        aria-label="알림"
+        aria-hidden={!isDrawerOpen}
+      >
+        {/* 헤더: 스크롤 시에도 상단 고정(Sticky) + 모두 읽음 */}
+        <div className="sticky top-0 z-20 flex-shrink-0 p-4 border-b border-neutral-600/50 flex flex-col gap-3 bg-neutral-800/98 dark:bg-neutral-900/98">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">알림</h2>
+            <button
+              onClick={closeDrawer}
+              className="p-2 hover:bg-neutral-700 rounded-lg transition-colors text-neutral-300"
+              aria-label="알림 패널 닫기"
+            >
+              <XMarkIcon className="w-5 h-5" />
+            </button>
+          </div>
+          {unreadCount > 0 && (
+            <button
+              type="button"
+              onClick={markAllAsRead}
+              className="w-full py-2 px-3 text-sm font-medium rounded-lg bg-neutral-700 hover:bg-neutral-600 text-neutral-200 transition-colors"
+            >
+              모두 읽음
+            </button>
+          )}
+        </div>
+
+        {/* 스크롤 영역: 중요 알림 스티키 + 일반 알림 */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {isLoading ? (
+            <div className="p-6 text-center">
+              <p className="text-sm text-neutral-400">알림을 불러오는 중...</p>
+            </div>
+          ) : notifications.length === 0 ? (
+            <div className="p-8 text-center">
+              <BellIcon className="w-12 h-12 text-neutral-500 mx-auto mb-3 opacity-50" />
+              <p className="text-sm text-neutral-400">알림이 없습니다.</p>
+            </div>
+          ) : (
+            <div className="p-3 space-y-3">
+              {/* 중요 알림: 최상단 고정(스티키) */}
+              {importantList.length > 0 && (
+                <div className="sticky top-0 z-10 space-y-2 pb-2 -mx-1 px-1 bg-neutral-800/98 dark:bg-neutral-900/98 pt-1">
+                  <p className="text-xs font-semibold text-red-500 uppercase tracking-wide">중요</p>
+                  {importantList.map((n) => renderNotificationItem(n, true))}
+                </div>
+              )}
+
+              {/* 일반 알림 */}
+              {normalList.length > 0 && (
+                <div className="space-y-2">
+                  {importantList.length > 0 && (
+                    <p className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wide pt-1">일반</p>
+                  )}
+                  {normalList.map((n) => renderNotificationItem(n, false))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
   );
 };
 
 export default NotificationPanel;
-
