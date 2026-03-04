@@ -15,7 +15,7 @@ pipeline {
 
   environment {
     WEB_USER = 'webmaster'
-    WEB1_HOST = '192.168.132.185'
+    WEB1_HOST = '192.168.23.185'
     APP_DIR = '/home/webmaster/my-app'
     BACKEND_DIR = "${APP_DIR}/server"
     CLIENT_DIR = "${APP_DIR}/client"
