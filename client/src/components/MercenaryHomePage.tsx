@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import GroupList from './GroupList';
 import DateFilterChips from './DateFilterChips';
 import DynamicFilterBar from './DynamicFilterBar';
@@ -10,11 +9,11 @@ import { SPORT_ICONS, MAIN_CATEGORIES, SPORT_POINT_COLORS, SPORT_CHIP_STYLES } f
 import { getUserCity, getCityCoordinates } from '../utils/locationUtils';
 import type { SelectedGroup } from '../types/selected-group';
 import { useAuth } from '../contexts/AuthContext';
-import { UserPlusIcon, UserCircleIcon } from '@heroicons/react/24/outline';
+import { api } from '../utils/api';
+import { UserPlusIcon, UserCircleIcon, PlusIcon } from '@heroicons/react/24/outline';
 
 /** 용병 메인 페이지: 용병 구하기 / 용병 신청 */
 const MercenaryHomePage = () => {
-  const navigate = useNavigate();
   const { user, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'find' | 'apply'>('find');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(() => {
@@ -36,6 +35,10 @@ const MercenaryHomePage = () => {
     groupId: number;
     participantCount: number;
   } | null>(null);
+  /** 지역별(용병) 목록 종목별 개수 — 용병 신청 안 한 유저일 때 정렬용 */
+  const [categoryCountsFromRegion, setCategoryCountsFromRegion] = useState<Record<string, number>>({});
+  /** 내 활동 통계(종목별 참여 횟수) — 용병 명함 등록 유저일 때 정렬용 */
+  const [activityCategoryStats, setActivityCategoryStats] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!optimisticParticipantCount) return;
@@ -81,6 +84,37 @@ const MercenaryHomePage = () => {
     }
     setRefreshTrigger((prev) => prev + 1);
   };
+
+  // 용병 명함에 종목이 등록된 유저: 종목별 참여 횟수 로드 (자주 참여한 순 정렬용)
+  useEffect(() => {
+    const sports = user?.interestedSports;
+    if (!user || !sports?.length) {
+      setActivityCategoryStats({});
+      return;
+    }
+    api
+      .get<{ categoryStats: Record<string, number> }>('/api/groups/my-activity-stats')
+      .then((res) => setActivityCategoryStats(res.categoryStats ?? {}))
+      .catch(() => setActivityCategoryStats({}));
+  }, [user?.id, user?.interestedSports?.length]);
+
+  /** 종목 칩 표시 순서: 용병 명함 등록 시 참여 많은 순, 미등록 시 지역별 목록 많은 순 */
+  const sortedCategories = useMemo(() => {
+    const rest = (MAIN_CATEGORIES as readonly string[]).filter((c) => c !== '전체');
+    const hasProfile = (user?.interestedSports?.length ?? 0) > 0;
+    if (hasProfile && Object.keys(activityCategoryStats).length > 0) {
+      const registered = user!.interestedSports!;
+      const byParticipation = [...registered].sort(
+        (a, b) => (activityCategoryStats[b] ?? 0) - (activityCategoryStats[a] ?? 0)
+      );
+      const others = rest.filter((c) => !registered.includes(c));
+      return ['전체', ...byParticipation, ...others];
+    }
+    const byCount = [...rest].sort(
+      (a, b) => (categoryCountsFromRegion[b] ?? 0) - (categoryCountsFromRegion[a] ?? 0)
+    );
+    return ['전체', ...byCount];
+  }, [user?.interestedSports, activityCategoryStats, categoryCountsFromRegion]);
 
   const effectiveSport = selectedCategory || '전체';
   const pointColor = SPORT_POINT_COLORS[effectiveSport] ?? SPORT_POINT_COLORS['전체'];
@@ -131,9 +165,9 @@ const MercenaryHomePage = () => {
             />
           </section>
 
-          {/* 종목 필터 (종목별 상징 컬러 칩) */}
+          {/* 종목 필터 (종목별 상징 컬러 칩): 미등록=지역별 많은 순, 등록=참여 많은 순 */}
           <section className="flex-shrink-0 px-4 py-2 flex gap-2 overflow-x-auto bg-[var(--color-bg-card)]">
-            {(MAIN_CATEGORIES as readonly string[]).map((cat) => {
+            {sortedCategories.map((cat) => {
               const isActive = (cat === '전체' && !selectedCategory) || selectedCategory === cat;
               const chipStyle = SPORT_CHIP_STYLES[cat] ?? SPORT_CHIP_STYLES['전체'];
               const catColor = SPORT_POINT_COLORS[cat] ?? SPORT_POINT_COLORS['전체'];
@@ -171,18 +205,6 @@ const MercenaryHomePage = () => {
             onGenderChange={setSelectedGender}
           />
 
-          {/* 용병 구하기 작성 버튼 → 종목별 맞춤형 구인 폼 모달 */}
-          <div className="flex-shrink-0 px-2 py-2 flex justify-end">
-            <button
-              type="button"
-              onClick={() => setRecruitFormOpen(true)}
-              className="px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-opacity hover:opacity-90"
-              style={{ borderColor: pointColor, color: pointColor, backgroundColor: 'transparent' }}
-            >
-              용병 구하기
-            </button>
-          </div>
-
           {/* 용병 구하는 매치 목록 */}
           <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-4">
             <GroupList
@@ -201,6 +223,7 @@ const MercenaryHomePage = () => {
               emptyStateSport={selectedCategory}
               onEmptyWriteClick={() => setRecruitFormOpen(true)}
               optimisticParticipantCount={optimisticParticipantCount}
+              onCategoryCountsChange={setCategoryCountsFromRegion}
             />
           </div>
 
@@ -216,8 +239,21 @@ const MercenaryHomePage = () => {
       ) : (
         /* 용병 신청 탭: 구직자 대시보드 (명함·활동상태·시간표·용병요청리스트) */
         <MercenaryJobseekerDashboard
-          onRecruitFormOpen={() => setRecruitFormOpen(true)}
         />
+      )}
+
+      {/* FAB: 용병 구하기 작성 (당근마켓 글쓰기 스타일) — 용병 구하기 탭에서만 표시 */}
+      {activeTab === 'find' && (
+        <button
+          type="button"
+          onClick={() => setRecruitFormOpen(true)}
+          className="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-[100] flex items-center justify-center gap-2.5 h-12 px-5 rounded-2xl text-white font-semibold text-[15px] leading-[1] shadow-lg hover:opacity-95 active:scale-[0.98] transition-all safe-area-bottom"
+          style={{ backgroundColor: pointColor }}
+          aria-label="용병 구하기 작성"
+        >
+          <PlusIcon className="w-5 h-5 shrink-0 stroke-[2.5]" aria-hidden />
+          <span className="leading-[1] -mt-px">용병 구하기</span>
+        </button>
       )}
 
       <MercenaryRecruitForm

@@ -55,9 +55,7 @@ const SettingsPage = () => {
   // 알림 설정
   const [pushNotificationsAll, setPushNotificationsAll] = useState(true);
   const [pushSectionOpen, setPushSectionOpen] = useState(true); // 전체 푸시 알림 섹션 펼침
-  const [matchInviteGeneral, setMatchInviteGeneral] = useState(true);
-  const [matchInviteRank, setMatchInviteRank] = useState(true);
-  const [matchInviteEvent, setMatchInviteEvent] = useState(true);
+  const [mercenaryNotifications, setMercenaryNotifications] = useState(true);
   const [teamInviteNotifications, setTeamInviteNotifications] = useState(true);
   const [rankScoreNotifications, setRankScoreNotifications] = useState(true);
   const [chatNotifications, setChatNotifications] = useState(true);
@@ -148,60 +146,39 @@ const SettingsPage = () => {
               </div>
             </div>
             {pushSectionOpen && (
-              <div className="mt-3 pt-3 border-t border-[var(--color-border-card)] pl-8 md:pl-10">
-                <div className="text-xs font-medium text-[var(--color-text-secondary)] mb-2">매치 초대 알림</div>
-                <div className="space-y-0.5">
-                  <SettingItem
-                    icon={UserGroupIcon}
-                    label="일반 매치"
-                    description="일반 매치에 초대될 때"
-                    isOn={matchInviteGeneral}
-                    onToggle={() => setMatchInviteGeneral(!matchInviteGeneral)}
-                    disabled={!pushNotificationsAll}
-                  />
-                  <SettingItem
-                    icon={UserGroupIcon}
-                    label="랭크 매치"
-                    description="랭크 매치에 초대될 때"
-                    isOn={matchInviteRank}
-                    onToggle={() => setMatchInviteRank(!matchInviteRank)}
-                    disabled={!pushNotificationsAll}
-                  />
-                  <SettingItem
-                    icon={UserGroupIcon}
-                    label="이벤트 매치"
-                    description="이벤트 매치에 초대될 때"
-                    isOn={matchInviteEvent}
-                    onToggle={() => setMatchInviteEvent(!matchInviteEvent)}
-                    disabled={!pushNotificationsAll}
-                  />
-                </div>
-                <div className="mt-3 pt-2 border-t border-[var(--color-border-card)] space-y-0">
-                  <SettingItem
-                    icon={UserPlusIcon}
-                    label="팀 초대 알림"
-                    description="팀에 초대될 때 알림"
-                    isOn={teamInviteNotifications}
-                    onToggle={() => setTeamInviteNotifications(!teamInviteNotifications)}
-                    disabled={!pushNotificationsAll}
-                  />
-                  <SettingItem
-                    icon={ChartBarIcon}
-                    label="랭크 점수 변동 알림"
-                    description="랭크 점수 변경 시 알림"
-                    isOn={rankScoreNotifications}
-                    onToggle={() => setRankScoreNotifications(!rankScoreNotifications)}
-                    disabled={!pushNotificationsAll}
-                  />
-                  <SettingItem
-                    icon={ChatBubbleLeftEllipsisIcon}
-                    label="채팅 알림"
-                    description="새 메시지 알림"
-                    isOn={chatNotifications}
-                    onToggle={() => setChatNotifications(!chatNotifications)}
-                    disabled={!pushNotificationsAll}
-                  />
-                </div>
+              <div className="mt-3 pt-3 border-t border-[var(--color-border-card)] pl-8 md:pl-10 space-y-0">
+                <SettingItem
+                  icon={UserPlusIcon}
+                  label="용병 알림 받기"
+                  description="내가 등록한 종목의 용병 구하는 매치가 생길 때 알림"
+                  isOn={mercenaryNotifications}
+                  onToggle={() => setMercenaryNotifications(!mercenaryNotifications)}
+                  disabled={!pushNotificationsAll}
+                />
+                <SettingItem
+                  icon={UserGroupIcon}
+                  label="팀 초대 알림"
+                  description="팀에 초대될 때 알림"
+                  isOn={teamInviteNotifications}
+                  onToggle={() => setTeamInviteNotifications(!teamInviteNotifications)}
+                  disabled={!pushNotificationsAll}
+                />
+                <SettingItem
+                  icon={ChartBarIcon}
+                  label="랭크 점수 변동 알림"
+                  description="랭크 점수 변경 시 알림"
+                  isOn={rankScoreNotifications}
+                  onToggle={() => setRankScoreNotifications(!rankScoreNotifications)}
+                  disabled={!pushNotificationsAll}
+                />
+                <SettingItem
+                  icon={ChatBubbleLeftEllipsisIcon}
+                  label="채팅 알림"
+                  description="새 메시지 알림"
+                  isOn={chatNotifications}
+                  onToggle={() => setChatNotifications(!chatNotifications)}
+                  disabled={!pushNotificationsAll}
+                />
               </div>
             )}
           </div>

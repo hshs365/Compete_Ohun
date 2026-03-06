@@ -47,6 +47,36 @@ const GRADE_OPTIONS: Record<string, { value: string; label: string }[]> = {
     { value: 'beginner', label: '초급' },
     { value: 'none', label: '급수 없음' },
   ],
+  핸드볼: [
+    { value: 'S', label: 'S' },
+    { value: 'A', label: 'A' },
+    { value: 'B', label: 'B' },
+    { value: 'C', label: 'C' },
+    { value: 'D', label: 'D' },
+    { value: 'E', label: 'E' },
+    { value: 'none', label: '급수 없음' },
+  ],
+  배구: [
+    { value: 'S', label: 'S' },
+    { value: 'A', label: 'A' },
+    { value: 'B', label: 'B' },
+    { value: 'C', label: 'C' },
+    { value: 'D', label: 'D' },
+    { value: 'E', label: 'E' },
+    { value: 'none', label: '급수 없음' },
+  ],
+  탁구: [
+    { value: 'advanced', label: '고급' },
+    { value: 'intermediate', label: '중급' },
+    { value: 'beginner', label: '초급' },
+    { value: 'none', label: '급수 없음' },
+  ],
+  골프: [
+    { value: 'advanced', label: '고급' },
+    { value: 'intermediate', label: '중급' },
+    { value: 'beginner', label: '초급' },
+    { value: 'none', label: '급수 없음' },
+  ],
 };
 
 const POSITION_OPTIONS: Record<string, { value: string; label: string }[]> = {
@@ -63,10 +93,29 @@ const POSITION_OPTIONS: Record<string, { value: string; label: string }[]> = {
     { value: 'FW', label: 'FW' },
   ],
   농구: [
-    { value: 'G', label: '가드' },
-    { value: 'F', label: '포워드' },
+    { value: 'PG', label: '포인트가드' },
+    { value: 'SG', label: '슈팅가드' },
+    { value: 'SF', label: '스몰포워드' },
+    { value: 'PF', label: '파워포워드' },
     { value: 'C', label: '센터' },
   ],
+  핸드볼: [
+    { value: 'GK', label: '골키퍼' },
+    { value: 'LW', label: '레프트윙' },
+    { value: 'RW', label: '라이트윙' },
+    { value: 'PV', label: '피벗' },
+    { value: 'CB', label: '센터백' },
+  ],
+  배구: [
+    { value: 'S', label: '세터' },
+    { value: 'OH', label: '아웃사이드 히터' },
+    { value: 'MB', label: '미들 블로커' },
+    { value: 'OP', label: '오포지트' },
+    { value: 'L', label: '리베로' },
+  ],
+  탁구: [],
+  골프: [],
+  배드민턴: [],
 };
 
 const POINT_COLOR = '#22c55e';

@@ -7,15 +7,14 @@ import {
   TrophyIcon,
   MapPinIcon,
   UserGroupIcon,
-  ChartBarIcon,
   StarIcon,
   CalendarIcon,
 } from '@heroicons/react/24/outline';
 import { TrophyIcon as TrophySolidIcon } from '@heroicons/react/24/solid';
 import { api } from '../utils/api';
 import { getAllcourtplayRankStyle, getRankDisplayLabel } from '../constants/allcourtplayRank';
-import { getMannerGradeConfig } from '../utils/mannerGrade';
 import { getFollowerGrade, getFollowerGradeBadgeStyle } from '../constants/followerGrade';
+import { SPORT_CHIP_STYLES, SPORT_ICONS } from '../constants/sports';
 import FormatNumber from './FormatNumber';
 
 interface User {
@@ -61,8 +60,6 @@ interface ProfileSummary {
     category: string;
     date: string;
   }>;
-  /** 랭크매치 실적 (승패 기록 시 반영) */
-  rankMatchStats?: { totalGames: number; wins: number; losses: number; winRate: number };
 }
 
 interface UserDetailModalProps {
@@ -74,13 +71,12 @@ interface UserDetailModalProps {
   onMatchInvite?: (userId: number) => Promise<void>;
 }
 
-/** 프로필 정보·랭크 매치 통계·주요 업적용 데이터 (API + 보조 데이터) */
+/** 프로필 정보·주요 업적용 데이터 (API + 보조 데이터) */
 function getDetailFromProfile(summary: ProfileSummary | null, user: User) {
   const seed = user.id;
   const score = summary?.totalScore ?? user.totalScore ?? 0;
   const isHighScore = score > 100;
   const location = [summary?.residenceSido, summary?.residenceSigungu].filter(Boolean).join(' ') || user.residenceSido || user.residenceSigungu || '-';
-  const rankStats = summary?.rankMatchStats;
   return {
     profile: {
       joinDate: summary?.createdAt ? new Date(summary.createdAt).toLocaleDateString('ko-KR') : '-',
@@ -89,17 +85,8 @@ function getDetailFromProfile(summary: ProfileSummary | null, user: User) {
       followersCount: summary?.followersCount ?? 0,
       followingCount: summary?.followingCount ?? 0,
     },
-    stats: {
-      totalMeetings: rankStats ? rankStats.totalGames : (isHighScore ? 20 + (seed % 30) : 5 + (seed % 15)),
-      winRate: rankStats ? rankStats.winRate : (40 + (seed % 35)),
-      consecutiveWins: 1 + (seed % 5),
-      favoriteTime: ['오전', '오후', '저녁'][seed % 3],
-      mannerScore: summary?.mannerScore ?? 0,
-      preferredPosition: summary?.preferredPosition ?? '-',
-    },
     achievements: isHighScore
       ? [
-          { title: '연속 우승', description: `${1 + (seed % 5)}회 연속 우승`, icon: '🏆' },
           { title: '활동왕', description: '매치 다수 참가', icon: '🔥' },
         ]
       : [
@@ -176,7 +163,8 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
 
   const isFollowing = profileSummary?.isFollowing ?? user.isFollowing;
   const rankEntries = profileSummary?.effectiveRanks ? Object.entries(profileSummary.effectiveRanks) : [];
-  const sportCategory = profileSummary?.interestedSports?.[0] ?? user.commonSports?.[0] ?? '전체';
+  /** 용병 신청 명함에 등록한 종목들 (프로필·헤더 표시) */
+  const interestedSports = profileSummary?.interestedSports ?? user.participatedSports ?? [];
   const detail = getDetailFromProfile(profileSummary, user);
 
   return (
@@ -225,8 +213,17 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
                       )}
                     </h2>
                   </div>
-                  <div className="flex items-center gap-3 text-white/90 flex-wrap">
-                    <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold">{sportCategory}</span>
+                  <div className="flex items-center gap-2 text-white/90 flex-wrap">
+                    {interestedSports.length > 0 ? (
+                      interestedSports.map((sport) => (
+                        <span key={sport} className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold flex items-center gap-1">
+                          <span>{SPORT_ICONS[sport] ?? '●'}</span>
+                          <span>{sport}</span>
+                        </span>
+                      ))
+                    ) : (
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold">전체</span>
+                    )}
                     {(() => {
                       const grade = getFollowerGrade(detail.profile.followersCount);
                       return grade ? (
@@ -235,9 +232,6 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
                         </span>
                       ) : null;
                     })()}
-                    {(profileSummary?.totalScore ?? user.totalScore) != null && (profileSummary?.totalScore ?? user.totalScore) >= 0 && (
-                      <span className="text-lg font-bold">{(profileSummary?.totalScore ?? user.totalScore)?.toLocaleString()} RP</span>
-                    )}
                   </div>
                 </div>
               </div>
@@ -274,44 +268,24 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
                     </p>
                   </div>
                 </div>
-              </div>
-
-              {/* 랭크 매치 통계 (총 참가자·평균점수 제거, 매너점수·선호 포지션 추가) */}
-              <div className="bg-[var(--color-bg-primary)] rounded-xl p-4 mb-4 border border-[var(--color-border-card)]">
-                <h3 className="text-lg font-bold text-[var(--color-text-primary)] mb-3 flex items-center gap-2">
-                  <ChartBarIcon className="w-5 h-5 text-blue-500" />
-                  랭크 매치 통계
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div className="p-3 rounded-lg bg-[var(--color-bg-card)]">
-                    <p className="text-xs text-[var(--color-text-secondary)] mb-1">총 매치 수</p>
-                    <p className="text-xl font-bold text-[var(--color-text-primary)]">{detail.stats.totalMeetings}</p>
+                {interestedSports.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-[var(--color-border-card)]">
+                    <p className="text-xs text-[var(--color-text-secondary)] mb-2">용병 신청 명함에 등록한 종목</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {interestedSports.map((sport) => {
+                        const chip = SPORT_CHIP_STYLES[sport] ?? SPORT_CHIP_STYLES['전체'];
+                        return (
+                          <span
+                            key={sport}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border ${chip.bg} ${chip.border} ${chip.text}`}
+                          >
+                            {SPORT_ICONS[sport] ?? '●'} {sport}
+                          </span>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="p-3 rounded-lg bg-[var(--color-bg-card)]">
-                    <p className="text-xs text-[var(--color-text-secondary)] mb-1">승률</p>
-                    <p className="text-xl font-bold text-[var(--color-text-primary)]">{detail.stats.winRate}%</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-[var(--color-bg-card)]">
-                    <p className="text-xs text-[var(--color-text-secondary)] mb-1">
-                      {getMannerGradeConfig(detail.stats.mannerScore).label}
-                    </p>
-                    <p className={`text-xl font-bold ${getMannerGradeConfig(detail.stats.mannerScore).textColor}`}>
-                      {detail.stats.mannerScore}점
-                    </p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-[var(--color-bg-card)]">
-                    <p className="text-xs text-[var(--color-text-secondary)] mb-1">선호 포지션</p>
-                    <p className="text-sm font-bold text-[var(--color-text-primary)]">{detail.stats.preferredPosition}</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-[var(--color-bg-card)]">
-                    <p className="text-xs text-[var(--color-text-secondary)] mb-1">연속 우승</p>
-                    <p className="text-xl font-bold text-[var(--color-text-primary)]">{detail.stats.consecutiveWins}회</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-[var(--color-bg-card)]">
-                    <p className="text-xs text-[var(--color-text-secondary)] mb-1">선호 시간</p>
-                    <p className="text-xl font-bold text-[var(--color-text-primary)]">{detail.stats.favoriteTime}</p>
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* 주요 업적 */}

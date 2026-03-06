@@ -50,6 +50,8 @@ interface GroupListProps {
   emptyStateSport?: string | null;
   /** 빈 상태에서 '용병 구하기 작성' 클릭 시 */
   onEmptyWriteClick?: () => void;
+  /** 용병 모드에서 전체 종목 조회 시, 지역 필터 적용된 목록의 종목별 개수 (지역별 정렬용) */
+  onCategoryCountsChange?: (counts: Record<string, number>) => void;
 }
 
 interface GroupResponse {
@@ -234,7 +236,7 @@ const GroupTitle = ({ title, groupId }: { title: string; groupId: number }) => {
   );
 };
 
-const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sportFilterValues, selectedRegion: propSelectedRegion, selectedCity = '전체', selectedDays = [], filterDate = null, hideClosed = true, onlyRanker = false, gender = null, includeCompleted = false, onGroupClick, refreshTrigger, mapBounds = null, matchType = 'general', userCoords = null, onGroupsChange, onLoadingChange, groupsOverride, mercenaryOnly = false, optimisticParticipantCount, emptyStateSport, onEmptyWriteClick }) => {
+const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sportFilterValues, selectedRegion: propSelectedRegion, selectedCity = '전체', selectedDays = [], filterDate = null, hideClosed = true, onlyRanker = false, gender = null, includeCompleted = false, onGroupClick, refreshTrigger, mapBounds = null, matchType = 'general', userCoords = null, onGroupsChange, onLoadingChange, groupsOverride, mercenaryOnly = false, optimisticParticipantCount, emptyStateSport, onEmptyWriteClick, onCategoryCountsChange }) => {
   const selectedRegion = propSelectedRegion ?? selectedCity;
   const [groups, setGroups] = useState<SelectedGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -511,6 +513,16 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
                  if (!a.parsedMeetingTime && b.parsedMeetingTime) return 1;
                  return 0;
                });
+
+               // 용병 모드 + 전체 종목 조회 시: 지역 필터된 목록의 종목별 개수 전달 (지역별 정렬용)
+               if (mercenaryOnly && onCategoryCountsChange && (selectedCategory === null || selectedCategory === '전체')) {
+                 const counts: Record<string, number> = {};
+                 for (const g of mappedGroups) {
+                   const cat = g.category || '전체';
+                   counts[cat] = (counts[cat] ?? 0) + 1;
+                 }
+                 onCategoryCountsChange(counts);
+               }
 
         setGroups(mappedGroups);
         onGroupsChange?.(mappedGroups);

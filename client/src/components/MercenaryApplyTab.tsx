@@ -15,7 +15,6 @@ import MercenaryDetailDrawer from './MercenaryDetailDrawer';
 interface ProfileSummary {
   mannerScore?: number;
   effectiveRanks?: Record<string, string>;
-  rankMatchStats?: { totalGames: number; wins: number; losses: number; winRate: number };
 }
 
 interface MercenaryApplyTabProps {
@@ -56,7 +55,6 @@ const MercenaryApplyTab: React.FC<MercenaryApplyTabProps> = ({
   const mannerScore = profile?.mannerScore ?? user?.mannerScore ?? 80;
   const noShowCount = user?.noShowCount ?? 0;
   const trustColors = getMannerTrustColors(mannerScore, noShowCount);
-  const totalGames = profile?.rankMatchStats?.totalGames ?? 0;
   const effectiveRanks = profile?.effectiveRanks ?? {};
 
   const handleParticipantChange = () => setLocalRefreshTrigger((prev) => prev + 1);
@@ -95,10 +93,6 @@ const MercenaryApplyTab: React.FC<MercenaryApplyTabProps> = ({
               <StarIcon className="w-5 h-5" style={{ color: trustColors.point }} />
               <span className={`font-bold ${trustColors.text}`}>{mannerScore}점</span>
               <span className="text-xs text-[var(--color-text-secondary)]">매너</span>
-            </div>
-            <div>
-              <span className="font-bold text-[var(--color-text-primary)]">{totalGames}</span>
-              <span className="text-xs text-[var(--color-text-secondary)] ml-1">경기</span>
             </div>
             {Object.keys(effectiveRanks).length > 0 && (
               <div className="flex flex-wrap gap-1.5">

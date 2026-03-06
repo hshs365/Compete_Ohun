@@ -1,7 +1,7 @@
-// 운동 종류 목록 (현재 축구만 제공, 추후 종목 추가 예정)
+// 운동 종류 목록 (홈·모임 생성 등에서 사용)
 // API에서 동적으로 가져올 수 있도록 확장 가능
 
-export const SPORTS_LIST: readonly string[] = ['축구'];
+export const SPORTS_LIST: readonly string[] = ['축구', '풋살', '농구', '테니스', '배드민턴', '핸드볼', '배구', '탁구', '골프'];
 
 /** 종목별 아이콘 (이모지 — 지도 마커·종목 칩용) */
 export const SPORT_ICONS: Record<string, string> = {
@@ -11,13 +11,17 @@ export const SPORT_ICONS: Record<string, string> = {
   테니스: '🎾',
   야구: '⚾',
   배드민턴: '🏸',
+  핸드볼: '🤾',
+  배구: '🏐',
+  탁구: '🏓',
+  골프: '⛳',
 };
 
 // 명예의 전당·홈 등에서 사용하는 카테고리 목록 (전체 포함)
 export const SPORTS_CATEGORIES: readonly string[] = ['전체', ...SPORTS_LIST];
 
 // 홈 화면 카테고리 필터용
-export const MAIN_CATEGORIES: readonly string[] = ['전체', '축구', '풋살', '농구', '테니스', '배드민턴'];
+export const MAIN_CATEGORIES: readonly string[] = ['전체', '축구', '풋살', '농구', '테니스', '배드민턴', '핸드볼', '배구', '탁구', '골프'];
 
 /** 스탯(레이더 차트) 제공 종목. 매치 리뷰 스텟이 있는 종목만 */
 export const SPORT_STATS_SPORTS: readonly string[] = ['축구', '풋살', '농구', '테니스'];
@@ -30,6 +34,10 @@ export const SPORT_POINT_COLORS: Record<string, string> = {
   농구: '#f97316',
   테니스: '#8b5cf6',
   배드민턴: '#14b8a6',
+  핸드볼: '#e11d48',
+  배구: '#0ea5e9',
+  탁구: '#facc15',
+  골프: '#22c55e',
 };
 
 /** 종목별 칩 스타일 (셔틀콕 화이트/민트, 잔디 그린 등 상징 컬러) */
@@ -40,6 +48,10 @@ export const SPORT_CHIP_STYLES: Record<string, { bg: string; border: string; tex
   농구: { bg: 'bg-orange-500/25', border: 'border-orange-500/50', text: 'text-orange-300' },
   테니스: { bg: 'bg-violet-500/25', border: 'border-violet-500/50', text: 'text-violet-300' },
   배드민턴: { bg: 'bg-teal-300/15', border: 'border-teal-300/45', text: 'text-teal-100' },
+  핸드볼: { bg: 'bg-rose-600/25', border: 'border-rose-500/50', text: 'text-rose-300' },
+  배구: { bg: 'bg-sky-600/25', border: 'border-sky-500/50', text: 'text-sky-300' },
+  탁구: { bg: 'bg-amber-500/25', border: 'border-amber-500/50', text: 'text-amber-300' },
+  골프: { bg: 'bg-emerald-500/25', border: 'border-emerald-400/50', text: 'text-emerald-200' },
 };
 
 /** 필터/폼 필드 타입 */
@@ -89,7 +101,7 @@ export const SPORT_CONFIG: Record<string, SportConfigSchema> = {
           { value: 'men', label: '남자복식' },
           { value: 'women', label: '여자복식' },
           { value: 'mixed', label: '혼합복식' },
-          { value: 'all', label: '복식 상관없음' },
+          { value: 'all', label: '상관없음' },
         ],
       },
     ],
@@ -121,17 +133,6 @@ export const SPORT_CONFIG: Record<string, SportConfigSchema> = {
           { value: 'FW', label: 'FW' },
         ],
       },
-      {
-        key: 'matchSize',
-        label: '경기 방식',
-        type: 'select',
-        placeholder: '전체 경기 방식',
-        options: [
-          { value: '5', label: '5:5' },
-          { value: '7', label: '7:7' },
-          { value: '11', label: '11:11' },
-        ],
-      },
     ],
     formFields: [
       {
@@ -160,16 +161,6 @@ export const SPORT_CONFIG: Record<string, SportConfigSchema> = {
           { value: 'FW', label: 'FW' },
         ],
       },
-      {
-        key: 'matchSize',
-        label: '경기 방식',
-        type: 'select',
-        placeholder: '전체 경기 방식',
-        options: [
-          { value: '5', label: '5:5' },
-          { value: '7', label: '7:7' },
-        ],
-      },
     ],
     formFields: [
       {
@@ -192,9 +183,24 @@ export const SPORT_CONFIG: Record<string, SportConfigSchema> = {
         label: '포지션',
         type: 'multiselect',
         options: [
-          { value: 'G', label: '가드' },
-          { value: 'F', label: '포워드' },
+          { value: 'PG', label: '포인트가드' },
+          { value: 'SG', label: '슈팅가드' },
+          { value: 'SF', label: '스몰포워드' },
+          { value: 'PF', label: '파워포워드' },
           { value: 'C', label: '센터' },
+        ],
+      },
+      {
+        key: 'matchType',
+        label: '경기 방식',
+        type: 'select',
+        placeholder: '전체 경기 방식',
+        options: [
+          { value: '3v3_half', label: '3:3 하프코트' },
+          { value: '3v3_full', label: '3:3 풀코트' },
+          { value: '5v5_full', label: '5:5 풀코트' },
+          { value: 'street', label: '스트리트(길거리)' },
+          { value: 'league', label: '리그/대회' },
         ],
       },
     ],
@@ -204,9 +210,23 @@ export const SPORT_CONFIG: Record<string, SportConfigSchema> = {
         label: '모집 포지션',
         type: 'multiselect',
         options: [
-          { value: 'G', label: '가드' },
-          { value: 'F', label: '포워드' },
+          { value: 'PG', label: '포인트가드' },
+          { value: 'SG', label: '슈팅가드' },
+          { value: 'SF', label: '스몰포워드' },
+          { value: 'PF', label: '파워포워드' },
           { value: 'C', label: '센터' },
+        ],
+      },
+      {
+        key: 'matchType',
+        label: '경기 방식',
+        type: 'select',
+        options: [
+          { value: '3v3_half', label: '3:3 하프코트' },
+          { value: '3v3_full', label: '3:3 풀코트' },
+          { value: '5v5_full', label: '5:5 풀코트' },
+          { value: 'street', label: '스트리트(길거리)' },
+          { value: 'league', label: '리그/대회' },
         ],
       },
     ],
@@ -248,6 +268,143 @@ export const SPORT_CONFIG: Record<string, SportConfigSchema> = {
           { value: 'advanced', label: '고급' },
         ],
       },
+    ],
+  },
+  핸드볼: {
+    filterFields: [
+      {
+        key: 'positions',
+        label: '포지션',
+        type: 'multiselect',
+        options: [
+          { value: 'GK', label: '골키퍼' },
+          { value: 'LW', label: '레프트윙' },
+          { value: 'RW', label: '라이트윙' },
+          { value: 'PV', label: '피벗' },
+          { value: 'CB', label: '센터백' },
+        ],
+      },
+      {
+        key: 'matchType',
+        label: '경기 방식',
+        type: 'select',
+        placeholder: '전체 경기 방식',
+        options: [
+          { value: '7v7', label: '7:7 정식' },
+          { value: 'practice', label: '연습/친선' },
+        ],
+      },
+    ],
+    formFields: [
+      { key: 'positions', label: '모집 포지션', type: 'multiselect', options: [
+        { value: 'GK', label: '골키퍼' },
+        { value: 'LW', label: '레프트윙' },
+        { value: 'RW', label: '라이트윙' },
+        { value: 'PV', label: '피벗' },
+        { value: 'CB', label: '센터백' },
+      ]},
+    ],
+  },
+  배구: {
+    filterFields: [
+      {
+        key: 'positions',
+        label: '포지션',
+        type: 'multiselect',
+        options: [
+          { value: 'S', label: '세터' },
+          { value: 'OH', label: '아웃사이드 히터' },
+          { value: 'MB', label: '미들 블로커' },
+          { value: 'OP', label: '오포지트' },
+          { value: 'L', label: '리베로' },
+        ],
+      },
+      {
+        key: 'matchType',
+        label: '경기 방식',
+        type: 'select',
+        placeholder: '전체 경기 방식',
+        options: [
+          { value: '6v6', label: '6:6 정식' },
+          { value: '4v4', label: '4:4' },
+          { value: 'practice', label: '연습/친선' },
+        ],
+      },
+    ],
+    formFields: [
+      { key: 'positions', label: '모집 포지션', type: 'multiselect', options: [
+        { value: 'S', label: '세터' },
+        { value: 'OH', label: '아웃사이드 히터' },
+        { value: 'MB', label: '미들 블로커' },
+        { value: 'OP', label: '오포지트' },
+        { value: 'L', label: '리베로' },
+      ]},
+    ],
+  },
+  탁구: {
+    filterFields: [
+      {
+        key: 'matchType',
+        label: '경기 방식',
+        type: 'select',
+        placeholder: '전체 경기 방식',
+        options: [
+          { value: 'singles', label: '단식' },
+          { value: 'doubles', label: '복식' },
+          { value: 'mixed', label: '혼합복식' },
+          { value: 'all', label: '상관없음' },
+        ],
+      },
+      {
+        key: 'skillLevel',
+        label: '실력',
+        type: 'select',
+        options: [
+          { value: 'beginner', label: '초급' },
+          { value: 'intermediate', label: '중급' },
+          { value: 'advanced', label: '고급' },
+        ],
+      },
+    ],
+    formFields: [
+      { key: 'skillLevel', label: '모집 실력', type: 'select', options: [
+        { value: 'beginner', label: '초급' },
+        { value: 'intermediate', label: '중급' },
+        { value: 'advanced', label: '고급' },
+      ]},
+    ],
+  },
+  골프: {
+    filterFields: [
+      {
+        key: 'matchType',
+        label: '경기 방식',
+        type: 'select',
+        placeholder: '전체 경기 방식',
+        options: [
+          { value: 'stroke', label: '스트로크' },
+          { value: 'match', label: '매치플레이' },
+          { value: 'fourball', label: '포볼' },
+          { value: 'practice', label: '연습라운드' },
+        ],
+      },
+      {
+        key: 'skillLevel',
+        label: '실력',
+        type: 'select',
+        options: [
+          { value: 'beginner', label: '초급' },
+          { value: 'intermediate', label: '중급' },
+          { value: 'advanced', label: '고급' },
+        ],
+      },
+    ],
+    formFields: [
+      { key: 'skillLevel', label: '모집 실력', type: 'select', options: [
+        { value: 'beginner', label: '초급' },
+        { value: 'intermediate', label: '중급' },
+        { value: 'advanced', label: '고급' },
+      ]},
     ],
   },
 };

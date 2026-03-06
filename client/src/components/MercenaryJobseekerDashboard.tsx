@@ -21,16 +21,9 @@ const POINT_COLOR = '#22c55e';
 interface ProfileSummary {
   mannerScore?: number;
   effectiveRanks?: Record<string, string>;
-  rankMatchStats?: { totalGames: number };
 }
 
-interface MercenaryJobseekerDashboardProps {
-  onRecruitFormOpen?: () => void;
-}
-
-const MercenaryJobseekerDashboard: React.FC<MercenaryJobseekerDashboardProps> = ({
-  onRecruitFormOpen,
-}) => {
+const MercenaryJobseekerDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user, checkAuth } = useAuth();
   const [profile, setProfile] = useState<ProfileSummary | null>(null);
@@ -51,7 +44,6 @@ const MercenaryJobseekerDashboard: React.FC<MercenaryJobseekerDashboardProps> = 
   const mannerScore = profile?.mannerScore ?? user?.mannerScore ?? 80;
   const noShowCount = user?.noShowCount ?? 0;
   const trustColors = getMannerTrustColors(mannerScore, noShowCount);
-  const totalGames = profile?.rankMatchStats?.totalGames ?? 0;
   const effectiveRanks = profile?.effectiveRanks ?? user?.effectiveRanks ?? user?.ohunRanks ?? {};
   const mainSports = user?.interestedSports ?? [];
   const sportPositions = user?.sportPositions ?? [];
@@ -203,10 +195,6 @@ const MercenaryJobseekerDashboard: React.FC<MercenaryJobseekerDashboardProps> = 
                     </div>
                   );
                 })()}
-                <div className="px-3 py-1.5 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)]">
-                  <span className="font-bold text-[var(--color-text-primary)]">{totalGames}</span>
-                  <span className="text-xs text-[var(--color-text-secondary)] ml-1">경기</span>
-                </div>
               </div>
               {mainSports.length > 0 && (
                 <p className="text-xs text-[var(--color-text-secondary)] mb-1.5">용병 가능 종목</p>
@@ -362,23 +350,6 @@ const MercenaryJobseekerDashboard: React.FC<MercenaryJobseekerDashboardProps> = 
           />
         </div>
       </section>
-
-      {/* 빈 공간: 용병 구하기 작성 유도 */}
-      {onRecruitFormOpen && (
-        <section className="flex-1 flex flex-col items-center justify-center px-4 py-8 min-h-[200px]">
-          <p className="text-sm text-[var(--color-text-secondary)] mb-4 text-center">
-            현재 주변에 용병 매치가 없어요. 직접 구해보시겠어요?
-          </p>
-          <button
-            type="button"
-            onClick={onRecruitFormOpen}
-            className="px-6 py-3 rounded-xl font-semibold text-white transition-opacity hover:opacity-90"
-            style={{ backgroundColor: '#3b82f6' }}
-          >
-            용병 구하기 작성
-          </button>
-        </section>
-      )}
 
       <MercenaryProfileEditModal
         isOpen={profileEditOpen}

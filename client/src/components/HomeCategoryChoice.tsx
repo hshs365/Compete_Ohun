@@ -27,6 +27,36 @@ const SPORT_CHIP_THEME: Record<string, { gradient: string; border: string; text:
     text: 'text-white dark:text-lime-100',
     activeGlow: 'shadow-[0_0_12px_rgba(132,204,22,0.5)] dark:shadow-[0_0_16px_rgba(132,204,22,0.4)]',
   },
+  배드민턴: {
+    gradient: 'bg-gradient-to-br from-cyan-600/90 to-cyan-800/95 dark:from-cyan-500/30 dark:to-cyan-700/40',
+    border: 'border-2 border-cyan-400/60 dark:border-cyan-400/50',
+    text: 'text-white dark:text-cyan-100',
+    activeGlow: 'shadow-[0_0_12px_rgba(34,211,238,0.5)] dark:shadow-[0_0_16px_rgba(34,211,238,0.4)]',
+  },
+  핸드볼: {
+    gradient: 'bg-gradient-to-br from-rose-600/90 to-rose-800/95 dark:from-rose-500/30 dark:to-rose-700/40',
+    border: 'border-2 border-rose-400/60 dark:border-rose-400/50',
+    text: 'text-white dark:text-rose-100',
+    activeGlow: 'shadow-[0_0_12px_rgba(251,113,133,0.5)] dark:shadow-[0_0_16px_rgba(251,113,133,0.4)]',
+  },
+  배구: {
+    gradient: 'bg-gradient-to-br from-sky-600/90 to-sky-800/95 dark:from-sky-500/30 dark:to-sky-700/40',
+    border: 'border-2 border-sky-400/60 dark:border-sky-400/50',
+    text: 'text-white dark:text-sky-100',
+    activeGlow: 'shadow-[0_0_12px_rgba(14,165,233,0.5)] dark:shadow-[0_0_16px_rgba(14,165,233,0.4)]',
+  },
+  탁구: {
+    gradient: 'bg-gradient-to-br from-amber-500/90 to-amber-700/95 dark:from-amber-500/30 dark:to-amber-700/40',
+    border: 'border-2 border-amber-400/60 dark:border-amber-400/50',
+    text: 'text-white dark:text-amber-100',
+    activeGlow: 'shadow-[0_0_12px_rgba(251,191,36,0.5)] dark:shadow-[0_0_16px_rgba(251,191,36,0.4)]',
+  },
+  골프: {
+    gradient: 'bg-gradient-to-br from-emerald-500/90 to-emerald-700/95 dark:from-emerald-500/30 dark:to-emerald-600/40',
+    border: 'border-2 border-emerald-400/60 dark:border-emerald-400/50',
+    text: 'text-white dark:text-emerald-100',
+    activeGlow: 'shadow-[0_0_12px_rgba(52,211,153,0.5)] dark:shadow-[0_0_16px_rgba(52,211,153,0.4)]',
+  },
 };
 
 const DEFAULT_CHIP_THEME = {

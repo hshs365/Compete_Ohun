@@ -1,5 +1,5 @@
 import React from 'react';
-import { XMarkIcon, TrophyIcon, StarIcon, FireIcon, ChartBarIcon, CalendarIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, TrophyIcon, StarIcon, FireIcon, CalendarIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import { TrophyIcon as TrophySolidIcon } from '@heroicons/react/24/solid';
 
 interface Ranker {
@@ -117,9 +117,6 @@ const RankerDetail: React.FC<RankerDetailProps> = ({ ranker, onClose }) => {
                 <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold">
                   {ranker.sportCategory}
                 </span>
-                <span className="text-lg font-bold">
-                  {ranker.score.toLocaleString()} RP
-                </span>
               </div>
             </div>
           </div>
@@ -148,40 +145,6 @@ const RankerDetail: React.FC<RankerDetailProps> = ({ ranker, onClose }) => {
               <div>
                 <p className="text-xs text-[var(--color-text-secondary)] mb-1">레벨</p>
                 <p className="text-sm font-semibold text-[var(--color-text-primary)]">{detail.profile.level}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* 통계 */}
-          <div className="bg-[var(--color-bg-primary)] rounded-xl p-4 mb-4 border border-[var(--color-border-card)]">
-            <h3 className="text-lg font-bold text-[var(--color-text-primary)] mb-3 flex items-center gap-2">
-              <ChartBarIcon className="w-5 h-5 text-blue-500" />
-              활동 통계
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <div className="p-3 bg-[var(--color-bg-card)] rounded-lg">
-                <p className="text-xs text-[var(--color-text-secondary)] mb-1">총 모임 수</p>
-                <p className="text-xl font-bold text-[var(--color-text-primary)]">{detail.stats.totalMeetings}</p>
-              </div>
-              <div className="p-3 bg-[var(--color-bg-card)] rounded-lg">
-                <p className="text-xs text-[var(--color-text-secondary)] mb-1">승률</p>
-                <p className="text-xl font-bold text-[var(--color-text-primary)]">{detail.stats.winRate}%</p>
-              </div>
-              <div className="p-3 bg-[var(--color-bg-card)] rounded-lg">
-                <p className="text-xs text-[var(--color-text-secondary)] mb-1">평균 점수</p>
-                <p className="text-xl font-bold text-[var(--color-text-primary)]">{detail.stats.averageScore.toFixed(1)}</p>
-              </div>
-              <div className="p-3 bg-[var(--color-bg-card)] rounded-lg">
-                <p className="text-xs text-[var(--color-text-secondary)] mb-1">총 참가자</p>
-                <p className="text-xl font-bold text-[var(--color-text-primary)]">{detail.stats.totalParticipants}</p>
-              </div>
-              <div className="p-3 bg-[var(--color-bg-card)] rounded-lg">
-                <p className="text-xs text-[var(--color-text-secondary)] mb-1">연속 우승</p>
-                <p className="text-xl font-bold text-[var(--color-text-primary)]">{detail.stats.consecutiveWins}회</p>
-              </div>
-              <div className="p-3 bg-[var(--color-bg-card)] rounded-lg">
-                <p className="text-xs text-[var(--color-text-secondary)] mb-1">선호 시간</p>
-                <p className="text-xl font-bold text-[var(--color-text-primary)]">{detail.stats.favoriteTime}</p>
               </div>
             </div>
           </div>
@@ -242,7 +205,7 @@ const RankerDetail: React.FC<RankerDetailProps> = ({ ranker, onClose }) => {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-[var(--color-text-primary)]">+{activity.score} RP</p>
+                    <p className="text-sm font-bold text-[var(--color-text-primary)]">{activity.event}</p>
                   </div>
                 </div>
               ))}

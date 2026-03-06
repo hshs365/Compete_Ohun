@@ -14,17 +14,23 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ isOn, handleToggle, label }
         type="button"
         role="switch"
         aria-checked={isOn}
-        className={`relative inline-flex items-center h-7 w-12 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--color-bg-card)] focus:ring-[var(--color-blue-primary)] border-2 shrink-0 ${
-          isOn
-            ? 'bg-[var(--color-blue-primary)] border-[var(--color-blue-primary)]'
-            : 'bg-[var(--color-bg-secondary)] border-[var(--color-border-card)]'
+        className={`relative inline-flex items-center h-7 w-12 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--color-bg-card)] focus:ring-[var(--color-blue-primary)] shrink-0 ${
+          isOn ? 'bg-[var(--color-blue-primary)]' : 'bg-[var(--color-bg-secondary)]'
         }`}
+        style={{
+          boxShadow: isOn
+            ? 'inset 0 1px 2px rgba(0,0,0,0.2)'
+            : '0 1px 2px rgba(0,0,0,0.06)',
+        }}
         onClick={handleToggle}
       >
         <span
-          className={`inline-block w-5 h-5 transform rounded-full transition-transform duration-200 bg-white shadow-md border border-[var(--color-border-card)] ${
+          className={`inline-block w-5 h-5 transform rounded-full transition-transform duration-200 bg-white ${
             isOn ? 'translate-x-6' : 'translate-x-0.5'
           }`}
+          style={{
+            boxShadow: '0 1px 3px rgba(0,0,0,0.2), 0 1px 1px rgba(0,0,0,0.1)',
+          }}
         />
       </button>
     </div>

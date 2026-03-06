@@ -38,20 +38,26 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
     }
   }, [isOpen, isAllMode]);
 
-  /** 모달 열릴 때 폼 초기화 */
+  /** 오늘 날짜 YYYY-MM-DD */
+  const getTodayString = useCallback(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  /** 모달 열릴 때 폼 초기화 (날짜는 오늘로) */
   useEffect(() => {
     if (!isOpen) return;
     setValues({});
     setTitle('');
     setLocation('');
     setCoordinates([36.3504, 127.3845]);
-    setMeetingDate('');
+    setMeetingDate(getTodayString());
     setMeetingStartTime('18:00');
     setMeetingEndTime('20:00');
     setRecruitCount('1');
     setGenderRestriction('');
     setMapKey((k) => k + 1);
-  }, [isOpen]);
+  }, [isOpen, getTodayString]);
 
   const [values, setValues] = useState<Record<string, string | string[] | boolean>>({});
   const [title, setTitle] = useState('');
@@ -59,7 +65,10 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
   const [coordinates, setCoordinates] = useState<[number, number]>([36.3504, 127.3845]);
   const [showMap, setShowMap] = useState(true);
   const [mapKey, setMapKey] = useState(0);
-  const [meetingDate, setMeetingDate] = useState('');
+  const [meetingDate, setMeetingDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [meetingStartTime, setMeetingStartTime] = useState('18:00');
   const [meetingEndTime, setMeetingEndTime] = useState('20:00');
   const [recruitCount, setRecruitCount] = useState('1');
