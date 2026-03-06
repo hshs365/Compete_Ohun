@@ -21,10 +21,10 @@ export class GroupsSchedulerService {
     private reservationsService: ReservationsService,
   ) {}
 
-  // 매 10분마다 실행 (모임 시작 1시간 전 체크)
+  /** 매 10분마다 실행. 비활성화: .env에 GROUPS_SCHEDULER_ENABLED=false */
   @Cron('*/10 * * * *')
   async checkGroupsBeforeMeeting() {
-    this.logger.log('모임 시작 1시간 전 체크 시작...');
+    if (process.env.GROUPS_SCHEDULER_ENABLED === 'false') return;
 
     try {
       const now = new Date();
@@ -39,8 +39,9 @@ export class GroupsSchedulerService {
         .andWhere('group.isClosed = :isClosed', { isClosed: false })
         .getMany();
 
-      this.logger.log(`체크할 모임 수: ${groupsToCheck.length}`);
+      if (groupsToCheck.length === 0) return;
 
+      this.logger.log(`모임 시작 1시간 전 체크: ${groupsToCheck.length}건`);
       for (const group of groupsToCheck) {
         await this.checkAndCancelIfNeeded(group);
       }

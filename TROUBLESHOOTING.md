@@ -142,6 +142,96 @@ http://localhost:3000
 
 ---
 
+## 🔴 세션 유지 안 됨 / 새로고침 시 "로그인이 필요합니다" / 사용자 정보 로드 실패
+
+### 증상
+- 로그인 후 새로고침하면 다시 로그인 화면으로 돌아감
+- 내 정보 페이지에서 "사용자 정보를 불러오는 중..."에서 멈추거나 "로그인이 필요합니다" 모달만 뜸
+
+### 원인
+앱은 로그인 시 **JWT 토큰**을 `localStorage` 또는 `sessionStorage`에 저장하고, 매 페이지 로드 시 `GET /api/auth/me`로 사용자 정보를 가져옵니다. 이 요청이 **401**을 반환하면 토큰을 지우고 로그인 화면으로 처리합니다.
+
+가능한 원인:
+1. **서버에서 /api/auth/me가 401 반환**  
+   - JWT 서명 시 사용한 `JWT_SECRET`과 서버 `.env`의 `JWT_SECRET`이 다름 (배포 서버 vs 로컬)  
+   - 토큰 만료 (`JWT_EXPIRES_IN` 확인)
+2. **Nginx가 Authorization 헤더를 전달하지 않음**  
+   - `/api`를 백엔드로 프록시할 때 `Authorization` 헤더가 빠지면 백엔드가 토큰을 못 받아 401 발생
+3. **CORS / 쿠키**  
+   - 프론트는 `Authorization: Bearer <token>`으로 보내므로, 같은 도메인(allcourtplay.com)이면 CORS보다는 **프록시·헤더 전달** 문제일 가능성이 큼
+
+### 해결 방법
+
+1. **서버 로그 확인**  
+   배포 서버에서:  
+   `pm2 logs backend --lines 200`  
+   `/api/auth/me` 요청 시 401이 나오는지, 에러 메시지가 있는지 확인.
+
+2. **서버 .env 확인**  
+   배포 서버의 `server/.env`에 `JWT_SECRET`이 로컬과 동일한 값으로 설정되어 있는지 확인. (값이 다르면 로그인 시 발급한 토큰이 서버에서 검증 실패.)
+
+3. **Nginx 프록시 설정**  
+   `/api`를 백엔드로 보낼 때 반드시 다음 헤더를 전달해야 합니다:
+   ```nginx
+   location /api {
+       proxy_pass http://127.0.0.1:3000;
+       proxy_http_version 1.1;
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+       proxy_set_header X-Forwarded-Proto $scheme;
+       proxy_set_header Authorization $http_authorization;   # ← 토큰 전달에 필요
+       proxy_pass_request_headers on;
+   }
+   ```
+   `Authorization $http_authorization` 또는 `proxy_pass_request_headers on;`으로 요청 헤더가 백엔드까지 전달되는지 확인.
+
+4. **소셜 로그인 후 세션**  
+   카카오/구글 등 로그인 직후에는 `remember_me`가 false라 토큰이 `sessionStorage`에도 들어갑니다. 새로고침 시 `checkAuth()`가 `/api/auth/me`를 호출하고, 위 조건(서버 JWT_SECRET, Nginx 헤더)이 맞아야 세션이 유지됩니다.
+
+---
+
+## 📁 서버 이미지 저장 경로 (프로필·업로드)
+
+### 어떻게 확인하나요?
+- **서버 기동 시 로그**에 다음이 한 줄 출력됩니다:  
+  `📁 업로드 경로: /home/webmaster/my-app/server/uploads` (또는 `UPLOAD_DIR` 값)  
+  → 이 경로가 **실제로 사용 중인 업로드 루트**입니다.
+- **UPLOAD_DIR 설정 여부**: 서버가 사용하는 `server/.env`에 `UPLOAD_DIR=...`가 **있는지** 보면 됩니다.  
+  - 없으면: `process.cwd() + '/uploads'` 사용 (pm2/node가 기동된 디렉터리 기준).  
+  - 있으면: 그 값이 루트 (예: `/mnt/shared/uploads`).
+
+### 실제 저장 위치
+- **UPLOAD_DIR 미설정**: `process.cwd() + '/uploads'`  
+  - 예: 앱을 `~/my-app/server`에서 실행하면 **`~/my-app/server/uploads`**
+- **UPLOAD_DIR 설정 시**: 그 값 아래에 용도별 폴더  
+  - 예: `UPLOAD_DIR=/mnt/shared/uploads` → 프로필 이미지 **`/mnt/shared/uploads/profile`**
+
+### 용도별 하위 경로
+| 용도       | 경로 (UPLOAD_DIR 미설정 시) | 경로 (UPLOAD_DIR 설정 시)   |
+|-----------|-----------------------------|-----------------------------|
+| 프로필 사진 | `uploads/profile`            | `{UPLOAD_DIR}/profile`      |
+| 모임 이미지 | `uploads/groups`            | (코드상 `uploadConfig`는 cwd 기준) |
+| 시설 이미지 | `uploads/facility`           | (동일)                      |
+| 상품 이미지 | `uploads/product`           | (동일)                      |
+
+프로필 이미지 업로드는 `server/src/auth/auth.service.ts`의 `uploadProfileImage()`에서 **`UPLOAD_DIR`이 있으면 `{UPLOAD_DIR}/profile`**, 없으면 **`{process.cwd()}/uploads/profile`**을 사용합니다.
+
+### 브라우저에서 이미지가 안 보일 때
+- API는 이미지 URL을 **`/uploads/profile/파일명`** 형태로 반환합니다.
+- 배포 환경에서 프론트가 `allcourtplay.com`이면, `img src="/uploads/profile/xxx"` 요청은 **`https://allcourtplay.com/uploads/profile/xxx`**로 갑니다.
+- **Nginx에서 `/uploads`를 백엔드로 프록시**해야 Nest가 제공하는 정적 파일(uploads 디렉터리)이 노출됩니다. 예:
+  ```nginx
+  location /uploads {
+      proxy_pass http://127.0.0.1:3000;
+      proxy_set_header Host $host;
+  }
+  ```
+- 서버에서 실제 파일 존재 여부 확인:  
+  `ls -la ~/my-app/server/uploads/profile` (또는 `$UPLOAD_DIR/profile`)
+
+---
+
 ## 📞 추가 도움
 
 문제가 계속되면:

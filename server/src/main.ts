@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { createClient, type RedisClientType } from 'redis';
 import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -35,10 +35,10 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionLoggerFilter());
 
   // 정적 파일 서빙 설정 (업로드된 파일)
+  // UPLOAD_DIR 미설정 시: process.cwd()/uploads (예: ~/my-app/server/uploads)
   const uploadsPath = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads');
-  app.useStaticAssets(uploadsPath, {
-    prefix: '/uploads',
-  });
+  app.useStaticAssets(uploadsPath, { prefix: '/uploads' });
+  Logger.log(`📁 업로드 경로: ${uploadsPath}`, 'Bootstrap');
 
   // Redis: 개발 환경에서는 기본 비활성, 운영 또는 REDIS_ENABLED=true 시에만 연결
   let redisClient: RedisClientType | null = null;

@@ -689,23 +689,23 @@ const MyInfoPage = () => {
       const formData = new FormData();
       formData.append('profileImage', file);
 
-      // 서버에 업로드
-      const response = await api.put('/api/auth/me', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      // 서버에 업로드 (Content-Type은 지정하지 않음 - 브라우저가 boundary 포함해 자동 설정)
+      const response = await api.put<{ profileImageUrl?: string | null }>('/api/auth/me', formData);
 
-      // 성공 시 프로필 데이터 업데이트
+      // 성공 시 프로필 데이터 업데이트: 서버가 반환한 URL 우선, 없으면 로컬 미리보기
       if (response) {
-        // 서버에서 반환된 이미지 URL 사용 또는 base64로 표시
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setProfileData({ ...profileData, profileImage: reader.result as string });
-          // localStorage에도 임시 저장 (서버 응답이 없을 경우 대비)
-          localStorage.setItem(`profileImage_${profileData.id}`, reader.result as string);
-        };
-        reader.readAsDataURL(file);
+        const imageUrl = response.profileImageUrl ?? null;
+        if (imageUrl) {
+          setProfileData({ ...profileData, profileImage: imageUrl });
+          if (profileData.id) localStorage.setItem(`profileImage_${profileData.id}`, imageUrl);
+        } else {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setProfileData({ ...profileData, profileImage: reader.result as string });
+            if (profileData.id) localStorage.setItem(`profileImage_${profileData.id}`, reader.result as string);
+          };
+          reader.readAsDataURL(file);
+        }
         await showSuccess('프로필 사진이 저장되었습니다.', '프로필 사진 업로드');
       }
     } catch (error) {
