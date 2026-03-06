@@ -1,19 +1,19 @@
-// API 베이스 URL 결정: 환경변수 > 런타임 체크 > 기본값
-const getApiBaseUrl = (): string => {
+// API 베이스 URL 결정: 환경변수 > 런타임 체크 > 기본값 (다른 모듈에서 재사용 가능하도록 export)
+export const getApiBaseUrl = (): string => {
   // 1. 환경변수가 명시적으로 설정되어 있으면 사용
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
   }
-  
+
   // 2. 런타임에 현재 호스트명 체크
   const hostname = window.location.hostname;
   const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.');
-  
-  // 3. localhost가 아니면 프로덕션으로 간주 (상대 경로 사용)
+
+  // 3. localhost가 아니면 프로덕션으로 간주 (상대 경로 사용 → same-origin)
   if (!isLocalhost) {
-    return ''; // 상대 경로 사용
+    return '';
   }
-  
+
   // 4. localhost면 개발 서버 사용
   return 'http://localhost:3000';
 };

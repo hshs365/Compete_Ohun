@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EnvelopeIcon, LockClosedIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../contexts/AuthContext';
+import { getApiBaseUrl } from '../utils/api';
 import AppLogo from './AppLogo';
 
 const LoginPage = () => {
@@ -48,7 +49,7 @@ const LoginPage = () => {
   const handleKakaoLogin = async () => {
     setError('');
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+      const API_BASE_URL = getApiBaseUrl();
       const response = await fetch(
         `${API_BASE_URL}/api/auth/social/auth-url?provider=kakao`,
       );
@@ -85,7 +86,7 @@ const LoginPage = () => {
   const handleNaverLogin = async () => {
     setError('');
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+      const API_BASE_URL = getApiBaseUrl();
       const response = await fetch(
         `${API_BASE_URL}/api/auth/social/auth-url?provider=naver`,
       );
@@ -120,15 +121,6 @@ const LoginPage = () => {
   const handleGoogleLogin = async () => {
     setError('');
     try {
-      // API 베이스 URL 결정 (api.ts와 동일한 로직)
-      const getApiBaseUrl = (): string => {
-        if (import.meta.env.VITE_API_BASE_URL) {
-          return import.meta.env.VITE_API_BASE_URL;
-        }
-        const hostname = window.location.hostname;
-        const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.');
-        return !isLocalhost ? '' : 'http://localhost:3000';
-      };
       const API_BASE_URL = getApiBaseUrl();
       const response = await fetch(
         `${API_BASE_URL}/api/auth/social/auth-url?provider=google`,

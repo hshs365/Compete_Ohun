@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { getApiBaseUrl } from '../utils/api';
 import AppLogo from './AppLogo';
 
 const PROVIDER_NAMES: Record<string, string> = {
@@ -30,7 +31,7 @@ const OAuthCallbackPage = () => {
 
       try {
         // 백엔드로 code 전송하여 토큰 교환 및 사용자 조회
-        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+        const API_BASE_URL = getApiBaseUrl();
         const response = await fetch(
           `${API_BASE_URL}/api/auth/social/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state || '')}&provider=${provider}`,
           {
@@ -96,7 +97,7 @@ const OAuthCallbackPage = () => {
   const handleRedirectToProvider = async () => {
     if (!existingProvider) return;
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+      const API_BASE_URL = getApiBaseUrl();
       const response = await fetch(`${API_BASE_URL}/api/auth/social/auth-url?provider=${existingProvider}`);
       const data = await response.json();
       if (data.authUrl) {
