@@ -20,7 +20,10 @@ import {
   IdentificationIcon,
   DocumentArrowUpIcon,
   PhotoIcon,
+  StarIcon,
+  CalendarIcon,
 } from '@heroicons/react/24/outline';
+import { TrophyIcon as TrophySolidIcon } from '@heroicons/react/24/solid';
 import { showError, showSuccess, showWarning, showInfo, showConfirm } from '../utils/swal';
 import ToggleSwitch from './ToggleSwitch';
 import { useAuth } from '../contexts/AuthContext';
@@ -32,8 +35,25 @@ import { getEarnedTitles, getCountByCategory } from '../utils/titles';
 import { formatPhoneNumber, PHONE_PLACEHOLDER } from '../utils/phoneFormat';
 import { getAllcourtplayRankStyle, getRankDisplayLabel } from '../constants/allcourtplayRank';
 import { getFollowerGrade, getFollowerGradeBadgeStyle } from '../constants/followerGrade';
+import { SPORT_CHIP_STYLES, SPORT_ICONS } from '../constants/sports';
+import { getMannerGradeConfig } from '../utils/mannerGrade';
 import FormatNumber from './FormatNumber';
 import { compressImageForOcr } from '../utils/imageCompress';
+
+/** 내 프로필 상세용 (profile-summary API 응답) */
+interface MyProfileSummary {
+  rankMatchStats?: { totalGames: number; wins: number; losses: number; winRate: number };
+  mannerScore?: number;
+  preferredPosition?: string;
+  totalScore?: number;
+  followersCount?: number;
+  followingCount?: number;
+  createdAt?: string;
+  residenceSido?: string;
+  residenceSigungu?: string;
+  earnedTitles?: string[];
+  recentCompletedActivities?: Array<{ type: 'participated' | 'created'; groupId: number; name: string; category: string; date: string }>;
+}
 
 interface UserProfileData {
   id: number;
@@ -115,6 +135,8 @@ const MyInfoPage = () => {
   const [pointHistory, setPointHistory] = useState<PointHistoryItem[]>([]);
   const [pointHistoryLoading, setPointHistoryLoading] = useState(false);
   const [isCharging, setIsCharging] = useState(false);
+  /** 내 정보 상단 탭: 프로필 / 계정정보 (용병 구하기·용병 신청 스타일) */
+  const [myInfoTab, setMyInfoTab] = useState<'profile' | 'account'>('profile');
   const [showBusinessConversionModal, setShowBusinessConversionModal] = useState(false);
   const [businessConversionDocumentFile, setBusinessConversionDocumentFile] = useState<File | null>(null);
   const [isConvertingBusiness, setIsConvertingBusiness] = useState(false);
@@ -532,6 +554,9 @@ const MyInfoPage = () => {
     following: 0,
   });
 
+  /** 타 유저 모달과 동일한 상세용 (랭크 통계·매너점수 등) */
+  const [myProfileSummary, setMyProfileSummary] = useState<MyProfileSummary | null>(null);
+
   const [isAthleteRegistering, setIsAthleteRegistering] = useState(false);
 
   // 모달 배경 클릭 감지용 (드래그와 클릭 구분)
@@ -630,6 +655,18 @@ const MyInfoPage = () => {
       fetchFollowStats();
     }
   }, [authUser, profileData]);
+
+  // 프로필 상세 (랭크 매치 통계·매너점수 등) — 타 유저 모달과 동일 데이터
+  useEffect(() => {
+    if (!profileData?.id) {
+      setMyProfileSummary(null);
+      return;
+    }
+    api
+      .get<MyProfileSummary>(`/api/users/${profileData.id}/profile-summary`)
+      .then(setMyProfileSummary)
+      .catch(() => setMyProfileSummary(null));
+  }, [profileData?.id]);
 
   const handleProfileImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -898,6 +935,28 @@ const MyInfoPage = () => {
     return getEarnedTitles(countByCategory);
   })();
 
+  // 용병 기록: 종목별 참여 횟수·생성 횟수·급수
+  const activityByCategory = (() => {
+    const participationsByCategory: Record<string, number> = {};
+    const creationsByCategory: Record<string, number> = {};
+    myParticipations.forEach((g) => {
+      participationsByCategory[g.category] = (participationsByCategory[g.category] || 0) + 1;
+    });
+    myCreations.forEach((g) => {
+      creationsByCategory[g.category] = (creationsByCategory[g.category] || 0) + 1;
+    });
+    const categories = new Set([...Object.keys(participationsByCategory), ...Object.keys(creationsByCategory)]);
+    return Array.from(categories)
+      .filter((c) => c !== '전체')
+      .sort()
+      .map((category) => ({
+        category,
+        participations: participationsByCategory[category] || 0,
+        creations: creationsByCategory[category] || 0,
+      }))
+      .filter((row) => row.participations > 0 || row.creations > 0);
+  })();
+
   // 주소 검색으로 위치 설정
   const handleSearchAddress = () => {
     // Daum Postcode API 스크립트 로드
@@ -982,276 +1041,356 @@ const MyInfoPage = () => {
   const joinDate = profileData.createdAt ? new Date(profileData.createdAt).toISOString().split('T')[0] : '';
 
   return (
-    <div className="flex flex-col w-full bg-[var(--color-bg-primary)]">
-      {/* 히어로 / 상단 (스포츠용품 페이지와 동일 톤) */}
-      <header className="flex-shrink-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)]">
-        <div className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-12">
-          <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-text-primary)] mb-2">
+    <div className="flex flex-col w-full min-h-full bg-[var(--color-bg-primary)]">
+      {/* 히어로 / 상단 — 모바일 패딩·타이포 축소 */}
+      <header className="flex-shrink-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)] safe-area-top">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 md:px-6 py-5 sm:py-6 md:py-8">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-[var(--color-text-primary)] mb-1 sm:mb-2">
             내 정보
           </h1>
-          <p className="text-[var(--color-text-secondary)] max-w-2xl">
+          <p className="text-sm sm:text-base text-[var(--color-text-secondary)] max-w-2xl">
             프로필과 계정을 관리하세요.
           </p>
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto w-full px-4 md:px-6 py-6 space-y-6 pb-12">
-      {/* 프로필 요약 */}
-      <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] overflow-hidden shadow-sm">
-        <div className="p-6">
-          <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">프로필 요약</h2>
-          <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-            {/* 프로필 사진 */}
-            <div className="relative">
-              <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-[var(--color-bg-secondary)] flex items-center justify-center overflow-hidden ring-2 ring-[var(--color-border-card)]">
+      {/* 프로필 / 계정정보 탭 — 터치 영역 44px 이상 */}
+      <div className="flex-shrink-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)]">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 md:px-6">
+          <div className="flex gap-1.5 sm:gap-2 py-2 sm:py-2.5">
+            <button
+              type="button"
+              onClick={() => setMyInfoTab('profile')}
+              className={`flex-1 min-h-[44px] py-3 rounded-xl text-sm font-semibold transition-colors active:scale-[0.98] ${
+                myInfoTab === 'profile'
+                  ? 'text-white bg-[var(--color-blue-primary)]'
+                  : 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)]'
+              }`}
+            >
+              프로필
+            </button>
+            <button
+              type="button"
+              onClick={() => setMyInfoTab('account')}
+              className={`flex-1 min-h-[44px] py-3 rounded-xl text-sm font-semibold transition-colors active:scale-[0.98] ${
+                myInfoTab === 'account'
+                  ? 'text-white bg-[var(--color-blue-primary)]'
+                  : 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)]'
+              }`}
+            >
+              계정정보
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto w-full px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6 pb-24 md:pb-12">
+      {myInfoTab === 'profile' && (
+      <>
+      {/* 프로필 — 모바일: 패딩·아바타·타이포 축소 */}
+      <section className="bg-[var(--color-bg-card)] rounded-xl sm:rounded-2xl border border-[var(--color-border-card)] overflow-hidden shadow-sm">
+        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-4 sm:p-5 md:p-6 text-white">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="relative shrink-0">
+              <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] md:w-20 md:h-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 sm:border-4 border-white/30 text-2xl sm:text-3xl font-bold overflow-hidden">
                 {profileData.profileImage ? (
-                  <img src={profileData.profileImage} alt="Profile" className="w-full h-full object-cover" />
+                  <img src={profileData.profileImage} alt="" className="w-full h-full object-cover" />
                 ) : (
-                  <UserCircleIcon className="w-20 h-20 text-[var(--color-text-secondary)]" />
+                  (profileData.nickname || '?').charAt(0)
                 )}
               </div>
-              <label className="absolute bottom-0 right-0 bg-[var(--color-blue-primary)] text-white rounded-full p-2 cursor-pointer hover:opacity-90 transition-opacity shadow-md">
-                <CameraIcon className="w-4 h-4" />
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleProfileImageChange}
-                  className="hidden"
-                />
+              <label className="absolute bottom-0 right-0 bg-white/90 text-gray-800 rounded-full p-1.5 sm:p-2 cursor-pointer hover:bg-white shadow-md touch-manipulation min-w-[36px] min-h-[36px] flex items-center justify-center">
+                <CameraIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                <input type="file" accept="image/*" onChange={handleProfileImageChange} className="hidden" />
               </label>
             </div>
-
-            {/* 닉네임 및 정보 — 성격별 블록 */}
-            <div className="flex-1 w-full md:w-auto text-center md:text-left space-y-4">
-              {/* 1. 신원: 닉네임 + 태그 + 수정 */}
-              <div>
-                {isEditingNickname ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      type="text"
-                      value={nickname}
-                      onChange={(e) => setNickname(e.target.value)}
-                      className="flex-1 min-w-[120px] px-3 py-2 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                      autoFocus
-                    />
-                    <button
-                      onClick={handleNicknameSave}
-                      className="px-4 py-2 bg-[var(--color-blue-primary)] text-white rounded-xl hover:opacity-90 transition-opacity font-medium text-sm"
-                    >
+            <div className="flex-1 min-w-0">
+              {isEditingNickname ? (
+                <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2">
+                  <input
+                    type="text"
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value)}
+                    className="flex-1 min-w-0 w-full sm:min-w-[120px] px-3 py-2.5 sm:py-2 rounded-xl bg-white/20 text-white placeholder-white/70 border border-white/30 focus:outline-none focus:ring-2 focus:ring-white text-base"
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={handleNicknameSave} className="flex-1 sm:flex-none min-h-[44px] px-4 py-2.5 bg-white text-indigo-600 rounded-xl font-medium text-sm hover:opacity-90 active:scale-[0.98]">
                       저장
                     </button>
-                    <button
-                      onClick={() => {
-                        setNickname(profileData.nickname || '');
-                        setIsEditingNickname(false);
-                      }}
-                      className="px-4 py-2 bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] rounded-xl hover:opacity-80 transition-opacity text-sm"
-                    >
+                    <button onClick={() => { setNickname(profileData.nickname || ''); setIsEditingNickname(false); }} className="flex-1 sm:flex-none min-h-[44px] px-4 py-2.5 bg-white/20 rounded-xl text-sm hover:bg-white/30 active:scale-[0.98]">
                       취소
                     </button>
                   </div>
-                ) : (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-2xl font-bold text-[var(--color-text-primary)] truncate">
-                      {profileData.nickname || '닉네임 없음'}
-                    </h3>
-                    {profileData.tag && (
-                      <span className="text-lg text-[var(--color-text-secondary)] shrink-0">
-                        {profileData.tag}
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (profileData.nicknameChangedAt) {
-                          const threeMonthsAgo = new Date();
-                          threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-                          const lastChange = new Date(profileData.nicknameChangedAt);
-                          if (lastChange > threeMonthsAgo) {
-                            const daysRemaining = Math.ceil(
-                              (lastChange.getTime() + 90 * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
-                            );
-                            showWarning(
-                              `닉네임은 3개월에 한 번만 변경할 수 있습니다. ${daysRemaining}일 후에 변경 가능합니다.`,
-                              '닉네임 변경 제한'
-                            );
-                            return;
-                          }
-                        }
-                        setIsEditingNickname(true);
-                      }}
-                      className="p-1.5 text-[var(--color-text-secondary)] hover:text-[var(--color-blue-primary)] hover:bg-[var(--color-bg-secondary)] rounded-lg transition-colors shrink-0"
-                      title={profileData.nicknameChangedAt && (() => {
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-xl sm:text-2xl font-bold truncate">{profileData.nickname || '닉네임 없음'}</h2>
+                  {profileData.tag && <span className="opacity-90">{profileData.tag}</span>}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (profileData.nicknameChangedAt) {
+                        const threeMonthsAgo = new Date(); threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
                         const lastChange = new Date(profileData.nicknameChangedAt);
-                        const threeMonthsAgo = new Date();
-                        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
                         if (lastChange > threeMonthsAgo) {
-                          const daysRemaining = Math.ceil(
-                            (lastChange.getTime() + 90 * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
-                          );
-                          return `${daysRemaining}일 후 변경 가능`;
+                          const daysRemaining = Math.ceil((lastChange.getTime() + 90 * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24));
+                          showWarning(`닉네임은 3개월에 한 번만 변경할 수 있습니다. ${daysRemaining}일 후에 변경 가능합니다.`, '닉네임 변경 제한');
+                          return;
                         }
-                        return '닉네임 변경';
-                      })()}
-                    >
-                      <PencilIcon className="w-5 h-5" />
-                    </button>
-                  </div>
-                )}
-                {!isEditingNickname && profileData.nicknameChangedAt && (() => {
-                  const lastChange = new Date(profileData.nicknameChangedAt);
-                  const threeMonthsAgo = new Date();
-                  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-                  const canChange = lastChange <= threeMonthsAgo;
-                  const daysRemaining = canChange ? 0 : Math.ceil(
-                    (lastChange.getTime() + 90 * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
-                  );
-                  return (
-                    <p className="text-xs text-[var(--color-text-secondary)] mt-1">
-                      {canChange ? '닉네임 변경 가능' : `${daysRemaining}일 후 변경 가능`}
-                    </p>
-                  );
-                })()}
-              </div>
-
-              {/* 2. 포인트: 보유 포인트 + 내역 + 충전하기 (한 그룹) */}
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setShowPointHistoryModal(true);
-                    setPointHistoryLoading(true);
-                    try {
-                      const list = await api.get<PointHistoryItem[]>('/api/users/my/point-history');
-                      setPointHistory(list);
-                    } catch {
-                      setPointHistory([]);
-                    } finally {
-                      setPointHistoryLoading(false);
-                    }
-                  }}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] hover:border-amber-500/50 hover:bg-[var(--color-bg-secondary)]/80 transition-colors cursor-pointer"
-                >
-                  <BanknotesIcon className="w-5 h-5 text-amber-500 shrink-0" />
-                  <span className="text-sm text-[var(--color-text-secondary)]">보유 포인트</span>
-                  <span className="text-lg font-bold text-[var(--color-text-primary)]">
-                    {(profileData.points ?? 0).toLocaleString()} P
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  disabled={isCharging}
-                  onClick={async () => {
-                    setIsCharging(true);
-                    try {
-                      const res = await api.post<{ balance: number; added: number }>('/api/users/my/charge');
-                      setProfileData((prev) => prev ? { ...prev, points: res.balance } : null);
-                      await showSuccess(`${res.added.toLocaleString()} P가 충전되었습니다.`, '포인트 충전');
-                    } catch (e) {
-                      const msg = e instanceof Error ? e.message : '포인트 충전에 실패했습니다.';
-                      await showError(msg, '충전 실패');
-                    } finally {
-                      setIsCharging(false);
-                    }
-                  }}
-                  className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
-                >
-                  {isCharging ? '충전 중...' : '충전하기'}
-                </button>
-              </div>
-
-              {/* 3. 뱃지: 일반/비즈니스/관리자/선수 */}
-              <div className="flex flex-wrap items-center gap-2">
-                {earnedTitles
-                  .filter((title) => !profileData.businessNumberVerified || title !== '일반')
-                  .map((title) => (
-                    <span
-                      key={title}
-                      className="px-3 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full font-semibold text-sm"
-                    >
-                      {title}
-                    </span>
-                  ))}
-                {profileData.businessNumberVerified && (
-                  <span className="px-3 py-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-full font-semibold text-sm flex items-center gap-1">
-                    <BuildingOfficeIcon className="w-4 h-4" />
-                    비즈니스
-                  </span>
-                )}
-                {profileData.isAdmin && (
-                  <span className="px-3 py-1 bg-gradient-to-r from-slate-600 to-slate-700 text-white rounded-full font-semibold text-sm flex items-center gap-1" title="시설·상품 등록, 이벤트매치 개최 등 모든 기능 이용 가능">
-                    <ShieldCheckIcon className="w-4 h-4" />
-                    관리자
-                  </span>
-                )}
-                {profileData.athleteVerified && (
-                  <span className="px-3 py-1 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-full font-semibold text-sm flex items-center gap-1" title={profileData.athleteData?.sport ? `종목: ${profileData.athleteData.sport}` : undefined}>
-                    <TrophyIcon className="w-4 h-4" />
-                    선수
-                    {profileData.athleteData?.sport && (
-                      <span className="opacity-90 text-xs">({profileData.athleteData.sport})</span>
-                    )}
-                  </span>
-                )}
-              </div>
-
-              {/* 4. 메타: 가입일 + 팔로워/팔로잉 */}
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                {joinDate && (
-                  <span className="text-[var(--color-text-secondary)]">
-                    가입일: {new Date(joinDate).toLocaleDateString('ko-KR')}
-                  </span>
-                )}
-                <div className="flex items-center gap-4 flex-wrap">
-                  {(() => {
-                    const grade = getFollowerGrade(followStats.followers);
-                    return grade ? (
-                      <span className={`px-2.5 py-0.5 rounded-lg text-xs font-semibold border ${getFollowerGradeBadgeStyle(grade)}`}>
-                        {grade}
-                      </span>
-                    ) : null;
-                  })()}
-                  <button
-                    onClick={() => navigate('/followers')}
-                    className="flex items-center gap-1 text-[var(--color-text-primary)] hover:text-[var(--color-blue-primary)] transition-colors cursor-pointer"
+                      }
+                      setIsEditingNickname(true);
+                    }}
+                    className="p-2 sm:p-1.5 rounded-lg text-white/80 hover:bg-white/20 touch-manipulation min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
                   >
-                    <FormatNumber value={followStats.followers} className="font-semibold" />
-                    <span className="text-[var(--color-text-secondary)]">팔로워</span>
-                  </button>
-                  <button
-                    onClick={() => navigate('/followers')}
-                    className="flex items-center gap-1 text-[var(--color-text-primary)] hover:text-[var(--color-blue-primary)] transition-colors cursor-pointer"
-                  >
-                    <FormatNumber value={followStats.following} className="font-semibold" />
-                    <span className="text-[var(--color-text-secondary)]">팔로잉</span>
+                    <PencilIcon className="w-5 h-5" />
                   </button>
                 </div>
+              )}
+              <div className="flex items-center gap-1.5 sm:gap-2 mt-1 flex-wrap">
+                {(profileData.interestedSports?.length ?? 0) > 0 ? (
+                  profileData.interestedSports!.map((sport) => (
+                    <span key={sport} className="px-2.5 sm:px-3 py-1 bg-white/20 rounded-full text-xs sm:text-sm font-semibold flex items-center gap-1">
+                      <span>{SPORT_ICONS[sport] ?? '●'}</span>
+                      <span>{sport}</span>
+                    </span>
+                  ))
+                ) : (
+                  <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold">전체</span>
+                )}
+                {(() => {
+                  const grade = getFollowerGrade(myProfileSummary?.followersCount ?? followStats.followers);
+                  return grade ? (
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getFollowerGradeBadgeStyle(grade)}`}>{grade}</span>
+                  ) : null;
+                })()}
               </div>
             </div>
           </div>
         </div>
-      </section>
 
-      {/* 계정 정보 */}
-      <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">계정 정보</h2>
-        <div className="space-y-4">
+        {/* 본문: 프로필 정보 · 주요 업적 · 보유 뱃지 — 모바일 패딩·그리드 */}
+        <div className="p-4 sm:p-5 md:p-6 space-y-4">
+          <div className="bg-[var(--color-bg-primary)] rounded-xl p-3 sm:p-4 border border-[var(--color-border-card)]">
+            <h3 className="text-base sm:text-lg font-bold text-[var(--color-text-primary)] mb-2 sm:mb-3 flex items-center gap-2">
+              <StarIcon className="w-5 h-5 text-yellow-500 shrink-0" />
+              프로필 정보
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+              <div className="min-w-0">
+                <p className="text-xs text-[var(--color-text-secondary)] mb-0.5 sm:mb-1">가입일</p>
+                <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{joinDate ? new Date(joinDate).toLocaleDateString('ko-KR') : '-'}</p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-[var(--color-text-secondary)] mb-0.5 sm:mb-1">주 활동지역</p>
+                <p className="text-sm font-semibold text-[var(--color-text-primary)] flex items-center gap-1 truncate">
+                  <MapPinIcon className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{profileData.residenceSido || '-'}</span>
+                </p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-[var(--color-text-secondary)] mb-0.5 sm:mb-1">매너점수</p>
+                <p className="text-sm font-semibold text-[var(--color-text-primary)] flex items-center gap-1.5 flex-wrap">
+                  {(() => {
+                    const mannerScore = profileData.mannerScore ?? myProfileSummary?.mannerScore ?? 80;
+                    const mannerConfig = getMannerGradeConfig(mannerScore);
+                    return (
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${mannerConfig.badgeClass}`}>
+                        {mannerConfig.icon} {mannerScore}점
+                      </span>
+                    );
+                  })()}
+                </p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-[var(--color-text-secondary)] mb-0.5 sm:mb-1">팔로워 / 팔로잉</p>
+                <p className="text-sm font-semibold text-[var(--color-text-primary)]">
+                  <FormatNumber value={myProfileSummary?.followersCount ?? followStats.followers} /> / <FormatNumber value={myProfileSummary?.followingCount ?? followStats.following} />
+                </p>
+                <button onClick={() => navigate('/followers')} className="text-xs text-[var(--color-blue-primary)] hover:underline mt-0.5 min-h-[28px] touch-manipulation">보기</button>
+              </div>
+            </div>
+            {(profileData.interestedSports?.length ?? 0) > 0 && (
+              <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-[var(--color-border-card)]">
+                <p className="text-xs text-[var(--color-text-secondary)] mb-1.5 sm:mb-2">용병 신청 명함에 등록한 종목</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {profileData.interestedSports!.map((sport) => {
+                    const chip = SPORT_CHIP_STYLES[sport] ?? SPORT_CHIP_STYLES['전체'];
+                    return (
+                      <span
+                        key={sport}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border ${chip.bg} ${chip.border} ${chip.text}`}
+                      >
+                        {SPORT_ICONS[sport] ?? '●'} {sport}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-[var(--color-bg-primary)] rounded-xl p-3 sm:p-4 border border-[var(--color-border-card)]">
+            <h3 className="text-base sm:text-lg font-bold text-[var(--color-text-primary)] mb-2 sm:mb-3 flex items-center gap-2">
+              <ChartBarIcon className="w-5 h-5 text-[var(--color-blue-primary)] shrink-0" />
+              용병 기록
+            </h3>
+            {activityByCategory.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                {activityByCategory.map(({ category, participations, creations }) => {
+                  const chip = SPORT_CHIP_STYLES[category] ?? SPORT_CHIP_STYLES['전체'];
+                  const rank = profileData.effectiveRanks?.[category];
+                  const rankLabel = rank && rank !== 'none' ? getRankDisplayLabel(category, rank) : '급수없음';
+                  const hasRank = rank && rank !== 'none';
+                  return (
+                    <div
+                      key={category}
+                      className={`p-3 rounded-lg border ${chip.bg} ${chip.border}`}
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-lg">{SPORT_ICONS[category] ?? '●'}</span>
+                        <span className={`text-sm font-semibold ${chip.text}`}>{category}</span>
+                      </div>
+                      <p className="text-xs text-[var(--color-text-secondary)]">
+                        참여 {participations}건 · 생성 {creations}건
+                      </p>
+                      <p className="text-xs mt-1">
+                        {hasRank ? (
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded font-medium bg-gradient-to-r ${getAllcourtplayRankStyle(rank)}`}>
+                            {rankLabel}
+                          </span>
+                        ) : (
+                          <span className="text-[var(--color-text-secondary)]">급수없음</span>
+                        )}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--color-text-secondary)] py-2">아직 용병 기록이 없어요. 매치에 참여하거나 모임을 만들면 여기에 표시돼요.</p>
+            )}
+          </div>
+
+          <div className="bg-[var(--color-bg-primary)] rounded-xl p-3 sm:p-4 border border-[var(--color-border-card)]">
+            <h3 className="text-base sm:text-lg font-bold text-[var(--color-text-primary)] mb-2 sm:mb-3 flex items-center gap-2">
+              <TrophySolidIcon className="w-5 h-5 text-yellow-500 shrink-0" />
+              주요 업적
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+              <div className="p-3 rounded-lg border bg-[var(--color-bg-card)] border-[var(--color-border-card)]">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">🎉</span>
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--color-text-primary)]">첫 매치</p>
+                    <p className="text-xs text-[var(--color-text-secondary)]">첫 매치 참가 완료</p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-3 rounded-lg border bg-[var(--color-bg-card)] border-[var(--color-border-card)]">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">🌟</span>
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--color-text-primary)]">활발한 참가자</p>
+                    <p className="text-xs text-[var(--color-text-secondary)]">참여 {activityStats.joinedGroups}건 · 생성 {activityStats.createdGroups}건</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-[var(--color-bg-primary)] rounded-xl p-3 sm:p-4 border border-[var(--color-border-card)]">
+            <h3 className="text-base sm:text-lg font-bold text-[var(--color-text-primary)] mb-2 sm:mb-3">보유 뱃지</h3>
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
+              {profileData.effectiveRanks && Object.entries(profileData.effectiveRanks).map(([sport, rank]) => (
+                <span key={sport} className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r ${getAllcourtplayRankStyle(rank)}`}>
+                  {sport} {getRankDisplayLabel(sport, rank)}
+                </span>
+              ))}
+              {earnedTitles.filter((t) => !profileData.businessNumberVerified || t !== '일반').map((title) => (
+                <span key={title} className="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-semibold rounded-full">{title}</span>
+              ))}
+              {profileData.athleteVerified && (
+                <span className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-xs font-semibold rounded-full flex items-center gap-1">
+                  <TrophyIcon className="w-3.5 h-3.5" /> 선수 {profileData.athleteData?.sport && `(${profileData.athleteData.sport})`}
+                </span>
+              )}
+              {(!profileData.effectiveRanks || !Object.keys(profileData.effectiveRanks).length) && !earnedTitles.length && !profileData.athleteVerified && (
+                <span className="text-sm text-[var(--color-text-secondary)]">보유 뱃지가 없습니다.</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+      </>
+      )}
+
+      {myInfoTab === 'account' && (
+      <>
+      {/* 계정 정보 — 모바일 패딩·터치 영역 */}
+      <section className="bg-[var(--color-bg-card)] rounded-xl sm:rounded-2xl border border-[var(--color-border-card)] p-4 sm:p-5 md:p-6 shadow-sm">
+        <h2 className="text-base sm:text-lg font-semibold text-[var(--color-text-primary)] mb-3 sm:mb-4">계정 정보</h2>
+        <div className="space-y-3 sm:space-y-4">
+          {/* 보유 포인트 + 충전하기 */}
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 py-3 border-b border-[var(--color-border-card)]">
+            <button
+              type="button"
+              onClick={async () => {
+                setShowPointHistoryModal(true);
+                setPointHistoryLoading(true);
+                try {
+                  const list = await api.get<PointHistoryItem[]>('/api/users/my/point-history');
+                  setPointHistory(list);
+                } catch {
+                  setPointHistory([]);
+                } finally {
+                  setPointHistoryLoading(false);
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-3 sm:py-2.5 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] hover:border-amber-500/50 transition-colors cursor-pointer min-h-[44px] active:scale-[0.98]"
+            >
+              <BanknotesIcon className="w-5 h-5 text-amber-500 shrink-0" />
+              <span className="text-sm text-[var(--color-text-secondary)]">보유 포인트</span>
+              <span className="text-base sm:text-lg font-bold text-[var(--color-text-primary)]">{(profileData.points ?? 0).toLocaleString()} P</span>
+            </button>
+            <button
+              type="button"
+              disabled={isCharging}
+              onClick={async () => {
+                setIsCharging(true);
+                try {
+                  const res = await api.post<{ balance: number; added: number }>('/api/users/my/charge');
+                  setProfileData((prev) => prev ? { ...prev, points: res.balance } : null);
+                  await showSuccess(`${res.added.toLocaleString()} P가 충전되었습니다.`, '포인트 충전');
+                } catch (e) {
+                  const msg = e instanceof Error ? e.message : '포인트 충전에 실패했습니다.';
+                  await showError(msg, '충전 실패');
+                } finally {
+                  setIsCharging(false);
+                }
+              }}
+              className="min-h-[44px] px-4 py-3 sm:py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 active:scale-[0.98]"
+            >
+              {isCharging ? '충전 중...' : '충전하기'}
+            </button>
+          </div>
+
           {/* 이메일 (수정 불가) */}
-          <div className="flex items-center justify-between py-3 border-b border-[var(--color-border-card)]">
-            <div className="flex items-center space-x-3">
-              <EnvelopeIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-              <div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 border-b border-[var(--color-border-card)]">
+            <div className="flex items-center space-x-3 min-w-0">
+              <EnvelopeIcon className="w-5 h-5 text-[var(--color-text-secondary)] shrink-0" />
+              <div className="min-w-0">
                 <div className="text-sm text-[var(--color-text-secondary)]">이메일</div>
-                <div className="text-[var(--color-text-primary)] font-medium">
+                <div className="text-[var(--color-text-primary)] font-medium truncate">
                   {profileData.email || '이메일 없음'}
                 </div>
               </div>
             </div>
-            <span className="text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] px-2 py-1 rounded">수정 불가</span>
+            <span className="text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] px-2 py-1 rounded shrink-0">수정 불가</span>
           </div>
 
           {/* 실명 (수정 불가) */}
-          <div className="flex items-center justify-between py-3 border-b border-[var(--color-border-card)]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 border-b border-[var(--color-border-card)]">
             <div className="flex items-center space-x-3">
               <IdentificationIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
               <div>
@@ -1265,9 +1404,9 @@ const MyInfoPage = () => {
           </div>
 
           {/* 비밀번호 변경 */}
-          <div className="flex items-center justify-between py-3 border-b border-[var(--color-border-card)]">
-            <div className="flex items-center space-x-3">
-              <LockClosedIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 border-b border-[var(--color-border-card)]">
+            <div className="flex items-center space-x-3 min-w-0">
+              <LockClosedIcon className="w-5 h-5 text-[var(--color-text-secondary)] shrink-0" />
               <div>
                 <div className="text-sm text-[var(--color-text-secondary)]">비밀번호</div>
                 <div className="text-[var(--color-text-primary)]">••••••••</div>
@@ -1275,7 +1414,7 @@ const MyInfoPage = () => {
             </div>
             <button
               onClick={handlePasswordChange}
-              className="px-4 py-2.5 bg-[var(--color-blue-primary)] text-white rounded-xl hover:opacity-90 transition-opacity text-sm font-medium"
+              className="min-h-[44px] px-4 py-2.5 bg-[var(--color-blue-primary)] text-white rounded-xl hover:opacity-90 transition-opacity text-sm font-medium active:scale-[0.98] shrink-0"
             >
               변경
             </button>
@@ -1332,8 +1471,9 @@ const MyInfoPage = () => {
               )}
               </div>
             )}
+          </div>
 
-          {/* 선수 등록 (계정 정보 하단, 덜 눈에 띄게) */}
+          {/* 선수 등록 */}
           {!profileData.athleteVerified && (
             <div className="pt-4 mt-4 border-t border-[var(--color-border-card)]">
               <p className="text-xs text-[var(--color-text-secondary)] mb-2">
@@ -1350,16 +1490,13 @@ const MyInfoPage = () => {
               </button>
             </div>
           )}
-          </div>
-        </div>
-      </section>
 
-      {/* 연락처 정보 */}
-      <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-4">연락처 정보</h2>
-        <div className="divide-y divide-[var(--color-border-card)]">
+          {/* 연락처 · 기타 (계정 정보 내 통합) — 모바일 패딩 */}
+          <div className="pt-4 sm:pt-6 mt-4 sm:mt-6 border-t border-[var(--color-border-card)]">
+            <h3 className="text-base font-semibold text-[var(--color-text-primary)] mb-3 sm:mb-4">연락처 · 기타</h3>
+            <div className="divide-y divide-[var(--color-border-card)]">
           {/* 휴대전화 번호 */}
-          <div className="flex items-center justify-between gap-4 py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 py-4">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <PhoneIcon className="w-5 h-5 shrink-0 text-[var(--color-text-secondary)]" />
               {isEditingPhone ? (
@@ -1373,7 +1510,7 @@ const MyInfoPage = () => {
                         const numbers = e.target.value.replace(/[^\d]/g, '');
                         setPhone(formatPhoneNumber(numbers));
                       }}
-                      className="flex-1 min-w-[140px] px-3 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                      className="flex-1 min-w-0 w-full sm:min-w-[140px] px-3 py-2.5 sm:py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-base focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
                       placeholder={PHONE_PLACEHOLDER}
                       maxLength={13}
                     />
@@ -1440,7 +1577,7 @@ const MyInfoPage = () => {
                   setPhoneCodeCountdown(0);
                   setIsEditingPhone(true);
                 }}
-                className="p-2 shrink-0 text-[var(--color-text-secondary)] hover:text-[var(--color-blue-primary)] hover:bg-[var(--color-bg-secondary)] rounded-lg transition-colors"
+                className="p-2.5 sm:p-2 shrink-0 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-blue-primary)] hover:bg-[var(--color-bg-secondary)] rounded-lg transition-colors active:scale-[0.98]"
                 aria-label="휴대전화 번호 수정"
               >
                 <PencilIcon className="w-5 h-5" />
@@ -1449,7 +1586,7 @@ const MyInfoPage = () => {
           </div>
 
           {/* 주소 */}
-          <div className="flex items-start justify-between gap-4 py-4">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4 py-4">
             <div className="flex items-start gap-3 min-w-0 flex-1">
               <MapPinIcon className="w-5 h-5 shrink-0 text-[var(--color-text-secondary)] mt-0.5" />
               <div className="min-w-0 flex-1">
@@ -1469,7 +1606,7 @@ const MyInfoPage = () => {
               type="button"
               onClick={handleSearchAddress}
               disabled={isSavingLocation}
-              className="px-4 py-2 shrink-0 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 shrink-0 bg-[var(--color-blue-primary)] text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
             >
               {isSavingLocation ? '저장 중...' : '변경'}
             </button>
@@ -1579,27 +1716,30 @@ const MyInfoPage = () => {
               label=""
             />
           </div>
-        </div>
-      </section>
-
-      {/* 매치 기록 요약 → 전용 페이지로 이동 */}
-      <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1">매치 기록</h2>
-            <p className="text-sm text-[var(--color-text-secondary)]">
-              참여한 매치 {activityStats.joinedGroups}건 · 생성한 매치 {activityStats.createdGroups}건
-            </p>
+            </div>
           </div>
+        </div>
+
+        {/* 로그아웃 · 회원 탈퇴 — 모바일 세로 배치·터치 영역 */}
+        <div className="flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center pt-4 sm:pt-6 mt-4 sm:mt-6 border-t border-[var(--color-border-card)]">
           <button
-            onClick={() => navigate('/my-activity')}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all border-2 border-[var(--color-blue-primary)] text-[var(--color-blue-primary)] bg-transparent hover:bg-[var(--color-blue-primary)] hover:text-white text-sm"
+            onClick={handleLogout}
+            className="w-full sm:w-auto min-h-[48px] flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-primary)] transition-colors text-sm font-medium border border-[var(--color-border-card)] active:scale-[0.98]"
           >
-            <ChartBarIcon className="w-5 h-5" />
-            매치 기록 보기
+            <ArrowRightOnRectangleIcon className="w-5 h-5" />
+            <span>로그아웃</span>
+          </button>
+          <button
+            onClick={handleWithdraw}
+            className="w-full sm:w-auto min-h-[48px] flex items-center justify-center gap-2 text-[var(--color-text-secondary)] hover:text-red-500 transition-colors text-sm font-medium active:scale-[0.98]"
+          >
+            <TrashIcon className="w-5 h-5" />
+            <span>회원 탈퇴</span>
           </button>
         </div>
       </section>
+      </>
+      )}
 
       {/* 사업자번호 변경 모달 (2단계: 비밀번호 인증 → 새 사업자번호 입력) */}
       {showChangeBusinessNumberModal && (
@@ -2179,24 +2319,6 @@ const MyInfoPage = () => {
           </div>
         </div>
       )}
-
-      {/* 로그아웃 및 회원 탈퇴 */}
-      <div className="flex justify-between items-center pt-6 mt-2">
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-primary)] transition-colors text-sm font-medium border border-[var(--color-border-card)]"
-        >
-          <ArrowRightOnRectangleIcon className="w-4 h-4" />
-          <span>로그아웃</span>
-        </button>
-        <button
-          onClick={handleWithdraw}
-          className="flex items-center gap-2 text-[var(--color-text-secondary)] hover:text-red-500 transition-colors text-sm font-medium"
-        >
-          <TrashIcon className="w-4 h-4" />
-          <span>회원 탈퇴</span>
-        </button>
-      </div>
       </div>
     </div>
   );
