@@ -11,7 +11,7 @@ import { getRankDisplayLabel } from '../constants/allcourtplayRank';
 import { getMannerTrustColors } from '../utils/mannerTrustColors';
 import { getMannerGradeConfig } from '../utils/mannerGrade';
 import { useAuth } from '../contexts/AuthContext';
-import { api } from '../utils/api';
+import { api, getImageUrl } from '../utils/api';
 import MercenaryProfileEditModal from './MercenaryProfileEditModal';
 import AvailabilityScheduleManager from './AvailabilityScheduleManager';
 import { showSuccess, showError } from '../utils/swal';
@@ -174,7 +174,7 @@ const MercenaryJobseekerDashboard: React.FC = () => {
           <div className="flex gap-4 mb-4">
             <div className="w-20 h-20 shrink-0 rounded-full overflow-hidden bg-[var(--color-bg-secondary)] border-2 flex items-center justify-center" style={{ borderColor: trustColors.point + '60' }}>
               {user?.profileImageUrl ? (
-                <img src={user.profileImageUrl} alt={user.nickname ?? '프로필'} className="w-full h-full object-cover" />
+                <img src={getImageUrl(user.profileImageUrl)} alt={user.nickname ?? '프로필'} className="w-full h-full object-cover" />
               ) : (
                 <UserCircleIcon className="w-12 h-12 text-[var(--color-text-secondary)]" />
               )}

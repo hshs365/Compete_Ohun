@@ -122,14 +122,18 @@ export class UsersService {
     });
   }
 
-  /** 용병 구하기 알림 수신 대상: 해당 종목 주력·활성화·알림 ON인 사용자 */
-  async findMercenaryEligibleUserIds(category: string, excludeUserId: number): Promise<number[]> {
+  /** 용병 구하기 알림 수신 대상: 해당 종목 주력·활성화·알림 ON인 사용자. meetingDateTime 있으면 시간대 조건도 적용 */
+  async findMercenaryEligibleUserIds(
+    category: string,
+    excludeUserId: number,
+    meetingDateTime?: Date | null,
+  ): Promise<number[]> {
     const users = await this.userRepository.find({
       where: {
         status: UserStatus.ACTIVE,
         mercenaryActivityStatus: 'active' as const,
       },
-      select: ['id', 'interestedSports', 'mercenaryActiveBySport'],
+      select: ['id', 'interestedSports', 'mercenaryActiveBySport', 'mercenaryAvailability'],
     });
 
     return users
@@ -138,6 +142,27 @@ export class UsersService {
       .filter((u) => {
         const bySport = u.mercenaryActiveBySport ?? {};
         return bySport[category] !== false;
+      })
+      .filter((u) => {
+        if (!meetingDateTime) return true;
+        const availability = (u.mercenaryAvailability ?? []) as Array<{
+          dayOfWeek: number;
+          timeSlots: Array<{ start: string; end: string }>;
+        }>;
+        if (!availability.length) return true; // 시간표 미설정 시 기존처럼 알림 발송
+        const dayOfWeek = meetingDateTime.getDay();
+        const meetingMin = meetingDateTime.getHours() * 60 + meetingDateTime.getMinutes();
+        const daySlots = availability.filter((a) => a.dayOfWeek === dayOfWeek);
+        for (const day of daySlots) {
+          for (const slot of day.timeSlots ?? []) {
+            const [sh, sm] = (slot.start ?? '00:00').split(':').map(Number);
+            const [eh, em] = (slot.end ?? '23:59').split(':').map(Number);
+            const startMin = (sh ?? 0) * 60 + (sm ?? 0);
+            const endMin = (eh ?? 23) * 60 + (em ?? 59);
+            if (meetingMin >= startMin && meetingMin <= endMin) return true;
+          }
+        }
+        return false;
       })
       .map((u) => u.id);
   }

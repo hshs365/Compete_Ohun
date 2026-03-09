@@ -20,6 +20,14 @@ export const getApiBaseUrl = (): string => {
 
 const API_BASE_URL = getApiBaseUrl();
 
+/** 업로드 이미지 URL: API 베이스가 별도 오리진이면 절대 경로로 변환 (깨짐 방지) */
+export function getImageUrl(url: string | null | undefined): string {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
+  const base = getApiBaseUrl();
+  return base ? `${base.replace(/\/$/, '')}${url.startsWith('/') ? url : `/${url}`}` : url;
+}
+
 /** Socket.io 연결용 URL (API와 동일 오리진) */
 export function getSocketUrl(): string {
   if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;

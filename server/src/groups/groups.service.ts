@@ -406,7 +406,11 @@ export class GroupsService {
     const isMercenaryRecruit = (createGroupDto as CreateGroupDto & { isMercenaryRecruit?: boolean }).isMercenaryRecruit;
     if (isMercenaryRecruit && savedGroup.category) {
       try {
-        const eligibleIds = await this.usersService.findMercenaryEligibleUserIds(savedGroup.category, creatorId);
+        const eligibleIds = await this.usersService.findMercenaryEligibleUserIds(
+          savedGroup.category,
+          creatorId,
+          savedGroup.meetingDateTime ?? undefined,
+        );
         for (const userId of eligibleIds) {
           await this.notificationsService.createNotification(
             userId,

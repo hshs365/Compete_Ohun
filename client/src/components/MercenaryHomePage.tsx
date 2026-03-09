@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import GroupList from './GroupList';
 import DateFilterChips from './DateFilterChips';
 import DynamicFilterBar from './DynamicFilterBar';
@@ -11,10 +12,12 @@ import { getUserCity, getCityCoordinates } from '../utils/locationUtils';
 import type { SelectedGroup } from '../types/selected-group';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../utils/api';
+import { showInfo } from '../utils/swal';
 import { UserPlusIcon, UserCircleIcon, PlusIcon, CameraIcon } from '@heroicons/react/24/outline';
 
 /** 용병 메인 페이지: 용병 구하기 / 용병 신청 */
 const MercenaryHomePage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'find' | 'apply'>('find');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(() => {
@@ -86,6 +89,40 @@ const MercenaryHomePage = () => {
     }
     setRefreshTrigger((prev) => prev + 1);
   };
+
+  // URL ?group=id 처리: 알림 등에서 구인글 상세로 진입
+  useEffect(() => {
+    const groupId = searchParams.get('group');
+    if (!groupId) return;
+    const id = parseInt(groupId, 10);
+    if (Number.isNaN(id)) return;
+    setSearchParams({}, { replace: true });
+    api
+      .get<{ id: number; name: string; location: string; latitude: number; longitude: number; participantCount: number; maxParticipants?: number | null; category: string; type?: 'normal' | 'rank' | 'event'; description?: string; meetingTime?: string; contact?: string; equipment?: string[]; isActive?: boolean }>(`/api/groups/${id}`)
+      .then((g) => {
+        if (g.isActive === false) {
+          showInfo('취소된 매치입니다.', '취소된 매치');
+          return;
+        }
+        const selected: SelectedGroup = {
+          id: g.id,
+          name: g.name,
+          location: g.location,
+          coordinates: [Number(g.latitude), Number(g.longitude)],
+          memberCount: g.participantCount,
+          maxParticipants: g.maxParticipants ?? undefined,
+          category: g.category,
+          type: g.type,
+          description: g.description,
+          meetingTime: g.meetingTime,
+          contact: g.contact,
+          equipment: g.equipment || [],
+        };
+        setActiveTab('find');
+        setSelectedGroup(selected);
+      })
+      .catch(() => {});
+  }, [searchParams, setSearchParams]);
 
   // 용병 명함에 종목이 등록된 유저: 종목별 참여 횟수 로드 (자주 참여한 순 정렬용)
   useEffect(() => {
@@ -244,23 +281,23 @@ const MercenaryHomePage = () => {
         />
       )}
 
-      {/* FAB: QR 스캔 (왼쪽) — 용병 구하기 탭에서만 표시 */}
+      {/* FAB: QR 스캔 (왼쪽) — 용병 구하기 탭에서만 표시. 모바일: 하단 네비(64px)+safe-area 위에 배치 */}
       {activeTab === 'find' && (
         <button
           type="button"
           onClick={() => setQrScannerOpen(true)}
-          className="fixed bottom-6 left-6 md:bottom-8 md:left-8 z-[100] flex items-center justify-center w-12 h-12 rounded-2xl text-white font-semibold shadow-lg hover:opacity-95 active:scale-[0.98] transition-all safe-area-bottom bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)]"
+          className="fixed bottom-28 left-6 md:bottom-8 md:left-8 z-[9010] flex items-center justify-center w-12 h-12 rounded-2xl text-white font-semibold shadow-lg hover:opacity-95 active:scale-[0.98] transition-all md:safe-area-bottom bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)]"
           aria-label="QR 인증 스캔"
         >
           <CameraIcon className="w-6 h-6 shrink-0" aria-hidden />
         </button>
       )}
-      {/* FAB: 용병 구하기 작성 (당근마켓 글쓰기 스타일) — 용병 구하기 탭에서만 표시 */}
+      {/* FAB: 용병 구하기 작성 (당근마켓 글쓰기 스타일) — 용병 구하기 탭에서만 표시. 모바일: 하단 네비(64px)+safe-area 위에 배치 */}
       {activeTab === 'find' && (
         <button
           type="button"
           onClick={() => setRecruitFormOpen(true)}
-          className="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-[100] flex items-center justify-center gap-2.5 h-12 px-5 rounded-2xl text-white font-semibold text-[15px] leading-[1] shadow-lg hover:opacity-95 active:scale-[0.98] transition-all safe-area-bottom"
+          className="fixed bottom-28 right-6 md:bottom-8 md:right-8 z-[9010] flex items-center justify-center gap-2.5 h-12 px-5 rounded-2xl text-white font-semibold text-[15px] leading-[1] shadow-lg hover:opacity-95 active:scale-[0.98] transition-all md:safe-area-bottom"
           style={{ backgroundColor: pointColor }}
           aria-label="용병 구하기 작성"
         >

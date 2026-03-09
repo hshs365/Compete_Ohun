@@ -27,7 +27,7 @@ import { TrophyIcon as TrophySolidIcon } from '@heroicons/react/24/solid';
 import { showError, showSuccess, showWarning, showInfo, showConfirm } from '../utils/swal';
 import ToggleSwitch from './ToggleSwitch';
 import { useAuth } from '../contexts/AuthContext';
-import { api } from '../utils/api';
+import { api, getImageUrl } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 import LoadingSpinner from './LoadingSpinner';
 import SportsStatisticsModal from './SportsStatisticsModal';
@@ -116,7 +116,7 @@ export interface PointHistoryItem {
 }
 
 const MyInfoPage = () => {
-  const { user: authUser, logout } = useAuth();
+  const { user: authUser, logout, checkAuth } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [profileData, setProfileData] = useState<UserProfileData | null>(null);
@@ -719,6 +719,7 @@ const MyInfoPage = () => {
         if (imageUrl) {
           setProfileData({ ...profileData, profileImage: imageUrl });
           if (profileData.id) localStorage.setItem(`profileImage_${profileData.id}`, imageUrl);
+          checkAuth(); // AuthContext user 갱신으로 앱 전체에서 실시간 반영
         } else {
           const reader = new FileReader();
           reader.onloadend = () => {
@@ -1108,7 +1109,7 @@ const MyInfoPage = () => {
             <div className="relative shrink-0">
               <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] md:w-20 md:h-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 sm:border-4 border-white/30 text-2xl sm:text-3xl font-bold overflow-hidden">
                 {profileData.profileImage ? (
-                  <img src={profileData.profileImage} alt="" className="w-full h-full object-cover" />
+                  <img src={getImageUrl(profileData.profileImage)} alt="" className="w-full h-full object-cover" />
                 ) : (
                   (profileData.nickname || '?').charAt(0)
                 )}

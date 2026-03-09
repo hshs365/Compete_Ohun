@@ -23,6 +23,8 @@ import { showError } from '../utils/swal';
 
 const CHAT_PRIMARY = '#8b5cf6';
 const CHAT_HISTORY_KEY = 'chat_widget_open';
+/** 모바일 하단 네비게이션 높이 (채팅 패널이 하단바를 가리지 않도록 여백 확보) */
+const BOTTOM_NAV_HEIGHT = 64;
 
 interface MessageItem {
   id: number;
@@ -210,6 +212,16 @@ const FloatingChatWidget: React.FC = () => {
     });
   }, [activeConversationId, user, fetchMessages, fetchConversations, setConversations]);
 
+  // 폴링: 모바일 등 WebSocket 불안정 시 메시지·읽음 상태 실시간 갱신 보완
+  useEffect(() => {
+    if (!isOpen || !activeConversationId || !user) return;
+    const poll = () => {
+      fetchMessages(activeConversationId).then(() => {});
+    };
+    const id = setInterval(poll, 8000);
+    return () => clearInterval(id);
+  }, [isOpen, activeConversationId, user, fetchMessages]);
+
   // 소켓: 위젯이 열려있을 때 항상 연결 (구인자가 목록만 봐도 inbox-update 수신)
   useEffect(() => {
     if (!isOpen || !user) return;
@@ -339,8 +351,9 @@ const FloatingChatWidget: React.FC = () => {
     <>
       {isMobileView && (
         <div
-          className="fixed inset-0 z-[9998] bg-black/40 transition-opacity md:hidden"
+          className="fixed left-0 right-0 top-0 z-[9998] bg-black/40 transition-opacity md:hidden"
           style={{
+            bottom: BOTTOM_NAV_HEIGHT,
             opacity: isSwipeClosing ? 0 : 1 - Math.min(swipeY / 200, 0.5),
           }}
           onClick={handleRequestClose}
@@ -361,7 +374,7 @@ const FloatingChatWidget: React.FC = () => {
                 left: 0,
                 right: 0,
                 width: '100%',
-                height: viewportHeight,
+                height: Math.max(200, viewportHeight - BOTTOM_NAV_HEIGHT),
                 borderBottomLeftRadius: 0,
                 borderBottomRightRadius: 0,
                 borderTopLeftRadius: '1rem',

@@ -333,7 +333,8 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
         category: effectiveSport,
         meetingDateTime: meetingDateTime || undefined,
         meetingEndTime: meetingDate && meetingEndTime ? meetingEndTime : undefined,
-        maxParticipants: Math.min(20, Math.max(1, parseInt(recruitCount, 10) || 1)),
+        // 용병 모집: 생성자 포함 총 인원 = 1(본인) + recruitCount(용병 수)
+        maxParticipants: 1 + Math.min(19, Math.max(1, parseInt(recruitCount, 10) || 1)),
         sportSpecificData: Object.keys(sportSpecificData).length > 0 ? sportSpecificData : undefined,
         genderRestriction: genderRestriction === 'male' || genderRestriction === 'female' ? genderRestriction : undefined,
         equipment: selectedEquipment.length > 0 ? selectedEquipment : undefined,
