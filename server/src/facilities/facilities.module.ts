@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FacilitiesService } from './facilities.service';
 import { PublicFacilitiesService } from './public-facilities.service';
@@ -18,7 +18,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Facility, FacilityCourt, FacilityReservation, FacilityReview]),
-    UsersModule,
+    forwardRef(() => UsersModule),
     NotificationsModule,
   ],
   controllers: [FacilitiesController, FacilityCourtsController, ReservationsController],

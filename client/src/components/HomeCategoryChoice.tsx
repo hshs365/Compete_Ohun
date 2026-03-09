@@ -27,6 +27,12 @@ const SPORT_CHIP_THEME: Record<string, { gradient: string; border: string; text:
     text: 'text-white dark:text-lime-100',
     activeGlow: 'shadow-[0_0_12px_rgba(132,204,22,0.5)] dark:shadow-[0_0_16px_rgba(132,204,22,0.4)]',
   },
+  야구: {
+    gradient: 'bg-gradient-to-br from-amber-600/90 to-amber-800/95 dark:from-amber-500/30 dark:to-amber-700/40',
+    border: 'border-2 border-amber-400/60 dark:border-amber-400/50',
+    text: 'text-white dark:text-amber-100',
+    activeGlow: 'shadow-[0_0_12px_rgba(251,191,36,0.5)] dark:shadow-[0_0_16px_rgba(251,191,36,0.4)]',
+  },
   배드민턴: {
     gradient: 'bg-gradient-to-br from-cyan-600/90 to-cyan-800/95 dark:from-cyan-500/30 dark:to-cyan-700/40',
     border: 'border-2 border-cyan-400/60 dark:border-cyan-400/50',

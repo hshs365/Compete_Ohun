@@ -6,9 +6,10 @@ export class CreateTeamDto {
   @MaxLength(50)
   teamName: string;
 
+  @IsOptional()
   @IsString()
-  @MinLength(1, { message: '종목을 선택해주세요.' })
-  sport: string;
+  @MaxLength(20)
+  sport?: string; // 선택. 미입력 시 '전체' (종목 무관)
 
   @IsString()
   @MinLength(1, { message: '팀 소재지를 선택해주세요.' })

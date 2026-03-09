@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { XMarkIcon, MapPinIcon, UsersIcon, WrenchScrewdriverIcon, TrashIcon, LockClosedIcon, LockOpenIcon, UserGroupIcon, TrophyIcon, StarIcon, CurrencyDollarIcon, BuildingOfficeIcon, ClipboardDocumentCheckIcon, HeartIcon, PencilSquareIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, MapPinIcon, UsersIcon, WrenchScrewdriverIcon, TrashIcon, LockClosedIcon, LockOpenIcon, UserGroupIcon, TrophyIcon, StarIcon, CurrencyDollarIcon, BuildingOfficeIcon, ClipboardDocumentCheckIcon, HeartIcon, PencilSquareIcon, ChevronLeftIcon, ChevronRightIcon, QrCodeIcon } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid, HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
 import type { SelectedGroup } from '../types/selected-group';
 import { api } from '../utils/api';
@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import UserDetailModal from './UserDetailModal';
 import FootballPitch from './FootballPitch';
 import MatchReviewModal from './MatchReviewModal';
+import HostQRModal from './HostQRModal';
 import { showError, showSuccess, showInfo, showConfirm } from '../utils/swal';
 import { extractCityFromAddress, getUserCityForJoin } from '../utils/locationUtils';
 import { MANNER_SCORE_THRESHOLD } from '../constants/penalty';
@@ -212,6 +213,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
   const [referees, setReferees] = useState<Array<{ id: number; userId: number; user: { id: number; nickname: string; tag?: string } }>>([]);
   const [isUserReferee, setIsUserReferee] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [isFavoriteLoading, setIsFavoriteLoading] = useState(false);
   /** 매치 유형: normal=일반(매치장 진행), rank=랭크(심판), event=이벤트 */
@@ -571,7 +573,12 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
     } catch (error: any) {
       console.error('매치 참가 실패:', error);
       const errorMessage = error?.response?.data?.message || error?.message || '매치 참가에 실패했습니다.';
-      await showError(errorMessage, '매치 참가 실패');
+      const msgStr = Array.isArray(errorMessage) ? errorMessage[0] : errorMessage;
+      const isTimeConflict = typeof msgStr === 'string' && msgStr.includes('같은 시간대');
+      await showError(
+        Array.isArray(errorMessage) ? errorMessage[0] : errorMessage,
+        isTimeConflict ? '해당 시간에 참여 중인 매치가 있습니다' : '매치 참가 실패'
+      );
       return false;
     } finally {
       setIsLoading(false);
@@ -1792,13 +1799,22 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
           {isCreator ? (
             <>
               {!isPastMatch && group && (
-                <button
-                  type="button"
-                  onClick={() => navigate(`/match-entry/${group.id}`)}
-                  className="w-full py-2.5 px-3 rounded-lg text-sm font-semibold bg-[var(--color-blue-primary)] text-white hover:opacity-90 transition-colors"
-                >
-                  매치 입장하기
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/match-entry/${group.id}`)}
+                    className="w-full py-2.5 px-3 rounded-lg text-sm font-semibold bg-[var(--color-blue-primary)] text-white hover:opacity-90 transition-colors"
+                  >
+                    매치 입장하기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowQRModal(true)}
+                    className="w-full py-2.5 px-3 rounded-lg text-sm font-semibold bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] border border-[var(--color-border-card)] hover:bg-[var(--color-bg-card)] transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <QrCodeIcon className="w-5 h-5" /> QR 인증 시작
+                  </button>
+                </>
               )}
               {isPastMatch && (
                 <button type="button" onClick={() => setShowReviewModal(true)} className="w-full py-2.5 px-3 rounded-lg text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-colors flex items-center justify-center gap-1.5">
@@ -1883,6 +1899,15 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
           groupName={group.name}
           isOpen={showReviewModal}
           onClose={() => setShowReviewModal(false)}
+        />
+      )}
+
+      {/* 호스트용 QR 인증 모달 */}
+      {group && (
+        <HostQRModal
+          groupId={group.id}
+          isOpen={showQRModal}
+          onClose={() => setShowQRModal(false)}
         />
       )}
 

@@ -101,57 +101,53 @@ const MySchedulePage = () => {
 
         const allEvents: GroupEvent[] = [];
 
-        // 1. 매치 일정 조회
-        const allGroupsResponse = await api.get<{ groups: any[]; total: number }>('/api/groups?limit=1000');
-        const allGroups = allGroupsResponse.groups;
+        // 1. 매치 일정 조회 (생성한 매치 + 참가한 매치(용병 포함) — my-schedule API)
+        const myGroups = await api.get<any[]>('/api/groups/my-schedule');
 
-        const participationChecks = await Promise.allSettled(
-          allGroups.map((group: any) => api.get(`/api/groups/${group.id}`))
-        );
-
-        const myGroups = allGroups.filter((group: any, index: number) => {
-          if (group.creatorId === user.id) return true;
-          const result = participationChecks[index];
-          if (result.status !== 'fulfilled') return false;
-          const detail = result.value as any;
-          return detail?.isUserParticipant === true || detail?.isUserOnWaitlist === true;
-        });
-
-        const matchEvents: GroupEvent[] = myGroups
-          .map((group: any, index: number) => {
-            if (!group.meetingTime) return null;
-            const result = participationChecks[index];
-            const detail = result?.status === 'fulfilled' ? (result.value as any) : null;
-            const isConfirmed = group.creatorId === user.id || detail?.isUserParticipant === true;
+        const matchEvents: GroupEvent[] = (Array.isArray(myGroups) ? myGroups : [])
+          .map((group: any) => {
             let startDate: Date | null = null;
-            const meetingTimeStr = group.meetingTime.trim();
-            if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(meetingTimeStr)) {
-              startDate = new Date(meetingTimeStr.slice(0, 16));
-            } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(meetingTimeStr)) {
-              const startPart = meetingTimeStr.split('~')[0]?.trim() || meetingTimeStr;
-              startDate = new Date(startPart.replace(' ', 'T') + ':00');
-            } else if (/^\d{4}-\d{2}-\d{2}$/.test(meetingTimeStr)) {
-              startDate = new Date(meetingTimeStr + 'T00:00:00');
-            } else {
-              const dateMatch = meetingTimeStr.match(/^\d{4}-\d{2}-\d{2}/);
-              startDate = dateMatch ? new Date(dateMatch[0] + 'T00:00:00') : new Date(meetingTimeStr);
+            if (group.meetingDateTime) {
+              startDate = new Date(group.meetingDateTime);
+            }
+            if ((!startDate || isNaN(startDate.getTime())) && group.meetingTime) {
+              const meetingTimeStr = String(group.meetingTime).trim();
+              if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(meetingTimeStr)) {
+                startDate = new Date(meetingTimeStr.slice(0, 16));
+              } else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(meetingTimeStr)) {
+                const startPart = meetingTimeStr.split('~')[0]?.trim() || meetingTimeStr;
+                startDate = new Date(startPart.replace(' ', 'T') + ':00');
+              } else if (/^\d{4}-\d{2}-\d{2}$/.test(meetingTimeStr)) {
+                startDate = new Date(meetingTimeStr + 'T00:00:00');
+              } else {
+                const dateMatch = meetingTimeStr.match(/^\d{4}-\d{2}-\d{2}/);
+                startDate = dateMatch ? new Date(dateMatch[0] + 'T00:00:00') : new Date(meetingTimeStr);
+              }
             }
             if (!startDate || isNaN(startDate.getTime())) return null;
             const endDate = new Date(startDate);
-            endDate.setHours(endDate.getHours() + 2);
+            const meetingTimeStr = String(group.meetingTime || '');
+            const endMatch = meetingTimeStr.match(/~\s*(\d{1,2}):(\d{2})/);
+            if (endMatch) {
+              endDate.setHours(parseInt(endMatch[1], 10), parseInt(endMatch[2], 10), 0, 0);
+              if (endDate <= startDate) endDate.setDate(endDate.getDate() + 1);
+            } else {
+              endDate.setHours(endDate.getHours() + 2);
+            }
+            const isCreator = group.creatorId === user.id;
             return {
               id: group.id,
-              title: isConfirmed ? group.name : `${group.name} (신청 중)`,
+              title: group.name,
               start: startDate.toISOString(),
               end: endDate.toISOString(),
               color: categoryColors[group.category] || '#6366f1',
-              className: isConfirmed ? 'fc-event-type-match fc-event-confirmed' : 'fc-event-type-match fc-event-applying',
+              className: 'fc-event-type-match fc-event-confirmed',
               extendedProps: {
                 groupId: group.id,
-                location: group.location,
-                category: group.category,
+                location: group.location || '',
+                category: group.category || '',
                 type: 'match' as const,
-                isConfirmed,
+                isConfirmed: true,
               },
             };
           })

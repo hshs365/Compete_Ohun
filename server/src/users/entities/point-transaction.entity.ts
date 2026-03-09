@@ -15,6 +15,7 @@ export enum PointTransactionType {
   ADJUST = 'adjust', // 관리자 조정
   REVIEW = 'review', // 선수 리뷰 작성 완료 보상
   FACILITY_REVIEW = 'facility_review', // 시설 리뷰 작성 완료 보상
+  ACHIEVEMENT = 'achievement', // 업적 달성 보상
 }
 
 @Entity('point_transactions')

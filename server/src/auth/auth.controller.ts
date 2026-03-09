@@ -294,6 +294,7 @@ export class AuthController {
       residenceAddress: user.residenceAddress || null,
       interestedSports: user.interestedSports || [],
       sportPositions: user.sportPositions || [],
+      sportEquipment: user.sportEquipment || [],
       skillLevel: user.skillLevel || null,
       isProfileComplete: user.isProfileComplete,
       createdAt: user.createdAt,

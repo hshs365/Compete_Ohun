@@ -37,4 +37,9 @@ export class GroupsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   emitPositionUpdated(groupId: number): void {
     this.server?.to(`group:${groupId}`).emit('position-updated', { groupId });
   }
+
+  /** 용병 QR 인증 완료 시 호스트 화면에 실시간 알림 */
+  emitMercenaryVerified(groupId: number, nickname: string): void {
+    this.server?.to(`group:${groupId}`).emit('mercenary-verified', { nickname });
+  }
 }

@@ -189,7 +189,11 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
       const str = Array.isArray(msg) ? msg[0] : msg;
-      showError(str ?? '참여 신청에 실패했습니다.', '실패');
+      const isTimeConflict = typeof str === 'string' && str.includes('같은 시간대');
+      showError(
+        str ?? '참여 신청에 실패했습니다.',
+        isTimeConflict ? '해당 시간에 참여 중인 매치가 있습니다' : '실패'
+      );
     } finally {
       setIsJoining(false);
     }

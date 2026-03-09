@@ -1,9 +1,10 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { GroupsService } from './groups.service';
 import { GroupsController } from './groups.controller';
 import { GroupsGateway } from './groups.gateway';
 import { GroupsSchedulerService } from './groups-scheduler.service';
+import { QrVerificationService } from './qr-verification.service';
 import { Group } from './entities/group.entity';
 import { GroupParticipant } from './entities/group-participant.entity';
 import { GroupGameSettings } from './entities/group-game-settings.entity';
@@ -22,11 +23,11 @@ import { FacilitiesModule } from '../facilities/facilities.module';
   imports: [
     TypeOrmModule.forFeature([Group, GroupParticipant, GroupGameSettings, GroupEvaluation, GroupParticipantPosition, GroupReferee, GroupFavorite, MatchReview, GroupProvisionalFacility, GroupWaitlist]),
     NotificationsModule,
-    UsersModule,
+    forwardRef(() => UsersModule),
     FacilitiesModule,
   ],
   controllers: [GroupsController],
-  providers: [GroupsService, GroupsGateway, GroupsSchedulerService],
+  providers: [GroupsService, GroupsGateway, GroupsSchedulerService, QrVerificationService],
   exports: [GroupsService],
 })
 export class GroupsModule {}

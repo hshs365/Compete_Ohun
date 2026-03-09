@@ -26,12 +26,14 @@ import { Public } from '../auth/decorators/public.decorator';
 import { User } from '../users/entities/user.entity';
 import type { Request } from 'express';
 import { GroupsGateway } from './groups.gateway';
+import { QrVerificationService } from './qr-verification.service';
 
 @Controller('api/groups')
 export class GroupsController {
   constructor(
     private readonly groupsService: GroupsService,
     private readonly groupsGateway: GroupsGateway,
+    private readonly qrVerificationService: QrVerificationService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -50,6 +52,13 @@ export class GroupsController {
   @Get('my-groups')
   async findMyGroups(@CurrentUser() user: User) {
     return this.groupsService.findMyGroups(user.id);
+  }
+
+  /** 내 일정용: 생성한 매치 + 참가한 매치(용병 포함) 중 아직 종료되지 않은 목록 */
+  @UseGuards(JwtAuthGuard)
+  @Get('my-schedule')
+  async findMySchedule(@CurrentUser() user: User) {
+    return this.groupsService.findMyScheduleGroups(user.id);
   }
 
   /** 내가 참가한 모임 (다른 사람이 만든 모임에 참가한 목록) */
@@ -156,6 +165,31 @@ export class GroupsController {
   ) {
     await this.groupsService.leaveGroup(id, user.id);
     return { success: true, message: '모임에서 나갔습니다.' };
+  }
+
+  /** QR 인증 토큰 생성 (호스트 전용, 1분 유효) */
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/qr-token')
+  @HttpCode(HttpStatus.OK)
+  async createQrToken(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+  ) {
+    return this.qrVerificationService.generateToken(id, user.id);
+  }
+
+  /** QR 스캔 인증 (용병 참가자만) */
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/qr-verify')
+  @HttpCode(HttpStatus.OK)
+  async verifyQrScan(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('token') token: string,
+    @CurrentUser() user: User,
+  ) {
+    const result = await this.qrVerificationService.verifyScan(id, token, user.id);
+    this.groupsGateway.emitMercenaryVerified(id, result.nickname);
+    return result;
   }
 
   /** 참가자가 자신의 포지션/팀 변경 (포지션 지정 매치) */

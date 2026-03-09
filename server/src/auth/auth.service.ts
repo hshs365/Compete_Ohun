@@ -869,6 +869,7 @@ export class AuthService {
       mercenaryAvailability?: Array<{ dayOfWeek: number; timeSlots: Array<{ start: string; end: string }> }>;
       interestedSports?: string[];
       sportPositions?: { sport: string; positions: string[] }[];
+      sportEquipment?: { sport: string; equipment: string[] }[];
       ohunRanks?: Record<string, string>;
       mercenaryActiveBySport?: Record<string, boolean>;
     },
@@ -878,6 +879,7 @@ export class AuthService {
     if (dto.mercenaryAvailability !== undefined) updateData.mercenaryAvailability = dto.mercenaryAvailability;
     if (dto.interestedSports !== undefined) updateData.interestedSports = dto.interestedSports;
     if (dto.sportPositions !== undefined) updateData.sportPositions = dto.sportPositions;
+    if (dto.sportEquipment !== undefined) updateData.sportEquipment = dto.sportEquipment;
     if (dto.ohunRanks !== undefined) updateData.ohunRanks = dto.ohunRanks;
     if (dto.mercenaryActiveBySport !== undefined) updateData.mercenaryActiveBySport = dto.mercenaryActiveBySport;
     return this.usersService.updateUser(userId, updateData);

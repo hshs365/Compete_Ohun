@@ -1,7 +1,7 @@
 // 운동 종류 목록 (홈·모임 생성 등에서 사용)
 // API에서 동적으로 가져올 수 있도록 확장 가능
 
-export const SPORTS_LIST: readonly string[] = ['축구', '풋살', '농구', '테니스', '배드민턴', '핸드볼', '배구', '탁구', '골프'];
+export const SPORTS_LIST: readonly string[] = ['축구', '풋살', '농구', '야구', '테니스', '배드민턴', '핸드볼', '배구', '탁구', '골프'];
 
 /** 종목별 아이콘 (이모지 — 지도 마커·종목 칩용) */
 export const SPORT_ICONS: Record<string, string> = {
@@ -21,7 +21,7 @@ export const SPORT_ICONS: Record<string, string> = {
 export const SPORTS_CATEGORIES: readonly string[] = ['전체', ...SPORTS_LIST];
 
 // 홈 화면 카테고리 필터용
-export const MAIN_CATEGORIES: readonly string[] = ['전체', '축구', '풋살', '농구', '테니스', '배드민턴', '핸드볼', '배구', '탁구', '골프'];
+export const MAIN_CATEGORIES: readonly string[] = ['전체', '축구', '풋살', '농구', '야구', '테니스', '배드민턴', '핸드볼', '배구', '탁구', '골프'];
 
 /** 스탯(레이더 차트) 제공 종목. 매치 리뷰 스텟이 있는 종목만 */
 export const SPORT_STATS_SPORTS: readonly string[] = ['축구', '풋살', '농구', '테니스'];
@@ -33,6 +33,7 @@ export const SPORT_POINT_COLORS: Record<string, string> = {
   풋살: '#10b981',
   농구: '#f97316',
   테니스: '#8b5cf6',
+  야구: '#f59e0b',
   배드민턴: '#14b8a6',
   핸드볼: '#e11d48',
   배구: '#0ea5e9',
@@ -47,6 +48,7 @@ export const SPORT_CHIP_STYLES: Record<string, { bg: string; border: string; tex
   풋살: { bg: 'bg-teal-500/25', border: 'border-teal-500/50', text: 'text-teal-300' },
   농구: { bg: 'bg-orange-500/25', border: 'border-orange-500/50', text: 'text-orange-300' },
   테니스: { bg: 'bg-violet-500/25', border: 'border-violet-500/50', text: 'text-violet-300' },
+  야구: { bg: 'bg-amber-500/25', border: 'border-amber-500/50', text: 'text-amber-300' },
   배드민턴: { bg: 'bg-teal-300/15', border: 'border-teal-300/45', text: 'text-teal-100' },
   핸드볼: { bg: 'bg-rose-600/25', border: 'border-rose-500/50', text: 'text-rose-300' },
   배구: { bg: 'bg-sky-600/25', border: 'border-sky-500/50', text: 'text-sky-300' },
@@ -266,6 +268,67 @@ export const SPORT_CONFIG: Record<string, SportConfigSchema> = {
           { value: 'beginner', label: '초급' },
           { value: 'intermediate', label: '중급' },
           { value: 'advanced', label: '고급' },
+        ],
+      },
+    ],
+  },
+  야구: {
+    filterFields: [
+      {
+        key: 'positions',
+        label: '포지션',
+        type: 'multiselect',
+        options: [
+          { value: 'P', label: '투수' },
+          { value: 'C', label: '포수' },
+          { value: '1B', label: '1루수' },
+          { value: '2B', label: '2루수' },
+          { value: '3B', label: '3루수' },
+          { value: 'SS', label: '유격수' },
+          { value: 'LF', label: '좌익수' },
+          { value: 'CF', label: '중견수' },
+          { value: 'RF', label: '우익수' },
+        ],
+      },
+      {
+        key: 'matchType',
+        label: '경기 방식',
+        type: 'select',
+        placeholder: '전체 경기 방식',
+        options: [
+          { value: 'full', label: '9회 정식' },
+          { value: '7inning', label: '7회' },
+          { value: 'softball', label: '소프트볼' },
+          { value: 'practice', label: '연습/친선' },
+        ],
+      },
+    ],
+    formFields: [
+      {
+        key: 'positions',
+        label: '모집 포지션',
+        type: 'multiselect',
+        options: [
+          { value: 'P', label: '투수' },
+          { value: 'C', label: '포수' },
+          { value: '1B', label: '1루수' },
+          { value: '2B', label: '2루수' },
+          { value: '3B', label: '3루수' },
+          { value: 'SS', label: '유격수' },
+          { value: 'LF', label: '좌익수' },
+          { value: 'CF', label: '중견수' },
+          { value: 'RF', label: '우익수' },
+        ],
+      },
+      {
+        key: 'matchType',
+        label: '경기 방식',
+        type: 'select',
+        options: [
+          { value: 'full', label: '9회 정식' },
+          { value: '7inning', label: '7회' },
+          { value: 'softball', label: '소프트볼' },
+          { value: 'practice', label: '연습/친선' },
         ],
       },
     ],

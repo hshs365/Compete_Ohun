@@ -153,7 +153,7 @@ export class TeamsService {
     const team: TeamMembership = {
       id: nextId,
       teamName: dto.teamName,
-      sport: dto.sport,
+      sport: (dto.sport?.trim() || '전체'),
       position: '',
       role: 'captain',
       description: dto.description,

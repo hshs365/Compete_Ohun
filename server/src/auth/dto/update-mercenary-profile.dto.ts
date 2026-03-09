@@ -39,6 +39,10 @@ export class UpdateMercenaryProfileDto {
   sportPositions?: { sport: string; positions: string[] }[];
 
   @IsOptional()
+  @IsArray()
+  sportEquipment?: { sport: string; equipment: string[] }[];
+
+  @IsOptional()
   ohunRanks?: Record<string, string>;
 
   /** 종목별 용병 알림 수신 활성화. { "축구": true, "배드민턴": false } */

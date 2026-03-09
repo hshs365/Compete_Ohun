@@ -40,6 +40,14 @@ import { getMannerGradeConfig } from '../utils/mannerGrade';
 import FormatNumber from './FormatNumber';
 import { compressImageForOcr } from '../utils/imageCompress';
 
+/** 업적 정의: 달성 조건 및 지급 포인트 (10배 적용) */
+const ACHIEVEMENTS = [
+  { id: 'first-match', icon: '🎉', title: '첫 매치', description: '첫 매치 참가 완료', points: 1000, check: (s: { joined: number }) => s.joined >= 1 },
+  { id: 'first-creation', icon: '✨', title: '첫 모임 생성', description: '모임을 처음 생성함', points: 500, check: (s: { created: number }) => s.created >= 1 },
+  { id: 'active-participant', icon: '🌟', title: '활발한 참가자', description: '참여 5건 이상 또는 생성 3건 이상', points: 1000, check: (s) => s.joined >= 5 || s.created >= 3 },
+  { id: 'match-master', icon: '🏆', title: '매치 마스터', description: '참여 10건 이상', points: 2000, check: (s) => s.joined >= 10 },
+] as const;
+
 /** 내 프로필 상세용 (profile-summary API 응답) */
 interface MyProfileSummary {
   rankMatchStats?: { totalGames: number; wins: number; losses: number; winRate: number };
@@ -101,7 +109,7 @@ interface UserProfileData {
 export interface PointHistoryItem {
   id: number;
   amount: number;
-  type: 'earn' | 'use' | 'adjust';
+  type: 'earn' | 'use' | 'adjust' | 'achievement' | 'review' | 'facility_review';
   description: string | null;
   balanceAfter: number;
   createdAt: string;
@@ -620,6 +628,19 @@ const MyInfoPage = () => {
           favoriteGroups: favoritesCount,
           upcomingGroups: upcomingCount,
         });
+
+        // 업적 동기화: 미지급 업적 있으면 포인트 지급
+        try {
+          const syncRes = await api.get<{ granted: { achievementId: string; points: number }[]; totalGranted: number }>('/api/users/me/achievements/sync');
+          if (syncRes?.granted?.length) {
+            const total = syncRes.totalGranted ?? syncRes.granted.reduce((s, g) => s + g.points, 0);
+            const updated = await api.get<UserProfileData>('/api/auth/me');
+            setProfileData(updated);
+            await showSuccess(`${total.toLocaleString()}P 업적 보상이 지급되었습니다.`, '업적 달성');
+          }
+        } catch (syncErr) {
+          console.error('업적 동기화 실패:', syncErr);
+        }
       } catch (error) {
         console.error('매치 기록 조회 실패:', error);
       }
@@ -710,14 +731,7 @@ const MyInfoPage = () => {
       }
     } catch (error) {
       console.error('프로필 사진 업로드 실패:', error);
-      // API가 아직 구현되지 않았을 경우 localStorage에 임시 저장
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfileData({ ...profileData, profileImage: reader.result as string });
-        localStorage.setItem(`profileImage_${profileData.id}`, reader.result as string);
-        showInfo('프로필 사진이 임시로 저장되었습니다. (서버 저장 기능은 준비 중입니다)', '임시 저장');
-      };
-      reader.readAsDataURL(file);
+      await showError('프로필 사진 저장에 실패했습니다. 네트워크를 확인하고 다시 시도해주세요.', '저장 실패');
     }
   };
 
@@ -1277,26 +1291,52 @@ const MyInfoPage = () => {
               <TrophySolidIcon className="w-5 h-5 text-yellow-500 shrink-0" />
               주요 업적
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
-              <div className="p-3 rounded-lg border bg-[var(--color-bg-card)] border-[var(--color-border-card)]">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">🎉</span>
-                  <div>
-                    <p className="text-sm font-semibold text-[var(--color-text-primary)]">첫 매치</p>
-                    <p className="text-xs text-[var(--color-text-secondary)]">첫 매치 참가 완료</p>
+            {(() => {
+              const stats = { joined: activityStats.joinedGroups, created: activityStats.createdGroups };
+              const achieved = ACHIEVEMENTS.filter((a) => a.check(stats));
+              const challengeable = ACHIEVEMENTS.filter((a) => !a.check(stats));
+              const AchievementCard = ({ a, done }: { a: (typeof ACHIEVEMENTS)[number]; done: boolean }) => (
+                <div key={a.id} className={`p-3 rounded-lg border bg-[var(--color-bg-card)] border-[var(--color-border-card)] ${done ? 'ring-1 ring-amber-500/40' : 'opacity-80'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-2xl shrink-0">{a.icon}</span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-[var(--color-text-primary)]">{a.title}</p>
+                        <p className="text-xs text-[var(--color-text-secondary)]">{a.description}</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold text-amber-500 shrink-0">+{a.points}P</span>
                   </div>
                 </div>
-              </div>
-              <div className="p-3 rounded-lg border bg-[var(--color-bg-card)] border-[var(--color-border-card)]">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">🌟</span>
-                  <div>
-                    <p className="text-sm font-semibold text-[var(--color-text-primary)]">활발한 참가자</p>
-                    <p className="text-xs text-[var(--color-text-secondary)]">참여 {activityStats.joinedGroups}건 · 생성 {activityStats.createdGroups}건</p>
-                  </div>
+              );
+              return (
+                <div className="space-y-4">
+                  {achieved.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-2">달성한 업적</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+                        {achieved.map((a) => (
+                          <AchievementCard key={a.id} a={a} done />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {challengeable.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-2">도전 가능한 업적</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+                        {challengeable.map((a) => (
+                          <AchievementCard key={a.id} a={a} done={false} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {achieved.length === 0 && challengeable.length === 0 && (
+                    <p className="text-sm text-[var(--color-text-secondary)] py-2">업적 데이터를 불러오는 중...</p>
+                  )}
                 </div>
-              </div>
-            </div>
+              );
+            })()}
           </div>
 
           <div className="bg-[var(--color-bg-primary)] rounded-xl p-3 sm:p-4 border border-[var(--color-border-card)]">
@@ -2296,7 +2336,7 @@ const MyInfoPage = () => {
                             {item.amount > 0 ? '+' : ''}{item.amount.toLocaleString()} P
                           </span>
                           <span className="text-xs text-[var(--color-text-secondary)]">
-                            {item.type === 'earn' ? '획득' : item.type === 'use' ? '사용' : '조정'}
+                            {item.type === 'earn' || item.type === 'achievement' || item.type === 'review' || item.type === 'facility_review' ? '획득' : item.type === 'use' ? '사용' : '조정'}
                           </span>
                         </div>
                         {item.description && (

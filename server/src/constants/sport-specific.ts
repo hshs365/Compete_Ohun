@@ -33,6 +33,11 @@ export const SPORT_SPECIFIC_SCHEMAS: Record<string, SportSpecificSchema> = {
       positions: '모집 포지션 (G, F, C 등)',
     },
   },
+  야구: {
+    optional: {
+      positions: '모집 포지션 (투수, 포수, 내야수, 외야수 등)',
+    },
+  },
   테니스: {
     optional: {
       skillLevel: '실력 수준',

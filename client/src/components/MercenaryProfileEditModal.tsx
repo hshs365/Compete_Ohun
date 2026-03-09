@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { SPORT_ICONS, SPORT_CHIP_STYLES, MAIN_CATEGORIES } from '../constants/sports';
+import { EQUIPMENT_OPTIONS } from '../constants/equipment';
 import { api } from '../utils/api';
 import { showSuccess, showError } from '../utils/swal';
 import type { User } from '../contexts/AuthContext';
@@ -30,6 +31,15 @@ const GRADE_OPTIONS: Record<string, { value: string; label: string }[]> = {
     { value: 'C', label: 'C조' },
     { value: 'D', label: 'D조' },
     { value: 'E', label: 'E조' },
+    { value: 'none', label: '급수 없음' },
+  ],
+  야구: [
+    { value: 'S', label: 'S' },
+    { value: 'A', label: 'A' },
+    { value: 'B', label: 'B' },
+    { value: 'C', label: 'C' },
+    { value: 'D', label: 'D' },
+    { value: 'E', label: 'E' },
     { value: 'none', label: '급수 없음' },
   ],
   농구: [
@@ -92,6 +102,17 @@ const POSITION_OPTIONS: Record<string, { value: string; label: string }[]> = {
     { value: 'MF', label: 'MF' },
     { value: 'FW', label: 'FW' },
   ],
+  야구: [
+    { value: 'P', label: '투수' },
+    { value: 'C', label: '포수' },
+    { value: '1B', label: '1루수' },
+    { value: '2B', label: '2루수' },
+    { value: '3B', label: '3루수' },
+    { value: 'SS', label: '유격수' },
+    { value: 'LF', label: '좌익수' },
+    { value: 'CF', label: '중견수' },
+    { value: 'RF', label: '우익수' },
+  ],
   농구: [
     { value: 'PG', label: '포인트가드' },
     { value: 'SG', label: '슈팅가드' },
@@ -136,6 +157,7 @@ const MercenaryProfileEditModal: React.FC<MercenaryProfileEditModalProps> = ({
   const [mainSports, setMainSports] = useState<string[]>([]);
   const [ohunRanks, setOhunRanks] = useState<Record<string, string>>({});
   const [sportPositions, setSportPositions] = useState<{ sport: string; positions: string[] }[]>([]);
+  const [sportEquipment, setSportEquipment] = useState<{ sport: string; equipment: string[] }[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -143,6 +165,7 @@ const MercenaryProfileEditModal: React.FC<MercenaryProfileEditModalProps> = ({
     setMainSports(user.interestedSports ?? []);
     setOhunRanks(user.ohunRanks ?? user.effectiveRanks ?? {});
     setSportPositions(user.sportPositions ?? []);
+    setSportEquipment(user.sportEquipment ?? []);
   }, [isOpen, user]);
 
   const toggleSport = (sport: string) => {
@@ -168,6 +191,19 @@ const MercenaryProfileEditModal: React.FC<MercenaryProfileEditModalProps> = ({
     });
   };
 
+  const toggleEquipment = (sport: string, item: string) => {
+    setSportEquipment((prev) => {
+      const existing = prev.find((sp) => sp.sport === sport);
+      const items = existing?.equipment ?? [];
+      const next = items.includes(item)
+        ? items.filter((e) => e !== item)
+        : [...items, item];
+      const without = prev.filter((sp) => sp.sport !== sport);
+      if (next.length === 0) return without;
+      return [...without, { sport, equipment: next }];
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -180,6 +216,7 @@ const MercenaryProfileEditModal: React.FC<MercenaryProfileEditModalProps> = ({
         interestedSports: mainSports,
         ohunRanks: ranks,
         sportPositions: sportPositions.filter((sp) => sp.positions.length > 0),
+        sportEquipment: sportEquipment.filter((sp) => sp.equipment.length > 0),
       });
       await showSuccess('용병 프로필이 저장되었습니다.', '저장 완료');
       onSuccess?.();
@@ -272,6 +309,50 @@ const MercenaryProfileEditModal: React.FC<MercenaryProfileEditModalProps> = ({
                   })}
                 </div>
               </div>
+
+              {mainSports.some((s) => EQUIPMENT_OPTIONS[s]) && (
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                    종목별 보유 장비
+                  </label>
+                  <p className="text-xs text-[var(--color-text-secondary)] mb-2">
+                    용병 참가 시 필요할 수 있는 품목을 선택해 주세요.
+                  </p>
+                  <div className="space-y-3">
+                    {mainSports
+                      .filter((s) => EQUIPMENT_OPTIONS[s])
+                      .map((sport) => {
+                        const selected = sportEquipment.find((sp) => sp.sport === sport)?.equipment ?? [];
+                        const opts = EQUIPMENT_OPTIONS[sport] ?? [];
+                        return (
+                          <div key={sport}>
+                            <span className="text-xs text-[var(--color-text-secondary)] block mb-1.5">
+                              {SPORT_ICONS[sport]} {sport}
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              {opts.map((o) => {
+                                const active = selected.includes(o.value);
+                                return (
+                                  <button
+                                    key={o.value}
+                                    type="button"
+                                    onClick={() => toggleEquipment(sport, o.value)}
+                                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                                      active ? 'text-white' : 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] border-transparent'
+                                    }`}
+                                    style={active ? { backgroundColor: POINT_COLOR, borderColor: POINT_COLOR } : undefined}
+                                  >
+                                    {o.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
 
               {mainSports.some((s) => POSITION_OPTIONS[s]) && (
                 <div>

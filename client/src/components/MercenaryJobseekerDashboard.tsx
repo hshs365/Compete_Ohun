@@ -100,13 +100,13 @@ const MercenaryJobseekerDashboard: React.FC = () => {
 
   if (!user) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8">
-        <UserCircleIcon className="w-16 h-16 text-[var(--color-text-secondary)] mb-4" />
-        <p className="text-[var(--color-text-secondary)] mb-4">로그인 후 용병 구직자 대시보드를 이용할 수 있습니다.</p>
+      <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-8">
+        <UserCircleIcon className="w-20 h-20 text-[var(--color-text-secondary)] mb-6" />
+        <p className="text-[var(--color-text-secondary)] text-center mb-6 px-4">로그인 후 용병 구직자 대시보드를 이용할 수 있습니다.</p>
         <button
           type="button"
           onClick={() => navigate('/login')}
-          className="px-6 py-2.5 rounded-xl font-semibold text-white bg-[var(--color-blue-primary)] hover:opacity-90"
+          className="px-8 py-4 rounded-xl font-semibold text-white bg-[var(--color-blue-primary)] hover:opacity-90 min-h-[48px] touch-manipulation"
         >
           로그인
         </button>
@@ -116,24 +116,24 @@ const MercenaryJobseekerDashboard: React.FC = () => {
 
   if (!hasProfile) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-8">
         <div className="max-w-sm w-full text-center">
           <div
-            className="w-24 h-24 mx-auto flex items-center justify-center rounded-full mb-6"
+            className="w-28 h-28 mx-auto flex items-center justify-center rounded-full mb-6"
             style={{ backgroundColor: `${POINT_COLOR}25` }}
           >
-            <UserCircleIcon className="w-12 h-12" style={{ color: POINT_COLOR }} />
+            <UserCircleIcon className="w-14 h-14" style={{ color: POINT_COLOR }} />
           </div>
-          <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-2">
+          <h2 className="text-xl font-semibold text-[var(--color-text-primary)] mb-2 px-2">
             자신의 용병 명함을 먼저 만들어보세요!
           </h2>
-          <p className="text-sm text-[var(--color-text-secondary)] mb-6">
+          <p className="text-sm text-[var(--color-text-secondary)] mb-8 px-2">
             주력 종목, 실력 등급, 선호 포지션을 등록하면 구인자 검색에 노출됩니다.
           </p>
           <button
             type="button"
             onClick={() => setProfileEditOpen(true)}
-            className="w-full py-3 px-4 rounded-xl font-semibold text-white transition-opacity hover:opacity-90"
+            className="w-full py-4 px-4 rounded-xl font-semibold text-white transition-opacity hover:opacity-90 min-h-[52px] touch-manipulation"
             style={{ backgroundColor: POINT_COLOR }}
           >
             프로필 등록하기
@@ -150,21 +150,21 @@ const MercenaryJobseekerDashboard: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
-      {/* 내 용병 명함 카드 */}
-      <section className="shrink-0 p-4">
+    <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
+      {/* 내 용병 명함 카드 — 모바일 터치 영역 확대 */}
+      <section className="shrink-0 p-4 md:p-5">
         <div
-          className={`rounded-2xl border-2 p-5 ${trustColors.bg} ${trustColors.border}`}
+          className={`rounded-2xl border-2 p-5 md:p-6 ${trustColors.bg} ${trustColors.border}`}
           style={{ borderColor: trustColors.point + '60' }}
         >
-          <div className="flex items-start justify-between mb-4">
-            <h3 className="text-sm font-semibold text-[var(--color-text-secondary)]">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-semibold text-[var(--color-text-secondary)]">
               내 용병 명함
             </h3>
             <button
               type="button"
               onClick={() => setProfileEditOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors min-h-[44px] touch-manipulation border border-[var(--color-border-card)] bg-[var(--color-bg-primary)]"
               style={{ color: POINT_COLOR }}
             >
               <PencilIcon className="w-4 h-4" />
@@ -172,40 +172,38 @@ const MercenaryJobseekerDashboard: React.FC = () => {
             </button>
           </div>
           <div className="flex gap-4 mb-4">
-            {/* 프로필 사진 */}
-            <div className="w-16 h-16 shrink-0 rounded-full overflow-hidden bg-[var(--color-bg-secondary)] border-2 flex items-center justify-center" style={{ borderColor: trustColors.point + '60' }}>
+            <div className="w-20 h-20 shrink-0 rounded-full overflow-hidden bg-[var(--color-bg-secondary)] border-2 flex items-center justify-center" style={{ borderColor: trustColors.point + '60' }}>
               {user?.profileImageUrl ? (
                 <img src={user.profileImageUrl} alt={user.nickname ?? '프로필'} className="w-full h-full object-cover" />
               ) : (
-                <UserCircleIcon className="w-10 h-10 text-[var(--color-text-secondary)]" />
+                <UserCircleIcon className="w-12 h-12 text-[var(--color-text-secondary)]" />
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-3 mb-2">
-                {/* 매너 점수 - 카드 형태 (그린/옐로/레드) */}
+              <div className="flex flex-wrap items-center gap-2 mb-3">
                 {(() => {
                   const mannerConfig = getMannerGradeConfig(mannerScore);
                   return (
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${mannerConfig.bg} ${mannerConfig.border}`}>
-                      <span className="text-lg" aria-hidden>{mannerConfig.icon}</span>
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${mannerConfig.bg} ${mannerConfig.border} min-h-[44px]`}>
+                      <span className="text-xl" aria-hidden>{mannerConfig.icon}</span>
                       <div>
-                        <span className={`font-bold ${mannerConfig.textColor}`}>{mannerScore}</span>
-                        <span className="text-xs text-[var(--color-text-secondary)] ml-1">점 · {mannerConfig.label}</span>
+                        <span className={`text-lg font-bold ${mannerConfig.textColor}`}>{mannerScore}</span>
+                        <span className="text-sm text-[var(--color-text-secondary)] ml-1">점 · {mannerConfig.label}</span>
                       </div>
                     </div>
                   );
                 })()}
               </div>
               {mainSports.length > 0 && (
-                <p className="text-xs text-[var(--color-text-secondary)] mb-1.5">용병 가능 종목</p>
+                <p className="text-xs text-[var(--color-text-secondary)] mb-2">용병 가능 종목</p>
               )}
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-2">
                 {mainSports.map((sport) => {
                   const chip = SPORT_CHIP_STYLES[sport] ?? SPORT_CHIP_STYLES['전체'];
                   return (
                     <span
                       key={sport}
-                      className={`px-2 py-0.5 rounded-lg text-xs font-medium border ${chip.bg} ${chip.border} ${chip.text}`}
+                      className={`px-3 py-1 rounded-lg text-sm font-medium border ${chip.bg} ${chip.border} ${chip.text}`}
                     >
                       {SPORT_ICONS[sport] ?? '●'} {sport}
                     </span>
@@ -215,15 +213,15 @@ const MercenaryJobseekerDashboard: React.FC = () => {
             </div>
           </div>
           {Object.keys(effectiveRanks).length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              <span className="text-xs text-[var(--color-text-secondary)] w-full mb-1">종목별 등급</span>
+            <div className="flex flex-wrap gap-2 mb-3">
+              <span className="text-xs text-[var(--color-text-secondary)] w-full">종목별 등급</span>
               {Object.entries(effectiveRanks).map(([sport, grade]) => {
                 const chip = SPORT_CHIP_STYLES[sport] ?? SPORT_CHIP_STYLES['전체'];
                 const displayGrade = getRankDisplayLabel(sport, grade);
                 return (
                   <span
                     key={sport}
-                    className={`px-2 py-0.5 rounded-lg text-xs font-medium border ${chip.bg} ${chip.border} ${chip.text}`}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium border ${chip.bg} ${chip.border} ${chip.text}`}
                   >
                     {SPORT_ICONS[sport] ?? ''} {displayGrade}
                   </span>
@@ -232,69 +230,55 @@ const MercenaryJobseekerDashboard: React.FC = () => {
             </div>
           )}
           {sportPositions.length > 0 && (
-            <p className="text-xs text-[var(--color-text-secondary)]">
-              선호 역할:{' '}
-              {sportPositions
-                .map((sp) => `${sp.sport} ${sp.positions.join(', ')}`)
-                .join(' / ')}
+            <p className="text-sm text-[var(--color-text-secondary)] pt-2 border-t border-[var(--color-border-card)]">
+              선호 역할: {sportPositions.map((sp) => `${sp.sport} ${sp.positions.join(', ')}`).join(' / ')}
             </p>
           )}
         </div>
       </section>
 
-      {/* 용병 활동 가능 상태 (전체 + 종목별) */}
-      <section className="shrink-0 px-4 pb-3">
-        <div className="p-3 rounded-xl bg-[var(--color-bg-card)] border border-[var(--color-border-card)]">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-[var(--color-text-primary)]">
-              용병 활동 가능 상태
-            </span>
-            <div className="flex rounded-full p-0.5 bg-[var(--color-bg-secondary)]">
+      {/* 용병 활동 가능 상태 — 모바일에서 세로 배치·터치 영역 확대 */}
+      <section className="shrink-0 px-4 pb-4">
+        <div className="p-4 md:p-5 rounded-2xl bg-[var(--color-bg-card)] border border-[var(--color-border-card)]">
+          <h3 className="text-base font-semibold text-[var(--color-text-primary)] mb-3">
+            용병 활동 가능 상태
+          </h3>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+            <p className="text-sm text-[var(--color-text-secondary)] sm:order-2 sm:flex-1">
+              활동 중일 때만 구인자 검색에 노출됩니다.
+            </p>
+            <div className="flex rounded-xl p-1 bg-[var(--color-bg-secondary)] w-full sm:w-auto sm:min-w-[240px]">
               <button
                 type="button"
                 onClick={() => handleActivityStatusChange('active')}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                  activityStatus === 'active'
-                    ? 'text-white shadow'
-                    : 'text-[var(--color-text-secondary)]'
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold transition-all min-h-[48px] touch-manipulation ${
+                  activityStatus === 'active' ? 'text-white shadow' : 'text-[var(--color-text-secondary)]'
                 }`}
-                style={
-                  activityStatus === 'active'
-                    ? { backgroundColor: POINT_COLOR }
-                    : undefined
-                }
+                style={activityStatus === 'active' ? { backgroundColor: POINT_COLOR } : undefined}
               >
-                <CheckCircleIcon className="w-4 h-4" />
+                <CheckCircleIcon className="w-5 h-5" />
                 전체 활동 중
               </button>
               <button
                 type="button"
                 onClick={() => handleActivityStatusChange('paused')}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                  activityStatus === 'paused'
-                    ? 'bg-[var(--color-bg-primary)] text-[var(--color-text-secondary)] shadow'
-                    : 'text-[var(--color-text-secondary)]'
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold transition-all min-h-[48px] touch-manipulation ${
+                  activityStatus === 'paused' ? 'bg-[var(--color-bg-primary)] text-[var(--color-text-secondary)] shadow' : 'text-[var(--color-text-secondary)]'
                 }`}
               >
-                <XCircleIcon className="w-4 h-4" />
+                <XCircleIcon className="w-5 h-5" />
                 잠시 멈춤
               </button>
             </div>
           </div>
-          <p className="text-xs text-[var(--color-text-secondary)] mb-4">
-            활동 중일 때만 구인자 검색에 노출됩니다. 종목별로 특정 운동만 멈춤 설정할 수 있습니다.
-          </p>
 
-          {/* 종목별 활동 가능 상태 */}
           {mainSports.length > 0 && (
-            <div className="border-t border-[var(--color-border-card)] pt-3">
-              <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-2">
-                종목별 활동 상태
-              </p>
+            <div className="border-t border-[var(--color-border-card)] pt-4">
+              <p className="text-sm font-medium text-[var(--color-text-primary)] mb-1">종목별 활동 상태</p>
               <p className="text-xs text-[var(--color-text-secondary)] mb-3">
                 멈춤으로 둔 종목은 검색에 노출되지 않고, 용병 구하기 알림도 받지 않습니다.
               </p>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {mainSports.map((sport) => {
                   const isActive = activeBySport[sport] !== false;
                   const chip = SPORT_CHIP_STYLES[sport] ?? SPORT_CHIP_STYLES['전체'];
@@ -302,17 +286,17 @@ const MercenaryJobseekerDashboard: React.FC = () => {
                   return (
                     <div
                       key={sport}
-                      className={`flex items-center justify-between py-2 border-b border-[var(--color-border-card)] last:border-0 ${disabled ? 'opacity-60' : ''}`}
+                      className={`flex flex-col sm:flex-row sm:items-center gap-3 py-3 border-b border-[var(--color-border-card)] last:border-0 ${disabled ? 'opacity-60' : ''}`}
                     >
-                      <span className={`text-sm px-2 py-0.5 rounded-lg border ${chip.bg} ${chip.border} ${chip.text}`}>
+                      <span className={`inline-flex items-center w-fit px-3 py-1.5 rounded-lg text-sm font-medium border ${chip.bg} ${chip.border} ${chip.text}`}>
                         {SPORT_ICONS[sport] ?? '●'} {sport}
                       </span>
-                      <div className="flex rounded-full p-0.5 bg-[var(--color-bg-secondary)]">
+                      <div className="flex rounded-xl p-1 bg-[var(--color-bg-secondary)] w-full sm:w-auto sm:min-w-[180px]">
                         <button
                           type="button"
                           disabled={disabled}
                           onClick={() => !disabled && handleSportActivityToggle(sport, true)}
-                          className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium transition-all min-h-[44px] touch-manipulation ${
                             isActive ? 'text-white shadow' : 'text-[var(--color-text-secondary)]'
                           }`}
                           style={isActive ? { backgroundColor: POINT_COLOR } : undefined}
@@ -324,7 +308,7 @@ const MercenaryJobseekerDashboard: React.FC = () => {
                           type="button"
                           disabled={disabled}
                           onClick={() => !disabled && handleSportActivityToggle(sport, false)}
-                          className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium transition-all min-h-[44px] touch-manipulation ${
                             !isActive ? 'bg-[var(--color-bg-primary)] text-[var(--color-text-secondary)] shadow' : 'text-[var(--color-text-secondary)]'
                           }`}
                         >
@@ -342,8 +326,9 @@ const MercenaryJobseekerDashboard: React.FC = () => {
       </section>
 
       {/* 활동 시간표 관리 */}
-      <section className="shrink-0 px-4 pb-4">
-        <div className="p-4 rounded-xl bg-[var(--color-bg-card)] border border-[var(--color-border-card)]">
+      <section className="shrink-0 px-4 pb-6 md:pb-8">
+        <div className="p-4 md:p-5 rounded-2xl bg-[var(--color-bg-card)] border border-[var(--color-border-card)]">
+          <h3 className="text-base font-semibold text-[var(--color-text-primary)] mb-3">활동 가능 시간표</h3>
           <AvailabilityScheduleManager
             availability={availability}
             onSave={handleAvailabilitySave}

@@ -1,7 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  TrophyIcon,
   ShieldCheckIcon,
   UserGroupIcon,
   BookOpenIcon,
@@ -10,7 +9,6 @@ import {
   Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../contexts/AuthContext';
-import { useChat } from '../contexts/ChatContext';
 
 /** 모바일 '더보기' 메뉴 페이지 */
 const MoreMenuPage = () => {
@@ -18,7 +16,6 @@ const MoreMenuPage = () => {
   const { user } = useAuth();
 
   const mainItems = [
-    { name: '명예의 전당', path: '/hall-of-fame', icon: TrophyIcon },
     { name: '용병 클럽', path: '/teams', icon: ShieldCheckIcon, protected: true },
     { name: '팔로워', path: '/followers', icon: UserGroupIcon, protected: true },
     { name: '가이드', path: '/guide', icon: BookOpenIcon },
@@ -26,7 +23,6 @@ const MoreMenuPage = () => {
 
   const footerItems = [
     { name: '공지사항', path: '/notice', icon: MegaphoneIcon },
-    { name: '채팅', path: null as unknown as string, icon: ChatBubbleLeftEllipsisIcon, onOpenChat: openChatList },
     { name: '문의하기', path: '/contact', icon: ChatBubbleLeftEllipsisIcon },
     { name: '앱 설정', path: '/settings', icon: Cog6ToothIcon },
   ];

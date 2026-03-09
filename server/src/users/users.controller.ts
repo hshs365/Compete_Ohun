@@ -3,6 +3,7 @@ import { UsersService } from './users.service';
 import { UserScoreService } from './user-score.service';
 import { FollowService } from './follow.service';
 import { PointsService } from './points.service';
+import { AchievementsService } from './achievements.service';
 import { RecommendedUsersService } from './recommended-users.service';
 import { UserReviewStatsService } from './user-review-stats.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -40,6 +41,7 @@ export class UsersController {
     private userScoreService: UserScoreService,
     private followService: FollowService,
     private pointsService: PointsService,
+    private achievementsService: AchievementsService,
     private recommendedUsersService: RecommendedUsersService,
     private userReviewStatsService: UserReviewStatsService,
     private notificationsService: NotificationsService,
@@ -399,6 +401,15 @@ export class UsersController {
   ) {
     const s = (sport || '축구').trim();
     return this.userReviewStatsService.getSportStatsFromReviews(user.id, s);
+  }
+
+  /**
+   * 업적 동기화: 미지급 업적이 있으면 포인트 지급 후 결과 반환 (내 정보 페이지 로드 시 호출)
+   */
+  @Get('me/achievements/sync')
+  @UseGuards(JwtAuthGuard)
+  async syncMyAchievements(@CurrentUser() user: User) {
+    return this.achievementsService.syncAchievements(user.id);
   }
 
   /**

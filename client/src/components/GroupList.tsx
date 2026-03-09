@@ -527,14 +527,15 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
         setGroups(mappedGroups);
         onGroupsChange?.(mappedGroups);
       } catch (err) {
-        console.error('매치 목록 조회 실패:', err);
+        const listLabel = mercenaryOnly ? '용병 구하기 목록' : '매치 목록';
+        console.error(`${listLabel} 조회 실패:`, err);
         const msg = err instanceof Error ? err.message : '';
         if (matchType === 'rank' || matchType === 'event') {
           setError(null);
           setGroups([]);
           onGroupsChange?.([]);
         } else {
-          setError(msg.includes('Internal') || msg.includes('500') ? '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' : (msg || '매치 목록을 불러오는데 실패했습니다.'));
+          setError(msg.includes('Internal') || msg.includes('500') ? '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' : (msg || `${listLabel}을 불러오는데 실패했습니다.`));
           setGroups([]);
           onGroupsChange?.([]);
         }
@@ -548,9 +549,10 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
   }, [selectedCategory, searchQuery, sportFilterKey, selectedRegion, selectedDaysKey, filterDate, hideClosed, onlyRanker, gender, includeCompleted, refreshTrigger, matchType, userCoords, hasGroupsOverride, mapBoundsKey]);
 
   if (isLoading) {
+    const loadingMessage = mercenaryOnly ? '용병 구하기 목록을 불러오는 중...' : '매치 목록을 불러오는 중...';
     return (
       <div className="p-4 relative min-h-[200px]">
-        <LoadingSpinner message="매치 목록을 불러오는 중..." />
+        <LoadingSpinner message={loadingMessage} />
       </div>
     );
   }

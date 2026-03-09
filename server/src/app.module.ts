@@ -38,6 +38,7 @@ import { UserSportParticipation } from './users/entities/user-sport-participatio
 import { UserSeasonScore } from './users/entities/user-season-score.entity';
 import { Follow } from './users/entities/follow.entity';
 import { PointTransaction } from './users/entities/point-transaction.entity';
+import { UserAchievement } from './users/entities/user-achievement.entity';
 import { Contact } from './contact/entities/contact.entity';
 import { Product } from './products/entities/product.entity';
 import { NoticesModule } from './notices/notices.module';
@@ -92,6 +93,7 @@ ConfigModule.forRoot({
           UserSeasonScore,
           Follow,
           PointTransaction,
+          UserAchievement,
           Contact,
           Product,
           Notice,

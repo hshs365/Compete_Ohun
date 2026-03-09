@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { SPORT_ICONS, SPORT_POINT_COLORS, SPORT_CHIP_STYLES, MAIN_CATEGORIES } from '../constants/sports';
+import { EQUIPMENT_OPTIONS } from '../constants/equipment';
 import { MERCENARY_RECRUIT_FORM, type RecruitFieldDef } from '../constants/mercenaryRecruitForm';
 import { api } from '../utils/api';
 import { showSuccess, showError } from '../utils/swal';
@@ -16,6 +17,7 @@ interface MercenaryRecruitFormProps {
 }
 
 const SPORT_OPTIONS = (MAIN_CATEGORIES as readonly string[]).filter((c) => c !== '전체');
+const TOTAL_STEPS = 4;
 
 const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
   isOpen,
@@ -24,6 +26,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
   onSuccess,
 }) => {
   const isAllMode = selectedSport === '전체';
+  const [step, setStep] = useState(1);
   const [modalSport, setModalSport] = useState<string>(() =>
     SPORT_OPTIONS.find((s) => MERCENARY_RECRUIT_FORM[s]) ?? SPORT_OPTIONS[0] ?? '배드민턴'
   );
@@ -38,15 +41,14 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
     }
   }, [isOpen, isAllMode]);
 
-  /** 오늘 날짜 YYYY-MM-DD */
   const getTodayString = useCallback(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }, []);
 
-  /** 모달 열릴 때 폼 초기화 (날짜는 오늘로) */
   useEffect(() => {
     if (!isOpen) return;
+    setStep(1);
     setValues({});
     setTitle('');
     setLocation('');
@@ -56,6 +58,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
     setMeetingEndTime('20:00');
     setRecruitCount('1');
     setGenderRestriction('');
+    setSelectedEquipment([]);
     setMapKey((k) => k + 1);
   }, [isOpen, getTodayString]);
 
@@ -65,14 +68,12 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
   const [coordinates, setCoordinates] = useState<[number, number]>([36.3504, 127.3845]);
   const [showMap, setShowMap] = useState(true);
   const [mapKey, setMapKey] = useState(0);
-  const [meetingDate, setMeetingDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  });
+  const [meetingDate, setMeetingDate] = useState(() => getTodayString());
   const [meetingStartTime, setMeetingStartTime] = useState('18:00');
   const [meetingEndTime, setMeetingEndTime] = useState('20:00');
   const [recruitCount, setRecruitCount] = useState('1');
   const [genderRestriction, setGenderRestriction] = useState<'male' | 'female' | ''>('');
+  const [selectedEquipment, setSelectedEquipment] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSearchAddress = useCallback(() => {
@@ -233,7 +234,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
                 key={o.value}
                 type="button"
                 onClick={() => toggle(o.value)}
-                className={`px-4 py-3 sm:py-1.5 rounded-lg text-sm font-medium transition-colors border touch-manipulation min-h-[44px] sm:min-h-0 flex items-center ${
+                className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors border touch-manipulation min-h-[44px] flex items-center ${
                   active ? 'text-white' : 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] border-[var(--color-border-card)]'
                 }`}
                 style={active ? { backgroundColor: pointColor, borderColor: pointColor } : undefined}
@@ -248,18 +249,40 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
     if (field.type === 'checkbox') {
       const checked = value === true;
       return (
-        <label className="flex items-center gap-2 cursor-pointer">
+        <label className="flex items-center gap-2 cursor-pointer min-h-[44px]">
           <input
             type="checkbox"
             checked={checked}
             onChange={(e) => handleFieldChange(field.key, e.target.checked)}
-            className="w-4 h-4 rounded border-[var(--color-border-card)] text-[var(--color-blue-primary)] focus:ring-2 focus:ring-offset-0"
+            className="w-5 h-5 rounded border-[var(--color-border-card)] text-[var(--color-blue-primary)] focus:ring-2 focus:ring-offset-0"
           />
           <span className="text-sm text-[var(--color-text-secondary)]">제공합니다</span>
         </label>
       );
     }
     return null;
+  };
+
+  const canProceedStep = () => {
+    if (step === 1) return title.trim().length > 0 && location.trim().length > 0;
+    if (step === 2 || step === 3) return true;
+    if (step === 4) {
+      if (!schema?.fields?.length) return true;
+      const required = schema.fields.filter((f) => f.required);
+      for (const f of required) {
+        const v = values[f.key];
+        if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) return false;
+      }
+      return true;
+    }
+    return true;
+  };
+
+  const handleNext = () => {
+    if (step < TOTAL_STEPS && canProceedStep()) setStep((s) => s + 1);
+  };
+  const handlePrev = () => {
+    if (step > 1) setStep((s) => s - 1);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -313,6 +336,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
         maxParticipants: Math.min(20, Math.max(1, parseInt(recruitCount, 10) || 1)),
         sportSpecificData: Object.keys(sportSpecificData).length > 0 ? sportSpecificData : undefined,
         genderRestriction: genderRestriction === 'male' || genderRestriction === 'female' ? genderRestriction : undefined,
+        equipment: selectedEquipment.length > 0 ? selectedEquipment : undefined,
         type: 'normal' as const,
         isMercenaryRecruit: true,
       };
@@ -338,11 +362,12 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
     <div className="fixed inset-0 z-[9999] flex items-end md:items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden />
       <div
-        className="relative w-full max-w-lg max-h-[85vh] md:max-h-[90vh] overflow-y-auto bg-[var(--color-bg-card)] border border-[var(--color-border-card)] rounded-t-2xl md:rounded-2xl shadow-xl pb-[env(safe-area-inset-bottom,0)]"
+        className="relative w-full max-w-lg max-h-[90dvh] md:max-h-[85vh] flex flex-col bg-[var(--color-bg-card)] border border-[var(--color-border-card)] rounded-t-2xl md:rounded-2xl shadow-xl overflow-hidden"
         role="dialog"
         aria-labelledby="mercenary-recruit-title"
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-[var(--color-border-card)] bg-[var(--color-bg-card)]">
+        {/* 헤더: 제목 + 단계 표시 + 닫기 */}
+        <div className="shrink-0 flex items-center justify-between p-4 border-b border-[var(--color-border-card)] bg-[var(--color-bg-card)]">
           <h2 id="mercenary-recruit-title" className="text-lg font-bold text-[var(--color-text-primary)] flex items-center gap-2">
             <span aria-hidden>{SPORT_ICONS[effectiveSport] ?? '🏃'}</span>
             {effectiveSport} 용병 구하기
@@ -350,203 +375,261 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-3 -m-2 rounded-lg text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-secondary)] touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
+            className="p-2.5 rounded-lg text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-secondary)] touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
             aria-label="닫기"
           >
             <XMarkIcon className="w-5 h-5" />
           </button>
         </div>
-
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {isAllMode && (
-            <div>
-              <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">종목 선택</label>
-              <div className="flex flex-wrap gap-2">
-                {SPORT_OPTIONS.map((sport) => {
-                  const hasForm = !!MERCENARY_RECRUIT_FORM[sport];
-                  const isActive = modalSport === sport;
-                  const sportChip = SPORT_CHIP_STYLES[sport] ?? SPORT_CHIP_STYLES['전체'];
-                  const sportColor = SPORT_POINT_COLORS[sport] ?? SPORT_POINT_COLORS['전체'];
-                  return (
-                    <button
-                      key={sport}
-                      type="button"
-                      onClick={() => hasForm && setModalSport(sport)}
-                      disabled={!hasForm}
-                      className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
-                        isActive
-                          ? `${sportChip.bg} ${sportChip.border} ${sportChip.text}`
-                          : hasForm
-                            ? 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] border-[var(--color-border-card)] hover:border-opacity-70'
-                            : 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] opacity-50 border-[var(--color-border-card)] cursor-not-allowed'
-                      }`}
-                      style={isActive ? { borderColor: sportColor + '80' } : undefined}
-                    >
-                      <span className="mr-1" aria-hidden>{SPORT_ICONS[sport] ?? '●'}</span>
-                      {sport}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1.5">제목 *</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="예: 토요일 오전 배드민턴 A조 구합니다"
-              className="w-full px-3 py-2.5 rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] text-sm focus:outline-none focus:ring-2"
-              style={{ ['--tw-ring-color' as string]: pointColor }}
+        <div className="shrink-0 px-4 pb-2 flex gap-1.5">
+          {[1, 2, 3, 4].map((s) => (
+            <div
+              key={s}
+              className={`flex-1 h-1.5 rounded-full transition-colors ${s <= step ? '' : 'bg-[var(--color-bg-secondary)]'}`}
+              style={s <= step ? { backgroundColor: pointColor } : undefined}
+              aria-hidden
             />
-          </div>
+          ))}
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1.5">장소 *</label>
-            <div className="flex gap-2 mb-2">
-              <input
-                type="text"
-                value={location}
-                readOnly
-                placeholder="주소 찾기로 위치를 선택하세요"
-                className="flex-1 px-3 py-2.5 rounded-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] text-sm focus:outline-none cursor-pointer"
-                onClick={handleSearchAddress}
-                style={{ ['--tw-ring-color' as string]: pointColor }}
-                aria-label="장소 (주소 찾기로 선택)"
-              />
-              <button
-                type="button"
-                onClick={handleSearchAddress}
-                className="px-4 py-2.5 rounded-lg font-medium text-white shrink-0 flex items-center gap-1"
-                style={{ backgroundColor: pointColor }}
-              >
-                <MagnifyingGlassIcon className="w-5 h-5" aria-hidden />
-                <span className="text-sm">주소 찾기</span>
-              </button>
-            </div>
-            <p className="text-xs text-[var(--color-text-secondary)] mb-2">
-              주소 찾기 버튼을 클릭하거나 지도에서 마커를 드래그하여 위치를 선택하세요. (직접 입력 불가)
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowMap(!showMap)}
-              className="text-xs mb-2 py-2 px-1 -m-1 touch-manipulation min-h-[44px] flex items-center"
-              style={{ color: pointColor }}
-            >
-              {showMap ? '지도 숨기기' : '지도 보기'}
-            </button>
-            {showMap && (
-              <div className="mt-2 border border-[var(--color-border-card)] rounded-lg overflow-hidden" style={{ height: '220px' }}>
-                <NaverMap
-                  key={mapKey}
-                  center={coordinates}
-                  zoom={11}
-                  onMarkerDragEnd={handleMarkerDragEnd}
-                />
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1.5">날짜</label>
-            <DarkDatePicker
-              value={meetingDate}
-              onChange={setMeetingDate}
-              placeholder="연도-월-일"
-              pointColor={pointColor}
-              minDate={new Date()}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1.5">경기 시간</label>
-            <TimeRangeSlider
-              startTime={meetingStartTime}
-              endTime={meetingEndTime}
-              onChange={(start, end) => {
-                setMeetingStartTime(start);
-                setMeetingEndTime(end);
-              }}
-              pointColor={pointColor}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1.5">성별 제한</label>
-            <select
-              value={genderRestriction}
-              onChange={(e) => setGenderRestriction(e.target.value as 'male' | 'female' | '')}
-              className="w-full px-3 py-2.5 rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)] text-sm focus:outline-none focus:ring-2"
-              style={{ ['--tw-ring-color' as string]: pointColor }}
-            >
-              <option value="">상관없음</option>
-              <option value="male">남자만</option>
-              <option value="female">여자만</option>
-            </select>
-            <p className="text-xs text-[var(--color-text-secondary)] mt-1">모집할 용병의 성별을 선택하세요.</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1.5">모집 인원</label>
-            <input
-              type="number"
-              min={1}
-              max={20}
-              value={recruitCount}
-              onChange={(e) => setRecruitCount(e.target.value)}
-              placeholder="1"
-              className="w-full px-3 py-2.5 rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] text-sm focus:outline-none focus:ring-2"
-              style={{ ['--tw-ring-color' as string]: pointColor }}
-            />
-            <p className="text-xs text-[var(--color-text-secondary)] mt-1">직접 입력 (1~20명)</p>
-          </div>
-
-          <div className={`pt-3 border-t border-[var(--color-border-card)] ${chipStyle.bg} ${chipStyle.border} border rounded-xl p-4`}>
-            <p className="text-sm font-medium text-[var(--color-text-primary)] mb-3">종목별 구인 조건</p>
-            {!schema || schema.fields.length === 0 ? (
-              <p className="text-sm text-[var(--color-text-secondary)]">
-                {isAllMode ? '위에서 종목을 선택해 주세요.' : '이 종목은 아직 구인 조건을 지원하지 않습니다.'}
-              </p>
-            ) : (
-            <div className="space-y-3">
-              {schema.fields.map((field) => (
-                <div key={field.key}>
-                  <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1.5">
-                    {field.label} {field.required && <span className="text-red-400">*</span>}
-                  </label>
-                  {renderField(field)}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 overflow-y-auto px-4 py-4 pb-6">
+            {/* Step 1: 종목 + 제목 + 장소 */}
+            {step === 1 && (
+              <div className="space-y-5 animate-fade-in">
+                {isAllMode && (
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">종목 선택</label>
+                    <div className="flex flex-wrap gap-2">
+                      {SPORT_OPTIONS.map((sport) => {
+                        const hasForm = !!MERCENARY_RECRUIT_FORM[sport];
+                        const isActive = modalSport === sport;
+                        const sportChip = SPORT_CHIP_STYLES[sport] ?? SPORT_CHIP_STYLES['전체'];
+                        const sportColor = SPORT_POINT_COLORS[sport] ?? SPORT_POINT_COLORS['전체'];
+                        return (
+                          <button
+                            key={sport}
+                            type="button"
+                            onClick={() => hasForm && setModalSport(sport)}
+                            disabled={!hasForm}
+                            className={`flex-shrink-0 px-4 py-2.5 rounded-full text-sm font-medium transition-colors border min-h-[44px] touch-manipulation ${
+                              isActive ? `${sportChip.bg} ${sportChip.border} ${sportChip.text}` : hasForm ? 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] border-[var(--color-border-card)]' : 'opacity-50 cursor-not-allowed border-[var(--color-border-card)]'
+                            }`}
+                            style={isActive ? { borderColor: sportColor + '80' } : undefined}
+                          >
+                            <span className="mr-1" aria-hidden>{SPORT_ICONS[sport] ?? '●'}</span>
+                            {sport}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">제목 <span className="text-red-400">*</span></label>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="예: 토요일 오전 배드민턴 A조 구합니다"
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--color-bg-primary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] text-base focus:outline-none focus:ring-2 min-h-[48px]"
+                    style={{ ['--tw-ring-color' as string]: pointColor }}
+                  />
                 </div>
-              ))}
-            </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">장소 <span className="text-red-400">*</span></label>
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={location}
+                      readOnly
+                      placeholder="주소 찾기로 위치를 선택하세요"
+                      className="flex-1 px-4 py-3 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)] text-base min-h-[48px] cursor-pointer"
+                      onClick={handleSearchAddress}
+                      style={{ ['--tw-ring-color' as string]: pointColor }}
+                      aria-label="장소 (주소 찾기로 선택)"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSearchAddress}
+                      className="px-4 py-3 rounded-xl font-medium text-white shrink-0 flex items-center gap-1.5 min-h-[48px] touch-manipulation"
+                      style={{ backgroundColor: pointColor }}
+                    >
+                      <MagnifyingGlassIcon className="w-5 h-5" aria-hidden />
+                      <span className="text-sm">주소 찾기</span>
+                    </button>
+                  </div>
+                  <p className="text-xs text-[var(--color-text-secondary)] mb-2">주소 찾기 또는 지도에서 마커를 드래그해 위치를 선택하세요.</p>
+                  <button type="button" onClick={() => setShowMap(!showMap)} className="text-xs py-2 -m-1 min-h-[44px] touch-manipulation" style={{ color: pointColor }}>
+                    {showMap ? '지도 숨기기' : '지도 보기'}
+                  </button>
+                  {showMap && (
+                    <div className="mt-2 border border-[var(--color-border-card)] rounded-xl overflow-hidden" style={{ height: '200px' }}>
+                      <NaverMap key={mapKey} center={coordinates} zoom={11} onMarkerDragEnd={handleMarkerDragEnd} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: 날짜 + 경기 시간 */}
+            {step === 2 && (
+              <div className="space-y-5 animate-fade-in">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">날짜</label>
+                  <DarkDatePicker value={meetingDate} onChange={setMeetingDate} placeholder="연도-월-일" pointColor={pointColor} minDate={new Date()} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">경기 시간</label>
+                  <TimeRangeSlider
+                    startTime={meetingStartTime}
+                    endTime={meetingEndTime}
+                    onChange={(start, end) => { setMeetingStartTime(start); setMeetingEndTime(end); }}
+                    pointColor={pointColor}
+                  />
+                </div>
+                {meetingStartTime && meetingEndTime && (
+                  <p className="text-sm text-[var(--color-text-secondary)]">
+                    선택된 시간: <span className="font-semibold" style={{ color: pointColor }}>{meetingStartTime} ~ {meetingEndTime}</span>
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Step 3: 성별 제한 + 모집 인원 */}
+            {step === 3 && (
+              <div className="space-y-5 animate-fade-in">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">성별 제한</label>
+                  <select
+                    value={genderRestriction}
+                    onChange={(e) => setGenderRestriction(e.target.value as 'male' | 'female' | '')}
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--color-bg-primary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)] text-base focus:outline-none focus:ring-2 min-h-[48px]"
+                    style={{ ['--tw-ring-color' as string]: pointColor }}
+                  >
+                    <option value="">상관없음</option>
+                    <option value="male">남자만</option>
+                    <option value="female">여자만</option>
+                  </select>
+                  <p className="text-xs text-[var(--color-text-secondary)] mt-1">모집할 용병의 성별을 선택하세요.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">모집 인원</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={recruitCount}
+                    onChange={(e) => setRecruitCount(e.target.value)}
+                    placeholder="1"
+                    className="w-full px-4 py-3 rounded-xl bg-[var(--color-bg-primary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)] text-base focus:outline-none focus:ring-2 min-h-[48px]"
+                    style={{ ['--tw-ring-color' as string]: pointColor }}
+                  />
+                  <p className="text-xs text-[var(--color-text-secondary)] mt-1">직접 입력 (1~20명)</p>
+                </div>
+              </div>
+            )}
+
+            {/* Step 4: 구인 조건 + 준비물 */}
+            {step === 4 && (
+              <div className="space-y-5 animate-fade-in">
+                <div className={`pt-3 border-t border-[var(--color-border-card)] ${chipStyle.bg} ${chipStyle.border} border rounded-xl p-4`}>
+                  <p className="text-sm font-medium text-[var(--color-text-primary)] mb-3">종목별 구인 조건</p>
+                  {EQUIPMENT_OPTIONS[effectiveSport]?.length > 0 && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">준비물</label>
+                      <p className="text-xs text-[var(--color-text-secondary)] mb-2">필수 준비물을 갖춘 용병만 참가할 수 있습니다.</p>
+                      <div className="flex flex-wrap gap-2">
+                        {EQUIPMENT_OPTIONS[effectiveSport].map((o) => {
+                          const active = selectedEquipment.includes(o.value);
+                          return (
+                            <button
+                              key={o.value}
+                              type="button"
+                              onClick={() => setSelectedEquipment((prev) => prev.includes(o.value) ? prev.filter((x) => x !== o.value) : [...prev, o.value])}
+                              className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors border touch-manipulation min-h-[44px] flex items-center ${
+                                active ? 'text-white' : 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] border-[var(--color-border-card)]'
+                              }`}
+                              style={active ? { backgroundColor: pointColor, borderColor: pointColor } : undefined}
+                            >
+                              {o.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {!schema || schema.fields.length === 0 ? (
+                    <p className="text-sm text-[var(--color-text-secondary)]">
+                      {isAllMode ? '위 단계에서 종목을 선택해 주세요.' : '이 종목은 아직 구인 조건을 지원하지 않습니다.'}
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {schema.fields.map((field) => (
+                        <div key={field.key}>
+                          <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">
+                            {field.label} {field.required && <span className="text-red-400">*</span>}
+                          </label>
+                          {renderField(field)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
           </div>
 
-          {meetingStartTime && meetingEndTime && (
-            <p className="text-sm text-[var(--color-text-secondary)]">
-              선택된 시간: <span className="font-semibold" style={{ color: pointColor }}>{meetingStartTime} ~ {meetingEndTime}</span>
-            </p>
-          )}
-
-          <div className="flex gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl font-medium border border-[var(--color-border-card)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-secondary)]"
-            >
-              취소
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting || !schema || schema.fields.length === 0}
-              className="flex-1 py-2.5 rounded-xl font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-              style={{ backgroundColor: pointColor }}
-            >
-              {isSubmitting ? '등록 중...' : '등록하기'}
-            </button>
+          {/* 하단 버튼 */}
+          <div className="shrink-0 p-4 pt-2 border-t border-[var(--color-border-card)] bg-[var(--color-bg-card)] pb-[env(safe-area-inset-bottom,0)]">
+            <div className="flex gap-3">
+              {step > 1 ? (
+                <button
+                  type="button"
+                  onClick={handlePrev}
+                  className="flex-1 py-3.5 rounded-xl font-semibold text-[var(--color-text-primary)] bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] flex items-center justify-center gap-1 min-h-[48px] touch-manipulation"
+                >
+                  <ChevronLeftIcon className="w-5 h-5" />
+                  이전
+                </button>
+              ) : (
+                <button type="button" onClick={onClose} className="flex-1 py-3.5 rounded-xl font-semibold text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] min-h-[48px] touch-manipulation">
+                  취소
+                </button>
+              )}
+              {step < TOTAL_STEPS ? (
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  disabled={!canProceedStep()}
+                  className="flex-[2] py-3.5 rounded-xl font-semibold text-white flex items-center justify-center gap-1 min-h-[48px] touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: pointColor }}
+                >
+                  다음
+                  <ChevronRightIcon className="w-5 h-5" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !schema?.fields?.length}
+                  className="flex-[2] py-3.5 rounded-xl font-semibold text-white min-h-[48px] touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: pointColor }}
+                >
+                  {isSubmitting ? '등록 중...' : '등록하기'}
+                </button>
+              )}
+            </div>
           </div>
         </form>
       </div>
+
+      <style>{`
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fade-in 0.2s ease-out; }
+      `}</style>
     </div>
   );
 };

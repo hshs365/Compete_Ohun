@@ -104,6 +104,10 @@ export class User {
   @Column({ type: 'jsonb', default: () => "'[]'" })
   sportPositions: { sport: string; positions: string[] }[];
 
+  /** 종목별 보유 장비 (용병 참가 시 필요 품목). [{ sport: '축구', equipment: ['축구화', '아대'] }] */
+  @Column({ type: 'jsonb', default: () => "'[]'" })
+  sportEquipment: { sport: string; equipment: string[] }[];
+
   @Column({ type: 'enum', enum: SkillLevel, nullable: true })
   skillLevel: SkillLevel | null;
 

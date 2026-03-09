@@ -5,6 +5,7 @@ import { UserScoreService } from './user-score.service';
 import { UsersController } from './users.controller';
 import { AuthModule } from '../auth/auth.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { GroupsModule } from '../groups/groups.module';
 import { User } from './entities/user.entity';
 import { UserScoreHistory } from './entities/user-score-history.entity';
 import { UserActivityLog } from './entities/user-activity-log.entity';
@@ -16,12 +17,14 @@ import { Group } from '../groups/entities/group.entity';
 import { GroupEvaluation } from '../groups/entities/group-evaluation.entity';
 import { Follow } from './entities/follow.entity';
 import { PointTransaction } from './entities/point-transaction.entity';
+import { UserAchievement } from './entities/user-achievement.entity';
 import { MatchReview } from '../groups/entities/match-review.entity';
 import { FollowService } from './follow.service';
 import { PointsService } from './points.service';
 import { RecommendedUsersService } from './recommended-users.service';
 import { AthleteService } from './athlete.service';
 import { UserReviewStatsService } from './user-review-stats.service';
+import { AchievementsService } from './achievements.service';
 
 @Module({
   imports: [
@@ -37,13 +40,15 @@ import { UserReviewStatsService } from './user-review-stats.service';
       GroupEvaluation,
       Follow,
       PointTransaction,
+      UserAchievement,
       MatchReview,
     ]),
     forwardRef(() => AuthModule),
+    forwardRef(() => GroupsModule),
     NotificationsModule,
   ],
   controllers: [UsersController],
-  providers: [UsersService, UserScoreService, FollowService, PointsService, RecommendedUsersService, AthleteService, UserReviewStatsService],
+  providers: [UsersService, UserScoreService, FollowService, PointsService, RecommendedUsersService, AthleteService, UserReviewStatsService, AchievementsService],
   exports: [UsersService, UserScoreService, FollowService, PointsService],
 })
 export class UsersModule {}

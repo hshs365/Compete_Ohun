@@ -86,7 +86,7 @@ export class PhoneVerificationService {
       await axios.post(
         apiUrl,
         {
-          type: 'SMS',
+          type: 'sms',
           from: sender,
           content: message,
           messages: [

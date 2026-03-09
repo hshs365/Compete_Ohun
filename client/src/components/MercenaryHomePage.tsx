@@ -3,6 +3,7 @@ import GroupList from './GroupList';
 import DateFilterChips from './DateFilterChips';
 import DynamicFilterBar from './DynamicFilterBar';
 import MercenaryDetailDrawer from './MercenaryDetailDrawer';
+import MercenaryQRScanner from './MercenaryQRScanner';
 import MercenaryJobseekerDashboard from './MercenaryJobseekerDashboard';
 import MercenaryRecruitForm from './MercenaryRecruitForm';
 import { SPORT_ICONS, MAIN_CATEGORIES, SPORT_POINT_COLORS, SPORT_CHIP_STYLES } from '../constants/sports';
@@ -10,7 +11,7 @@ import { getUserCity, getCityCoordinates } from '../utils/locationUtils';
 import type { SelectedGroup } from '../types/selected-group';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../utils/api';
-import { UserPlusIcon, UserCircleIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { UserPlusIcon, UserCircleIcon, PlusIcon, CameraIcon } from '@heroicons/react/24/outline';
 
 /** 용병 메인 페이지: 용병 구하기 / 용병 신청 */
 const MercenaryHomePage = () => {
@@ -31,6 +32,7 @@ const MercenaryHomePage = () => {
   const [selectedGroup, setSelectedGroup] = useState<SelectedGroup | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [recruitFormOpen, setRecruitFormOpen] = useState(false);
+  const [qrScannerOpen, setQrScannerOpen] = useState(false);
   const [optimisticParticipantCount, setOptimisticParticipantCount] = useState<{
     groupId: number;
     participantCount: number;
@@ -242,6 +244,17 @@ const MercenaryHomePage = () => {
         />
       )}
 
+      {/* FAB: QR 스캔 (왼쪽) — 용병 구하기 탭에서만 표시 */}
+      {activeTab === 'find' && (
+        <button
+          type="button"
+          onClick={() => setQrScannerOpen(true)}
+          className="fixed bottom-6 left-6 md:bottom-8 md:left-8 z-[100] flex items-center justify-center w-12 h-12 rounded-2xl text-white font-semibold shadow-lg hover:opacity-95 active:scale-[0.98] transition-all safe-area-bottom bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)]"
+          aria-label="QR 인증 스캔"
+        >
+          <CameraIcon className="w-6 h-6 shrink-0" aria-hidden />
+        </button>
+      )}
       {/* FAB: 용병 구하기 작성 (당근마켓 글쓰기 스타일) — 용병 구하기 탭에서만 표시 */}
       {activeTab === 'find' && (
         <button
@@ -255,6 +268,11 @@ const MercenaryHomePage = () => {
           <span className="leading-[1] -mt-px">용병 구하기</span>
         </button>
       )}
+
+      <MercenaryQRScanner
+        isOpen={qrScannerOpen}
+        onClose={() => setQrScannerOpen(false)}
+      />
 
       <MercenaryRecruitForm
         isOpen={recruitFormOpen}

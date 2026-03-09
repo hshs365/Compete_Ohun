@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ChevronLeftIcon,
+  ChevronRightIcon,
   UserGroupIcon,
   MagnifyingGlassIcon,
   UserPlusIcon,
@@ -11,7 +12,6 @@ import {
 } from '@heroicons/react/24/outline';
 import { api } from '../utils/api';
 import { showSuccess, showError } from '../utils/swal';
-import { TEAM_PAGE_SPORTS } from '../constants/sports';
 import { KOREAN_CITIES, getRegionDisplayName } from '../utils/locationUtils';
 
 interface FollowerUser {
@@ -21,13 +21,13 @@ interface FollowerUser {
   profileImageUrl?: string;
 }
 
+const TOTAL_STEPS = 4;
+
 const CreateTeamPage = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const initialSportFromQuery = searchParams.get('sport') || '';
 
+  const [step, setStep] = useState(1);
   const [teamName, setTeamName] = useState('');
-  const [sport, setSport] = useState(initialSportFromQuery || TEAM_PAGE_SPORTS[0]);
   const [region, setRegion] = useState('');
   const [description, setDescription] = useState('');
   const [coach, setCoach] = useState('');
@@ -42,12 +42,6 @@ const CreateTeamPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const regionOptions = KOREAN_CITIES.filter((c) => c !== '전체');
-
-  useEffect(() => {
-    if (initialSportFromQuery && TEAM_PAGE_SPORTS.includes(initialSportFromQuery)) {
-      setSport(initialSportFromQuery);
-    }
-  }, [initialSportFromQuery]);
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -99,12 +93,23 @@ const CreateTeamPage = () => {
     });
   };
 
+  const canProceed = () => {
+    if (step === 1) return teamName.trim() && region;
+    return true;
+  };
+
+  const handleNext = () => {
+    if (step < TOTAL_STEPS && canProceed()) {
+      setStep((s) => s + 1);
+    }
+  };
+
+  const handlePrev = () => {
+    if (step > 1) setStep((s) => s - 1);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!logoFile) {
-      await showError('용병 클럽 로고를 등록해주세요.', '입력 필요');
-      return;
-    }
     if (!teamName.trim()) {
       await showError('용병 클럽명을 입력해주세요.', '입력 필요');
       return;
@@ -117,13 +122,12 @@ const CreateTeamPage = () => {
     try {
       const formData = new FormData();
       formData.append('teamName', teamName.trim());
-      formData.append('sport', sport);
       formData.append('region', region);
       if (description.trim()) formData.append('description', description.trim());
       if (coach.trim()) formData.append('coach', coach.trim());
       if (assistantCoach.trim()) formData.append('assistantCoach', assistantCoach.trim());
       if (contact.trim()) formData.append('contact', contact.trim());
-      formData.append('logo', logoFile);
+      if (logoFile) formData.append('logo', logoFile);
       if (selectedInviteeIds.size > 0) {
         formData.append('inviteeIds', JSON.stringify([...selectedInviteeIds]));
       }
@@ -140,42 +144,55 @@ const CreateTeamPage = () => {
   };
 
   return (
-    <div className="flex flex-col w-full">
-      {/* 히어로: 무게감 있는 헤더 */}
+    <div className="flex flex-col min-h-screen">
       <header className="flex-shrink-0 border-b border-[var(--color-border-card)] bg-[var(--color-bg-card)]">
-        <div className="max-w-3xl mx-auto px-4 md:px-6 py-6 md:py-8">
+        <div className="max-w-3xl mx-auto px-4 md:px-6 py-4 md:py-6">
           <Link
             to="/teams"
-            className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] mb-4 transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] mb-3 transition-colors"
           >
             <ChevronLeftIcon className="w-4 h-4" />
             용병 클럽 목록으로
           </Link>
-          <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)] mb-2">
+          <h1 className="text-xl md:text-2xl font-bold text-[var(--color-text-primary)] mb-1">
             용병클럽 만들기
           </h1>
-          <p className="text-[var(--color-text-secondary)]">
+          <p className="text-sm text-[var(--color-text-secondary)] mb-4">
             용병 클럽 정보를 입력하고 함께할 멤버를 초대하세요. 생성하시는 분이 용병 클럽장이 됩니다.
           </p>
+          {/* 단계 표시 */}
+          <div className="flex gap-2">
+            {[1, 2, 3, 4].map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => s < step && canProceed() && setStep(s)}
+                className={`flex-1 h-1.5 rounded-full transition-colors ${
+                  s <= step ? 'bg-[var(--color-blue-primary)]' : 'bg-[var(--color-bg-secondary)]'
+                }`}
+                aria-label={`단계 ${s}`}
+              />
+            ))}
+          </div>
         </div>
       </header>
 
-      <form onSubmit={handleSubmit} className="flex-1">
-        <div className="max-w-3xl mx-auto px-4 md:px-6 py-6 md:py-8 space-y-8 pb-24">
-          {/* 섹션 1: 기본 정보 */}
-          <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 md:p-8 shadow-sm">
-            <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1 flex items-center gap-2">
-              <UserGroupIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
-              기본 정보
-            </h2>
-            <p className="text-sm text-[var(--color-text-secondary)] mb-6">
-              용병 클럽을 대표하는 이름과 로고, 종목·소재지를 입력하세요.
-            </p>
+      <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+        <div className="flex-1 overflow-y-auto max-w-3xl w-full mx-auto px-4 md:px-6 py-6 pb-28">
+          {/* Step 1: 기본 정보 */}
+          {step === 1 && (
+            <section className="space-y-6 animate-fade-in">
+              <h2 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
+                <UserGroupIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
+                기본 정보
+              </h2>
+              <p className="text-sm text-[var(--color-text-secondary)]">
+                용병 클럽을 대표하는 이름과 로고, 소재지를 입력하세요.
+              </p>
 
-            <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                  용병 클럽 로고 <span className="text-[var(--color-text-secondary)]">(필수)</span>
+                  용병 클럽 로고 <span className="text-[var(--color-text-secondary)] font-normal">(선택)</span>
                 </label>
                 <div className="flex items-center gap-4">
                   <label className="w-24 h-24 rounded-2xl border-2 border-dashed border-[var(--color-border-card)] flex items-center justify-center overflow-hidden cursor-pointer hover:border-[var(--color-blue-primary)] transition-colors shrink-0">
@@ -195,7 +212,7 @@ const CreateTeamPage = () => {
 
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                  용병 클럽명 <span className="text-[var(--color-text-secondary)]">(필수)</span>
+                  용병 클럽명 <span className="text-red-400">(필수)</span>
                 </label>
                 <input
                   type="text"
@@ -207,56 +224,40 @@ const CreateTeamPage = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                    종목 <span className="text-[var(--color-text-secondary)]">(필수)</span>
-                  </label>
-                  <select
-                    value={sport}
-                    onChange={(e) => setSport(e.target.value)}
-                    className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                  >
-                    {TEAM_PAGE_SPORTS.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                    용병 클럽 소재지 <span className="text-[var(--color-text-secondary)]">(필수)</span>
-                  </label>
-                  <select
-                    value={region}
-                    onChange={(e) => setRegion(e.target.value)}
-                    className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                  >
-                    <option value="">지역 선택</option>
-                    {regionOptions.map((c) => (
-                      <option key={c} value={c}>{getRegionDisplayName(c)}</option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                  용병 클럽 소재지 <span className="text-red-400">(필수)</span>
+                </label>
+                <select
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value)}
+                  className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                >
+                  <option value="">지역 선택</option>
+                  {regionOptions.map((c) => (
+                    <option key={c} value={c}>{getRegionDisplayName(c)}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-[var(--color-bg-secondary)] text-sm text-[var(--color-text-secondary)]">
                 <ShieldCheckIcon className="w-5 h-5 shrink-0" />
                 <span>생성하시는 분이 용병 클럽장이 됩니다.</span>
               </div>
-            </div>
-          </section>
+            </section>
+          )}
 
-          {/* 섹션 2: 용병 클럽 구성 */}
-          <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 md:p-8 shadow-sm">
-            <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1 flex items-center gap-2">
-              <UserGroupIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
-              용병 클럽 구성
-            </h2>
-            <p className="text-sm text-[var(--color-text-secondary)] mb-6">
-              감독, 코치, 연락처를 입력하면 용병 클럽원들이 연락하기 편합니다.
-            </p>
+          {/* Step 2: 용병 클럽 구성 */}
+          {step === 2 && (
+            <section className="space-y-6 animate-fade-in">
+              <h2 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
+                <UserGroupIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
+                용병 클럽 구성
+              </h2>
+              <p className="text-sm text-[var(--color-text-secondary)]">
+                감독, 코치, 연락처를 입력하면 용병 클럽원들이 연락하기 편합니다.
+              </p>
 
-            <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">감독</label>
                 <input
@@ -293,40 +294,42 @@ const CreateTeamPage = () => {
                   className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
                 />
               </div>
-            </div>
-          </section>
+            </section>
+          )}
 
-          {/* 섹션 3: 용병 클럽 소개 */}
-          <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 md:p-8 shadow-sm">
-            <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1 flex items-center gap-2">
-              <DocumentTextIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
-              용병 클럽 소개
-            </h2>
-            <p className="text-sm text-[var(--color-text-secondary)] mb-6">
-              용병 클럽의 성격, 목표, 활동 방식을 간단히 소개해주세요.
-            </p>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="용병 클럽 소개를 입력하세요 (선택)"
-              rows={4}
-              maxLength={500}
-              className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] resize-none"
-            />
-            <p className="mt-2 text-xs text-[var(--color-text-secondary)]">{description.length}/500</p>
-          </section>
+          {/* Step 3: 용병 클럽 소개 */}
+          {step === 3 && (
+            <section className="space-y-6 animate-fade-in">
+              <h2 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
+                <DocumentTextIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
+                용병 클럽 소개
+              </h2>
+              <p className="text-sm text-[var(--color-text-secondary)]">
+                용병 클럽의 성격, 목표, 활동 방식을 간단히 소개해주세요.
+              </p>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="용병 클럽 소개를 입력하세요 (선택)"
+                rows={5}
+                maxLength={500}
+                className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] resize-none"
+              />
+              <p className="text-xs text-[var(--color-text-secondary)]">{description.length}/500</p>
+            </section>
+          )}
 
-{/* 섹션 4: 용병 클럽원 초대 */}
-            <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-6 md:p-8 shadow-sm">
-            <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-1 flex items-center gap-2">
-              <UserPlusIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
-              용병 클럽원 초대
-            </h2>
-            <p className="text-sm text-[var(--color-text-secondary)] mb-6">
-              팔로우 중인 유저를 검색해 용병 클럽 생성과 함께 초대할 수 있습니다.
-            </p>
+          {/* Step 4: 용병 클럽원 초대 */}
+          {step === 4 && (
+            <section className="space-y-6 animate-fade-in">
+              <h2 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
+                <UserPlusIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
+                용병 클럽원 초대
+              </h2>
+              <p className="text-sm text-[var(--color-text-secondary)]">
+                팔로우 중인 유저를 검색해 용병 클럽 생성과 함께 초대할 수 있습니다.
+              </p>
 
-            <div className="space-y-4">
               <div className="relative">
                 <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-[var(--color-text-secondary)]" />
                 <input
@@ -337,7 +340,7 @@ const CreateTeamPage = () => {
                   className="w-full py-3 pl-10 pr-4 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
                 />
               </div>
-              <div className="max-h-48 overflow-y-auto rounded-xl border border-[var(--color-border-card)] divide-y divide-[var(--color-border-card)]">
+              <div className="max-h-56 overflow-y-auto rounded-xl border border-[var(--color-border-card)] divide-y divide-[var(--color-border-card)]">
                 {followersLoading ? (
                   <div className="p-4 text-sm text-[var(--color-text-secondary)]">불러오는 중...</div>
                 ) : invitees.length === 0 ? (
@@ -376,27 +379,60 @@ const CreateTeamPage = () => {
                   {selectedInviteeIds.size}명 초대 예정
                 </p>
               )}
-            </div>
-          </section>
+            </section>
+          )}
+        </div>
 
-          {/* 하단 액션 */}
-          <div className="flex flex-col sm:flex-row gap-3 pt-4">
-            <Link
-              to="/teams"
-              className="flex-1 py-4 rounded-xl font-semibold text-center text-[var(--color-text-primary)] bg-[var(--color-bg-secondary)] hover:bg-[var(--color-bg-card)] border border-[var(--color-border-card)] transition-colors"
-            >
-              취소
-            </Link>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex-1 sm:flex-[2] py-4 rounded-xl font-semibold text-white bg-[var(--color-blue-primary)] hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed transition-opacity shadow-lg"
-            >
-              {isSubmitting ? '생성 중...' : '용병클럽 만들기'}
-            </button>
+        {/* 하단 네비게이션 */}
+        <div className="flex-shrink-0 sticky bottom-0 left-0 right-0 p-4 bg-[var(--color-bg-card)] border-t border-[var(--color-border-card)] safe-area-pb">
+          <div className="max-w-3xl mx-auto flex gap-3">
+            {step > 1 ? (
+              <button
+                type="button"
+                onClick={handlePrev}
+                className="flex-1 py-4 rounded-xl font-semibold text-center text-[var(--color-text-primary)] bg-[var(--color-bg-secondary)] hover:bg-[var(--color-bg-primary)] border border-[var(--color-border-card)] transition-colors flex items-center justify-center gap-1"
+              >
+                <ChevronLeftIcon className="w-5 h-5" />
+                이전
+              </button>
+            ) : (
+              <Link
+                to="/teams"
+                className="flex-1 py-4 rounded-xl font-semibold text-center text-[var(--color-text-primary)] bg-[var(--color-bg-secondary)] hover:bg-[var(--color-bg-card)] border border-[var(--color-border-card)] transition-colors flex items-center justify-center"
+              >
+                취소
+              </Link>
+            )}
+            {step < TOTAL_STEPS ? (
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={!canProceed()}
+                className="flex-1 sm:flex-[2] py-4 rounded-xl font-semibold text-white bg-[var(--color-blue-primary)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity flex items-center justify-center gap-1"
+              >
+                다음
+                <ChevronRightIcon className="w-5 h-5" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="flex-1 sm:flex-[2] py-4 rounded-xl font-semibold text-white bg-[var(--color-blue-primary)] hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed transition-opacity"
+              >
+                {isSubmitting ? '생성 중...' : '용병클럽 만들기'}
+              </button>
+            )}
           </div>
         </div>
       </form>
+
+      <style>{`
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fade-in 0.25s ease-out; }
+      `}</style>
     </div>
   );
 };

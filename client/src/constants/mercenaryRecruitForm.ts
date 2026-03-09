@@ -150,6 +150,39 @@ export const MERCENARY_RECRUIT_FORM: Record<string, MercenaryRecruitFormSchema> 
       },
     ],
   },
+  야구: {
+    fields: [
+      {
+        key: 'positions',
+        label: '희망 포지션',
+        type: 'multiselect',
+        options: [
+          { value: 'P', label: '투수' },
+          { value: 'C', label: '포수' },
+          { value: '1B', label: '1루수' },
+          { value: '2B', label: '2루수' },
+          { value: '3B', label: '3루수' },
+          { value: 'SS', label: '유격수' },
+          { value: 'LF', label: '좌익수' },
+          { value: 'CF', label: '중견수' },
+          { value: 'RF', label: '우익수' },
+        ],
+        required: true,
+      },
+      {
+        key: 'matchType',
+        label: '경기 방식',
+        type: 'select',
+        options: [
+          { value: 'full', label: '9회 정식' },
+          { value: '7inning', label: '7회' },
+          { value: 'softball', label: '소프트볼' },
+          { value: 'practice', label: '연습/친선' },
+        ],
+        required: true,
+      },
+    ],
+  },
   핸드볼: {
     fields: [
       {

@@ -33,9 +33,6 @@ export class TeamsController {
     @CurrentUser() user: User,
     @UploadedFile() logo?: Express.Multer.File,
   ) {
-    if (!logo) {
-      throw new BadRequestException('팀 로고를 등록해주세요.');
-    }
     return this.teamsService.createTeam(dto, user.id, logo);
   }
 

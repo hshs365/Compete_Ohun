@@ -145,7 +145,7 @@ export class GroupsService {
   }
 
   async create(createGroupDto: CreateGroupDto, creatorId: number): Promise<Group> {
-    const allowedCategories = ['축구', '풋살', '농구', '테니스', '배드민턴'];
+    const allowedCategories = ['축구', '풋살', '농구', '야구', '테니스', '배드민턴'];
     if (!createGroupDto.category || !allowedCategories.includes(createGroupDto.category)) {
       throw new BadRequestException(`현재 지원하는 종목은 ${allowedCategories.join(', ')}입니다.`);
     }
@@ -1121,6 +1121,19 @@ export class GroupsService {
         }
       }
 
+      // 준비물 체크 (용병 구인 시 필수 장비가 있는 용병만 참가 가능)
+      const requiredEquipment = group.equipment;
+      if (Array.isArray(requiredEquipment) && requiredEquipment.length > 0) {
+        const category = group.category;
+        const userSportEquipment = user.sportEquipment ?? [];
+        const userEntry = userSportEquipment.find((e) => e?.sport === category);
+        const userEquipment = Array.isArray(userEntry?.equipment) ? userEntry.equipment : [];
+        const missing = requiredEquipment.filter((eq) => !userEquipment.includes(eq));
+        if (missing.length > 0) {
+          throw new ForbiddenException('필요한 준비물을 모두 갖춘 용병만 참가할 수 있습니다.');
+        }
+      }
+
       // 동시간대에 이미 생성·참가한 매치가 있으면 참가 불가 (생성한 매치 + 참가한 매치 모두 포함)
       if (group.meetingDateTime) {
         const meetingTime = new Date(group.meetingDateTime);
@@ -1900,6 +1913,48 @@ export class GroupsService {
       take: 50,
     });
     return groups;
+  }
+
+  /** 내 일정용: 생성한 매치 + 참가한 매치(용병 포함) 중 아직 종료되지 않은 것. meetingDateTime 있으면 캘린더 표시용 */
+  async findMyScheduleGroups(userId: number): Promise<Group[]> {
+    const now = new Date();
+    const [created, participantRows] = await Promise.all([
+      this.groupRepository.find({
+        where: { creatorId: userId, isActive: true },
+        relations: ['creator'],
+        select: ['id', 'name', 'location', 'category', 'meetingTime', 'meetingDateTime', 'creatorId'],
+        order: { meetingDateTime: 'ASC' },
+        take: 100,
+      }),
+      this.participantRepository.find({
+        where: { userId },
+        relations: ['group', 'group.creator'],
+        order: { joinedAt: 'DESC' },
+        take: 200,
+      }),
+    ]);
+    const seen = new Set<number>();
+    for (const g of created) {
+      seen.add(g.id);
+    }
+    const participations: Group[] = [];
+    for (const p of participantRows) {
+      const g = p.group;
+      if (!g || !g.isActive || g.creatorId === userId) continue;
+      const completed =
+        g.isCompleted ||
+        (g.meetingDateTime != null && new Date(g.meetingDateTime) <= now);
+      if (completed) continue;
+      if (seen.has(g.id)) continue;
+      seen.add(g.id);
+      participations.push(g);
+    }
+    const all = [...created, ...participations].sort((a, b) => {
+      const at = a.meetingDateTime ? new Date(a.meetingDateTime).getTime() : 0;
+      const bt = b.meetingDateTime ? new Date(b.meetingDateTime).getTime() : 0;
+      return at - bt;
+    });
+    return all;
   }
 
   /** 활동 기록용: 완료된 매치만 반환. 매치 종료 시각이 지났거나 isCompleted인 경우.

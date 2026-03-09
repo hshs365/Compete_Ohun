@@ -33,6 +33,8 @@ export interface User {
   interestedSports?: string[];
   /** 스포츠별 선호 포지션 */
   sportPositions?: { sport: string; positions: string[] }[];
+  /** 종목별 보유 장비 (용병 참가 시 필요 품목) */
+  sportEquipment?: { sport: string; equipment: string[] }[];
   /** 종목별 올코트플레이 랭크 (급수) */
   ohunRanks?: Record<string, string>;
   effectiveRanks?: Record<string, string>;
