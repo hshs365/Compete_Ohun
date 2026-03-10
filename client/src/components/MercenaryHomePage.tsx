@@ -220,7 +220,7 @@ const MercenaryHomePage = () => {
                     setSportFilterValues({});
                   }}
                   className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
-                    isActive ? `${chipStyle.bg} ${chipStyle.border} ${chipStyle.text}` : 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] border-transparent'
+                    isActive ? `${chipStyle.bg} ${chipStyle.border} text-[var(--color-text-primary)]` : 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] border-transparent'
                   }`}
                   style={isActive ? { borderColor: catColor + '80' } : undefined}
                 >

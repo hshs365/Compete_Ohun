@@ -263,9 +263,19 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
     return null;
   };
 
+  /** 선택한 경기 일시(날짜+시작시간)가 현재보다 이전이면 true */
+  const isMeetingTimeInPast = useCallback(() => {
+    if (!meetingDate || !meetingStartTime) return false;
+    const [y, m, d] = meetingDate.split('-').map(Number);
+    const [hh, mm] = meetingStartTime.split(':').map((v) => parseInt(v, 10) || 0);
+    const selected = new Date(y, (m ?? 1) - 1, d ?? 1, hh, mm, 0);
+    return selected.getTime() <= Date.now();
+  }, [meetingDate, meetingStartTime]);
+
   const canProceedStep = () => {
     if (step === 1) return title.trim().length > 0 && location.trim().length > 0;
-    if (step === 2 || step === 3) return true;
+    if (step === 2) return !isMeetingTimeInPast();
+    if (step === 3) return true;
     if (step === 4) {
       if (!schema?.fields?.length) return true;
       const required = schema.fields.filter((f) => f.required);
@@ -287,7 +297,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Enter 키 등으로 인한 조기 제출: 아직 마지막 단계가 아니면 다음 단계로만 이동
+    // 아직 마지막 단계가 아니면 다음 단계로만 이동(필수 입력 검사 없음)
     if (step < TOTAL_STEPS) {
       handleNext();
       return;
@@ -310,6 +320,10 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
     }
     if (!location.trim()) {
       showError('장소를 입력해 주세요.', '필수 입력');
+      return;
+    }
+    if (isMeetingTimeInPast()) {
+      showError('경기 일시는 현재 시간 이후로 설정해 주세요.', '일시 오류');
       return;
     }
 
@@ -368,7 +382,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
     <div className="fixed inset-0 z-[9999] flex items-end md:items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden />
       <div
-        className="relative w-full max-w-lg max-h-[90dvh] md:max-h-[85vh] flex flex-col bg-[var(--color-bg-card)] border border-[var(--color-border-card)] rounded-t-2xl md:rounded-2xl shadow-xl overflow-hidden"
+        className="relative w-full max-w-lg min-h-[55dvh] md:min-h-[50vh] max-h-[90dvh] md:max-h-[85vh] flex flex-col bg-[var(--color-bg-card)] border border-[var(--color-border-card)] rounded-t-2xl md:rounded-2xl shadow-xl overflow-hidden"
         role="dialog"
         aria-labelledby="mercenary-recruit-title"
       >
@@ -398,8 +412,17 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="flex-1 overflow-y-auto px-4 py-4 pb-6">
+        <form
+          onSubmit={handleSubmit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && step < TOTAL_STEPS) {
+              e.preventDefault();
+              handleNext();
+            }
+          }}
+          className="flex flex-col flex-1 min-h-0"
+        >
+          <div className="flex-1 overflow-y-auto px-4 py-4 pb-4">
             {/* Step 1: 종목 + 제목 + 장소 */}
             {step === 1 && (
               <div className="space-y-5 animate-fade-in">
@@ -419,7 +442,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
                             onClick={() => hasForm && setModalSport(sport)}
                             disabled={!hasForm}
                             className={`flex-shrink-0 px-4 py-2.5 rounded-full text-sm font-medium transition-colors border min-h-[44px] touch-manipulation ${
-                              isActive ? `${sportChip.bg} ${sportChip.border} ${sportChip.text}` : hasForm ? 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] border-[var(--color-border-card)]' : 'opacity-50 cursor-not-allowed border-[var(--color-border-card)]'
+                              isActive ? `${sportChip.bg} ${sportChip.border} text-[var(--color-text-primary)]` : hasForm ? 'bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] border-[var(--color-border-card)]' : 'opacity-50 cursor-not-allowed border-[var(--color-border-card)]'
                             }`}
                             style={isActive ? { borderColor: sportColor + '80' } : undefined}
                           >
@@ -497,6 +520,11 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
                 {meetingStartTime && meetingEndTime && (
                   <p className="text-sm text-[var(--color-text-secondary)]">
                     선택된 시간: <span className="font-semibold" style={{ color: pointColor }}>{meetingStartTime} ~ {meetingEndTime}</span>
+                  </p>
+                )}
+                {isMeetingTimeInPast() && (
+                  <p className="text-sm text-red-500 mt-1">
+                    경기 일시는 현재 시간 이후로 설정해 주세요.
                   </p>
                 )}
               </div>
@@ -586,8 +614,8 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
             )}
           </div>
 
-          {/* 하단 버튼 */}
-          <div className="shrink-0 p-4 pt-2 border-t border-[var(--color-border-card)] bg-[var(--color-bg-card)] pb-[env(safe-area-inset-bottom,0)]">
+          {/* 하단 버튼: 단계 전환 시에도 여유 있게 */}
+          <div className="shrink-0 pt-5 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] border-t border-[var(--color-border-card)] bg-[var(--color-bg-card)]">
             <div className="flex gap-3">
               {step > 1 ? (
                 <button
@@ -606,7 +634,11 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
               {step < TOTAL_STEPS ? (
                 <button
                   type="button"
-                  onClick={handleNext}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleNext();
+                  }}
                   disabled={!canProceedStep()}
                   className="flex-[2] py-3.5 rounded-xl font-semibold text-white flex items-center justify-center gap-1 min-h-[48px] touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ backgroundColor: pointColor }}

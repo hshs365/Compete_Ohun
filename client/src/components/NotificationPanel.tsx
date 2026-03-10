@@ -25,6 +25,30 @@ function isImportant(type: Notification['type']) {
   return IMPORTANT_TYPES.includes(type);
 }
 
+/** 알림 타입별 강조 색상: 왼쪽 테두리 + 읽지 않았을 때 배경 틴트 */
+function getTypeStyle(type: Notification['type'], isRead: boolean): { border: string; bg: string } {
+  if (IMPORTANT_TYPES.includes(type)) {
+    return { border: 'border-l-red-500', bg: isRead ? '' : 'bg-red-950/30 dark:bg-red-950/25' };
+  }
+  switch (type) {
+    case 'new_follower':
+      return { border: 'border-l-blue-500', bg: isRead ? '' : 'bg-blue-950/30 dark:bg-blue-950/25' };
+    case 'mercenary_recruit':
+      return { border: 'border-l-amber-500', bg: isRead ? '' : 'bg-amber-950/30 dark:bg-amber-950/25' };
+    case 'group_join':
+    case 'group_closed':
+    case 'group_waitlist_spot_open':
+    case 'creator_new_match':
+      return { border: 'border-l-emerald-500', bg: isRead ? '' : 'bg-emerald-950/20 dark:bg-emerald-950/20' };
+    case 'referee_rank_match_in_region':
+      return { border: 'border-l-violet-500', bg: isRead ? '' : 'bg-violet-950/20 dark:bg-violet-950/20' };
+    case 'facility_reservation':
+      return { border: 'border-l-cyan-500', bg: isRead ? '' : 'bg-cyan-950/20 dark:bg-cyan-950/20' };
+    default:
+      return { border: 'border-l-neutral-500', bg: '' };
+  }
+}
+
 const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: propNotifications }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -76,9 +100,10 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
     }
   };
 
+  const userId = user?.id;
+
   useEffect(() => {
-    // 로그인한 경우에만 알림 API 호출 (401 방지)
-    if (!user) {
+    if (!userId) {
       setNotifications([]);
       setContextUnreadCount(0);
       return;
@@ -86,11 +111,6 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
 
     fetchNotifications();
     fetchUnreadCount();
-
-    const interval = setInterval(() => {
-      fetchNotifications();
-      fetchUnreadCount();
-    }, 10000);
 
     const handleNotificationUpdate = () => {
       fetchNotifications();
@@ -100,10 +120,27 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
     window.addEventListener('notificationUpdate', handleNotificationUpdate);
 
     return () => {
-      clearInterval(interval);
       window.removeEventListener('notificationUpdate', handleNotificationUpdate);
     };
-  }, [user]);
+  }, [userId]);
+
+  // 드로어가 닫혀 있을 때만 30초마다 미읽음 개수/목록 갱신. 열려 있는 동안은 폴링하지 않아 수시 새로고침 방지
+  useEffect(() => {
+    if (!userId || isDrawerOpen) return;
+    const interval = setInterval(() => {
+      fetchUnreadCount();
+      fetchNotifications();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [userId, isDrawerOpen]);
+
+  // 알림창을 열 때마다 최신 목록 1회 로드
+  useEffect(() => {
+    if (userId && isDrawerOpen) {
+      fetchNotifications();
+      fetchUnreadCount();
+    }
+  }, [userId, isDrawerOpen]);
 
   useEffect(() => {
     if (propNotifications) {
@@ -124,12 +161,11 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
     }
   };
 
-  const getNotificationStyles = (forImportant: boolean) => {
-    const cardBase = 'bg-neutral-700/90 dark:bg-neutral-800/95 border border-neutral-600/50 dark:border-neutral-600/40 text-[var(--color-text-primary)]';
-    if (forImportant) {
-      return `${cardBase} border-l-4 border-l-red-500`;
-    }
-    return cardBase;
+  const getNotificationCardClass = (notification: Notification) => {
+    const important = isImportant(notification.type);
+    const { border, bg } = getTypeStyle(notification.type, notification.isRead);
+    const cardBase = 'bg-neutral-700/90 dark:bg-neutral-800/95 border border-neutral-600/50 dark:border-neutral-600/40 text-[var(--color-text-primary)] border-l-4';
+    return `${cardBase} ${border} ${bg}`.trim();
   };
 
   const handleNotificationClick = (n: Notification) => {
@@ -158,8 +194,23 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
   const importantList = notifications.filter((n) => isImportant(n.type));
   const normalList = notifications.filter((n) => !isImportant(n.type));
 
+  const getTypeIconColor = (type: Notification['type']) => {
+    if (IMPORTANT_TYPES.includes(type)) return 'text-red-500';
+    switch (type) {
+      case 'new_follower': return 'text-blue-400';
+      case 'mercenary_recruit': return 'text-amber-400';
+      case 'group_join':
+      case 'group_closed':
+      case 'group_waitlist_spot_open':
+      case 'creator_new_match': return 'text-emerald-400';
+      case 'referee_rank_match_in_region': return 'text-violet-400';
+      case 'facility_reservation': return 'text-cyan-400';
+      default: return 'text-[var(--color-text-secondary)]';
+    }
+  };
+
   const renderNotificationItem = (notification: Notification, important: boolean) => {
-    const cardClass = getNotificationStyles(important);
+    const cardClass = getNotificationCardClass(notification);
     const isCancelled = notification.type === 'group_cancelled';
 
     return (
@@ -169,12 +220,12 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
         tabIndex={0}
         onClick={() => handleNotificationClick(notification)}
         onKeyDown={(e) => e.key === 'Enter' && handleNotificationClick(notification)}
-        className={`${cardClass} rounded-lg p-3 flex items-start gap-3 transition-colors ${!notification.isRead ? 'ring-1 ring-red-400/40' : 'opacity-90'} ${isCancelled ? 'cursor-default' : 'cursor-pointer hover:bg-neutral-600/90 dark:hover:bg-neutral-700/90'}`}
+        className={`${cardClass} rounded-lg p-3 flex items-start gap-3 transition-colors ${!notification.isRead ? 'ring-1 ring-neutral-400/50' : 'opacity-90'} ${isCancelled ? 'cursor-default' : 'cursor-pointer hover:bg-neutral-600/90 dark:hover:bg-neutral-700/90'}`}
       >
         {important ? (
-          <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-500" />
+          <ExclamationTriangleIcon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${getTypeIconColor(notification.type)}`} />
         ) : (
-          <BellIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--color-text-secondary)]" />
+          <BellIcon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${getTypeIconColor(notification.type)}`} />
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">

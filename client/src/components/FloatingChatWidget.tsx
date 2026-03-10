@@ -11,6 +11,7 @@ import {
   ChevronLeftIcon,
   ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline';
+import { useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import { api, getSocketUrl } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -48,6 +49,7 @@ function formatMeetingDate(dt: string | null): string {
 }
 
 const FloatingChatWidget: React.FC = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const {
     isOpen,
@@ -435,9 +437,31 @@ const FloatingChatWidget: React.FC = () => {
 
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {showList ? (
-            /* 채팅방 목록 */
+            /* 채팅방 목록 (비로그인 시 로그인 유도) */
             <div className="flex-1 overflow-y-auto overscroll-contain">
-              {isLoadingList ? (
+              {!user ? (
+                <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                  <ChatBubbleLeftRightIcon
+                    className="w-12 h-12 text-white/30 mb-3"
+                    aria-hidden
+                  />
+                  <p className="text-white/80 text-sm font-medium">로그인이 필요합니다</p>
+                  <p className="text-white/50 text-xs mt-1 mb-5">
+                    채팅을 이용하려면 로그인해 주세요.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeChat();
+                      navigate('/login');
+                    }}
+                    className="px-5 py-3 rounded-xl text-sm font-semibold text-white touch-manipulation min-h-[44px]"
+                    style={{ backgroundColor: CHAT_PRIMARY }}
+                  >
+                    로그인하기
+                  </button>
+                </div>
+              ) : isLoadingList ? (
                 <div className="flex justify-center py-8 text-white/50 text-sm">
                   불러오는 중...
                 </div>
