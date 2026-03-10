@@ -1,12 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, LessThan, MoreThan, IsNull } from 'typeorm';
 import { Group } from './entities/group.entity';
 import { GroupParticipant } from './entities/group-participant.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ReservationsService } from '../facilities/reservations.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
+import { PointsService } from '../users/points.service';
+import { PointTransactionType } from '../users/entities/point-transaction.entity';
+
+/** 예치금 환급 시점: meetingDateTime + 이 값(ms). 기본 3시간 */
+const DEPOSIT_REFUND_BUFFER_MS = 3 * 60 * 60 * 1000;
 
 @Injectable()
 export class GroupsSchedulerService {
@@ -19,6 +24,7 @@ export class GroupsSchedulerService {
     private participantRepository: Repository<GroupParticipant>,
     private notificationsService: NotificationsService,
     private reservationsService: ReservationsService,
+    private pointsService: PointsService,
   ) {}
 
   /** 매 10분마다 실행. 비활성화: .env에 GROUPS_SCHEDULER_ENABLED=false */
@@ -123,6 +129,57 @@ export class GroupsSchedulerService {
       this.logger.log(`모임 ${group.id}: 취소 완료 (가예약 취소 ${cancelledCount}건, 알림 전송 완료)`);
     } catch (error) {
       this.logger.error(`모임 ${group.id} 체크 중 오류:`, error);
+    }
+  }
+
+  /** 매 10분마다 실행. meetingDateTime + 3시간 지난 용병 구하기 모임의 예치금 환급 */
+  @Cron('*/10 * * * *')
+  async refundDeposits() {
+    if (process.env.GROUPS_SCHEDULER_ENABLED === 'false') return;
+
+    try {
+      const cutoff = new Date(Date.now() - DEPOSIT_REFUND_BUFFER_MS);
+
+      const groups = await this.groupRepository.find({
+        where: {
+          isMercenaryRecruit: true,
+          meetingDateTime: LessThan(cutoff),
+        },
+        select: ['id', 'name', 'depositPlatformFee'],
+      });
+
+      for (const group of groups) {
+        const participants = await this.participantRepository.find({
+          where: {
+            groupId: group.id,
+            depositAmountPaid: MoreThan(0),
+            depositRefundedAt: IsNull(),
+          },
+        });
+
+        const platformFee = group.depositPlatformFee ?? 500;
+        for (const p of participants) {
+          if (p.depositAmountPaid <= 0) continue;
+          const refundAmount = Math.max(0, p.depositAmountPaid - platformFee);
+          if (refundAmount <= 0) continue;
+          try {
+            await this.pointsService.addTransaction(
+              p.userId,
+              refundAmount,
+              PointTransactionType.DEPOSIT_REFUND,
+              `예치금 환급: ${group.name}`,
+            );
+            await this.participantRepository.update(p.id, {
+              depositRefundedAt: new Date(),
+            });
+            this.logger.log(`예치금 환급: 그룹 ${group.id}, 참가자 ${p.userId}, ${refundAmount}P`);
+          } catch (err) {
+            this.logger.error(`예치금 환급 실패: 그룹 ${group.id}, 참가자 ${p.userId}`, err);
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.error('예치금 환급 스케줄러 오류:', error);
     }
   }
 }

@@ -36,4 +36,9 @@ export type SelectedGroup = {
     mannerScore?: number;
     noShowCount?: number;
   };
+  /** 슈퍼 노출: boostedUntil > now 이면 리스트 최상단 고정 */
+  boostedUntil?: string | null;
+  isBoosted?: boolean;
+  /** 노쇼 방지 예치금 (용병 참가 시, 경기 종료 후 환급) */
+  depositAmount?: number | null;
 }

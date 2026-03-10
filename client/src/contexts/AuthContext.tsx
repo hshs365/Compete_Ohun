@@ -112,12 +112,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(() => {
-    // 자동 로그인이 활성화되어 있으면 localStorage에서, 아니면 sessionStorage에서 가져오기
-    const rememberMe = localStorage.getItem('remember_me') === 'true';
-    if (rememberMe) {
-      return localStorage.getItem('access_token');
-    }
-    return sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+    // localStorage 우선으로 읽어 모바일 뒤로가기 시에도 로그인 유지
+    return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
   });
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
@@ -125,11 +121,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // API 호출 헬퍼 함수
   const apiCall = async (endpoint: string, options: RequestInit = {}) => {
     const url = `${API_BASE_URL}${endpoint}`;
-    // 자동 로그인 설정에 따라 토큰 가져오기
-    const rememberMe = localStorage.getItem('remember_me') === 'true';
-    const currentToken = token || (rememberMe 
-      ? localStorage.getItem('access_token')
-      : sessionStorage.getItem('access_token') || localStorage.getItem('access_token'));
+    const currentToken = token || localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
     
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
@@ -153,13 +145,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return response.json();
   };
 
-  // 인증 상태 확인
+  // 인증 상태 확인 (localStorage 우선 — 모바일 뒤로가기 후에도 로그인 유지)
   const checkAuth = async () => {
-    const rememberMe = localStorage.getItem('remember_me') === 'true';
-    const savedToken = rememberMe 
-      ? localStorage.getItem('access_token')
-      : sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-    
+    const savedToken = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
     if (!savedToken) {
       setIsLoading(false);
       return;
@@ -171,14 +159,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         method: 'GET',
       });
       setUser(data);
-      
-      // 자동 로그인이 활성화되어 있으면 localStorage에 저장, 아니면 sessionStorage에 저장
-      if (rememberMe) {
-        localStorage.setItem('access_token', savedToken);
-      } else {
-        sessionStorage.setItem('access_token', savedToken);
-        // 기존 호환성을 위해 localStorage에도 저장 (하지만 remember_me가 false면 세션 종료 시 제거)
-      }
+      // 모바일 뒤로가기 시에도 로그인 유지되도록 localStorage에 보관
+      localStorage.setItem('access_token', savedToken);
+      sessionStorage.setItem('access_token', savedToken);
     } catch (error) {
       // 토큰이 유효하지 않으면 로그아웃
       localStorage.removeItem('access_token');

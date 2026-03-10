@@ -56,6 +56,14 @@ export class GroupParticipant {
   @Column({ type: 'timestamp', nullable: true })
   ratedAt: Date | null; // 평가 일시
 
+  /** 노쇼 방지 예치금 납부액 (용병 참가 시) */
+  @Column({ type: 'int', default: 0 })
+  depositAmountPaid: number;
+
+  /** 예치금 환급 일시 (null이면 미환급) */
+  @Column({ type: 'timestamp', nullable: true })
+  depositRefundedAt: Date | null;
+
   // 메타 정보
   @CreateDateColumn({ name: 'joined_at' })
   joinedAt: Date;

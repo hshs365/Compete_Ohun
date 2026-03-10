@@ -128,6 +128,22 @@ export class Group {
   @Column({ type: 'jsonb', nullable: true })
   sportSpecificData: Record<string, unknown> | null;
 
+  /** 슈퍼 노출: 이 시간까지 리스트 최상단 고정 (포인트 사용) */
+  @Column({ type: 'timestamp', nullable: true })
+  boostedUntil: Date | null;
+
+  /** 용병 구하기 글 여부. 예치금 부과 대상 식별용 */
+  @Column({ type: 'boolean', default: false })
+  isMercenaryRecruit: boolean;
+
+  /** 노쇼 방지 예치금 (용병 참가 시 부과, 경기 종료 후 환급) */
+  @Column({ type: 'int', nullable: true })
+  depositAmount: number | null;
+
+  /** 예치금 환급 시 플랫폼 수수료 (기본 500P) */
+  @Column({ type: 'int', default: 500 })
+  depositPlatformFee: number;
+
   // 메타 정보
   @CreateDateColumn()
   createdAt: Date;

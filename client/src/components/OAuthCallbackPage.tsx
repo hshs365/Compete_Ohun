@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { getApiBaseUrl } from '../utils/api';
+import { getApiBaseUrl, isInAppBrowser } from '../utils/api';
 import AppLogo from './AppLogo';
 
 const PROVIDER_NAMES: Record<string, string> = {
@@ -65,10 +65,10 @@ const OAuthCallbackPage = () => {
           throw new Error('로그인 응답에 토큰이 없습니다.');
         }
 
-        // 토큰 저장 (login/register 흐름과 동일하게)
+        // 토큰 저장: 인앱 브라우저(카카오톡 등)에서는 나갔다 들어와도 로그인 유지 위해 localStorage 사용
         sessionStorage.setItem('access_token', data.token);
         localStorage.setItem('access_token', data.token);
-        localStorage.setItem('remember_me', 'false');
+        localStorage.setItem('remember_me', isInAppBrowser() ? 'true' : 'false');
 
         // 소셜 프로필(닉네임·성별·연령대) → 추가정보 입력 폼 자동 채움용
         if (data.socialProfile) {

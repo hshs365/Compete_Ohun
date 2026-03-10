@@ -156,6 +156,17 @@ export class GroupsController {
     return await this.groupsService.joinGroup(id, userId);
   }
 
+  /** 슈퍼 노출: 500P 사용 시 리스트 최상단 24시간 고정 (글 작성자 전용) */
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/boost')
+  @HttpCode(HttpStatus.OK)
+  async boostGroup(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+  ) {
+    return this.groupsService.boostGroup(id, user.id);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post(':id/leave')
   @HttpCode(HttpStatus.OK)

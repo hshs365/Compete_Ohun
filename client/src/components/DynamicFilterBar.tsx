@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MagnifyingGlassIcon, MapPinIcon, Cog6ToothIcon, BellIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, MapPinIcon, BellIcon } from '@heroicons/react/24/outline';
 import { KOREAN_CITIES, getRegionDisplayName, getRegionChildren, parseRegionToHierarchy } from '../utils/locationUtils';
 import { useNotification } from '../contexts/NotificationContext';
 import { SPORT_CONFIG, SPORT_POINT_COLORS, type SportFilterFieldDef } from '../constants/sports';
@@ -18,6 +18,10 @@ interface DynamicFilterBarProps {
   /** 성별 필터 (용병 구하기 등). 있으면 성별 드롭다운 표시 */
   selectedGender?: 'male' | 'female' | null;
   onGenderChange?: (g: 'male' | 'female' | null) => void;
+  /** 활동시간만 보기 체크박스 (로그인 시) */
+  showActivityCheckbox?: boolean;
+  filterByActivityTime?: boolean;
+  onActivityTimeFilterChange?: (checked: boolean) => void;
 }
 
 const DynamicFilterBar: React.FC<DynamicFilterBarProps> = ({
@@ -31,6 +35,9 @@ const DynamicFilterBar: React.FC<DynamicFilterBarProps> = ({
   onSportFilterChange,
   selectedGender = null,
   onGenderChange,
+  showActivityCheckbox = false,
+  filterByActivityTime = false,
+  onActivityTimeFilterChange,
 }) => {
   const { unreadCount, openDrawer } = useNotification();
   const region = selectedRegion || '전체';
@@ -202,9 +209,6 @@ const DynamicFilterBar: React.FC<DynamicFilterBarProps> = ({
             <option value="female">여자만</option>
           </select>
         )}
-        <button type="button" onClick={onOpenSearchOptions} className="p-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] shrink-0" aria-label="검색 옵션" title="검색 옵션">
-          <Cog6ToothIcon className="h-5 w-5" />
-        </button>
         <button
           type="button"
           onClick={openDrawer}
@@ -221,11 +225,20 @@ const DynamicFilterBar: React.FC<DynamicFilterBarProps> = ({
           )}
         </button>
       </div>
-      {filterFields.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {filterFields.map(renderField)}
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {filterFields.length > 0 && filterFields.map(renderField)}
+        {showActivityCheckbox && onActivityTimeFilterChange && (
+          <label className="flex items-center gap-2 shrink-0 ml-auto cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={filterByActivityTime}
+              onChange={(e) => onActivityTimeFilterChange(e.target.checked)}
+              className="w-4 h-4 rounded border-[var(--color-border-card)] bg-[var(--color-bg-primary)] accent-[var(--color-accent)] focus:ring-2 focus:ring-offset-0"
+            />
+            <span className="text-sm text-[var(--color-text-primary)]">활동시간만 보기</span>
+          </label>
+        )}
+      </div>
     </div>
   );
 };

@@ -177,6 +177,11 @@ export class CreateGroupDto {
   @IsOptional()
   @IsBoolean()
   isMercenaryRecruit?: boolean;
+
+  /** 노쇼 방지 예치금 (용병 참가 시 부과, 경기 종료 후 환급. 0 또는 미설정 시 예치금 없음) */
+  @IsOptional()
+  @IsNumber()
+  depositAmount?: number;
 }
 
 

@@ -223,6 +223,8 @@ export class GroupsService {
       }
     }
 
+    const isMercenaryRecruit = !!createGroupDto.isMercenaryRecruit;
+    const depositAmount = isMercenaryRecruit ? 10000 : null;
     const group = this.groupRepository.create({
       ...createGroupDto,
       type: groupType,
@@ -234,6 +236,8 @@ export class GroupsService {
       meetingTime: meetingTimeStr ?? createGroupDto.meetingTime ?? null,
       facilityId: null, // 인원 마감 시 1→2→3순위로 확정 후 설정
       sportSpecificData: createGroupDto.sportSpecificData ?? null,
+      isMercenaryRecruit,
+      depositAmount,
     });
 
     const savedGroup = await this.groupRepository.save(group);
@@ -403,7 +407,6 @@ export class GroupsService {
     }
 
     // 용병 구하기 글: 해당 종목 용병 알림 수신 유저에게 알림
-    const isMercenaryRecruit = (createGroupDto as CreateGroupDto & { isMercenaryRecruit?: boolean }).isMercenaryRecruit;
     if (isMercenaryRecruit && savedGroup.category) {
       try {
         const eligibleIds = await this.usersService.findMercenaryEligibleUserIds(
@@ -471,10 +474,10 @@ export class GroupsService {
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.groupRepository
-      .createQueryBuilder('group')
-      .leftJoinAndSelect('group.creator', 'creator')
-      .leftJoinAndSelect('group.gameSettings', 'gameSettings')
-      .where('group.isActive = :isActive', { isActive: true });
+      .createQueryBuilder('grp')
+      .leftJoinAndSelect('grp.creator', 'creator')
+      .leftJoinAndSelect('grp.gameSettings', 'gameSettings')
+      .where('grp.isActive = :isActive', { isActive: true });
 
     // 중복 매치 체크용: 같은 날짜·비슷한 시간(±2시간)·같은 지역
     if (meetingDate && meetingTime && latitude != null && longitude != null) {
@@ -485,16 +488,16 @@ export class GroupsService {
       const targetStart = new Date(y, (m ?? 1) - 1, d ?? 1, hh, mm, 0);
       const windowStart = new Date(targetStart.getTime() - 2 * 60 * 60 * 1000);
       const windowEnd = new Date(targetStart.getTime() + 2 * 60 * 60 * 1000);
-      queryBuilder.andWhere('group.meetingDateTime IS NOT NULL');
+      queryBuilder.andWhere('grp.meetingDateTime IS NOT NULL');
       queryBuilder.andWhere(
-        'group.meetingDateTime >= :dupStart AND group.meetingDateTime <= :dupEnd',
+        'grp.meetingDateTime >= :dupStart AND grp.meetingDateTime <= :dupEnd',
         { dupStart: windowStart.toISOString(), dupEnd: windowEnd.toISOString() },
       );
       // 반경 내: 하버사인 근사 (위도 1도≈111km, 경도 1도≈cos(위도)*111km)
       const degLat = radiusKm / 111;
       const degLng = radiusKm / (111 * Math.cos((latitude * Math.PI) / 180));
       queryBuilder.andWhere(
-        'group.latitude BETWEEN :latMin AND :latMax AND group.longitude BETWEEN :lngMin AND :lngMax',
+        'grp.latitude BETWEEN :latMin AND :latMax AND grp.longitude BETWEEN :lngMin AND :lngMax',
         {
           latMin: latitude - degLat,
           latMax: latitude + degLat,
@@ -507,7 +510,7 @@ export class GroupsService {
     // 지도 bounds 필터 (이 지역에서 재검색)
     if (latMin != null && latMax != null && lngMin != null && lngMax != null) {
       queryBuilder.andWhere(
-        'group.latitude BETWEEN :boundsLatMin AND :boundsLatMax AND group.longitude BETWEEN :boundsLngMin AND :boundsLngMax',
+        'grp.latitude BETWEEN :boundsLatMin AND :boundsLatMax AND grp.longitude BETWEEN :boundsLngMin AND :boundsLngMax',
         { boundsLatMin: latMin, boundsLatMax: latMax, boundsLngMin: lngMin, boundsLngMax: lngMax },
       );
     }
@@ -516,9 +519,9 @@ export class GroupsService {
     if (filterDate) {
       const trimmed = String(filterDate).trim();
       if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-        queryBuilder.andWhere('group.meetingDateTime IS NOT NULL');
+        queryBuilder.andWhere('grp.meetingDateTime IS NOT NULL');
         queryBuilder.andWhere(
-          `DATE("group"."meetingDateTime") = :filterDate`,
+          `DATE("grp"."meetingDateTime") = :filterDate`,
           { filterDate: trimmed },
         );
       }
@@ -526,12 +529,12 @@ export class GroupsService {
 
     // 모임 타입 필터
     if (queryDto.type) {
-      queryBuilder.andWhere('group.type = :type', { type: queryDto.type });
+      queryBuilder.andWhere('grp.type = :type', { type: queryDto.type });
     }
 
     // 카테고리 필터
     if (category && category !== '전체') {
-      queryBuilder.andWhere('group.category = :category', { category });
+      queryBuilder.andWhere('grp.category = :category', { category });
     }
 
     // 종목별 동적 필터 (sport_specific_data)
@@ -547,12 +550,12 @@ export class GroupsService {
               // jsonb 배열 overlap: && 연산자 (공통 원소 있으면 true)
               const jsonArr = JSON.stringify((val as string[]).map((v) => String(v)));
               queryBuilder.andWhere(
-                `("group"."sportSpecificData"->'${safeKey}') && CAST(:ssf_${safeKey} AS jsonb)`,
+                `("grp"."sportSpecificData"->'${safeKey}') && CAST(:ssf_${safeKey} AS jsonb)`,
                 { [`ssf_${safeKey}`]: jsonArr },
               );
             } else if (typeof val === 'string' && val) {
               queryBuilder.andWhere(
-                `"group"."sportSpecificData"->>'${safeKey}' = :ssf_${safeKey}`,
+                `"grp"."sportSpecificData"->>'${safeKey}' = :ssf_${safeKey}`,
                 { [`ssf_${safeKey}`]: val },
               );
             }
@@ -566,14 +569,14 @@ export class GroupsService {
     // 검색어 필터
     if (search) {
       queryBuilder.andWhere(
-        '(group.name ILIKE :search OR group.location ILIKE :search OR group.description ILIKE :search)',
+        '(grp.name ILIKE :search OR grp.location ILIKE :search OR grp.description ILIKE :search)',
         { search: `%${search}%` },
       );
     }
 
     // 성별 필터
     if (gender) {
-      queryBuilder.andWhere('group.genderRestriction = :gender', { gender });
+      queryBuilder.andWhere('grp.genderRestriction = :gender', { gender });
     }
 
     // 종료된 모임 필터
@@ -583,19 +586,19 @@ export class GroupsService {
       // 이벤트매치인 경우
       if (!queryDto.includeCompleted) {
         // 종료된 이벤트매치는 기본적으로 제외
-        queryBuilder.andWhere('group.isCompleted = :isCompleted', { isCompleted: false });
+        queryBuilder.andWhere('grp.isCompleted = :isCompleted', { isCompleted: false });
       }
     } else {
       // 일반/랭크 모임 또는 타입 미지정 시
       if (!queryDto.includeCompleted) {
-        queryBuilder.andWhere('group.isCompleted = :isCompleted', { isCompleted: false });
+        queryBuilder.andWhere('grp.isCompleted = :isCompleted', { isCompleted: false });
       }
     }
 
     // 마감된 모임 가리기
     if (hideClosed) {
       queryBuilder.andWhere(
-        '(group.maxParticipants IS NULL OR group.participantCount < group.maxParticipants)',
+        '(grp.maxParticipants IS NULL OR grp.participantCount < grp.maxParticipants)',
       );
     }
 
@@ -603,13 +606,16 @@ export class GroupsService {
     // users 테이블 컬럼명: TypeORM 기본이 camelCase이면 "skillLevel", snake면 skill_level
     if (onlyRanker) {
       queryBuilder.andWhere(
-        'EXISTS (SELECT 1 FROM group_participants gp INNER JOIN users u ON gp.user_id = u.id WHERE gp.group_id = group.id AND u."skillLevel" = :skillLevel)',
+        'EXISTS (SELECT 1 FROM group_participants gp INNER JOIN users u ON gp.user_id = u.id WHERE gp.group_id = grp.id AND u."skillLevel" = :skillLevel)',
         { skillLevel: 'advanced' },
       );
     }
 
-    // 정렬: 최신순
-    queryBuilder.orderBy('group.createdAt', 'DESC');
+    // 정렬: 슈퍼 노출(boostedUntil > now) 우선, 그 다음 최신순
+    // boostedUntil DESC: 미래(슈퍼노출중) 먼저, NULL LAST: 비부스트 글은 마지막
+    queryBuilder
+      .orderBy('grp.boostedUntil', 'DESC', 'NULLS LAST')
+      .addOrderBy('grp.createdAt', 'DESC');
 
     // 페이지네이션
     const [groups, total] = await queryBuilder.skip(skip).take(limit).getManyAndCount();
@@ -657,11 +663,14 @@ export class GroupsService {
           ? totalParticipants - 1
           : totalParticipants;
 
+        const isBoosted =
+          group.boostedUntil != null && new Date(group.boostedUntil) > now;
         return {
           ...group,
           recentJoinCount: recentParticipants,
           hasRanker,
           participantCountExcludingCreator,
+          isBoosted,
         };
       }),
     );
@@ -1191,6 +1200,18 @@ export class GroupsService {
         );
       }
 
+      // 노쇼 방지 예치금: 용병 구하기 글이고 예치금 설정 시 참가 시 차감
+      let depositAmountPaid = 0;
+      if (group.isMercenaryRecruit && group.depositAmount != null && group.depositAmount > 0) {
+        depositAmountPaid = group.depositAmount;
+        await this.pointsService.addTransaction(
+          numericUserId,
+          -depositAmountPaid,
+          PointTransactionType.DEPOSIT_PAY,
+          `노쇼 방지 예치금: ${group.name}`,
+        );
+      }
+
       // 참가자 추가 - Raw SQL을 사용하여 직접 INSERT 실행
       console.log('📝 참가자 INSERT 시작:', {
         numericGroupId,
@@ -1224,6 +1245,7 @@ export class GroupsService {
             groupId: numericGroupId,
             userId: numericUserId,
             status: 'joined',
+            depositAmountPaid,
           });
 
         const sql = queryBuilder.getSql();
@@ -1281,14 +1303,14 @@ export class GroupsService {
         try {
           console.log('🔧 방법 2: Raw SQL INSERT 시도');
           const insertQuery = `
-            INSERT INTO group_participants (group_id, user_id, status, joined_at)
-            VALUES ($1, $2, $3, NOW())
+            INSERT INTO group_participants (group_id, user_id, status, joined_at, deposit_amount_paid)
+            VALUES ($1, $2, $3, NOW(), $4)
             RETURNING id, group_id, user_id, status, joined_at
           `;
           
           console.log('📄 Raw SQL 쿼리:', {
             query: insertQuery,
-            params: [numericGroupId, numericUserId, 'joined'],
+            params: [numericGroupId, numericUserId, 'joined', depositAmountPaid],
             param1_타입: typeof numericGroupId,
             param2_타입: typeof numericUserId,
             param1_값: numericGroupId,
@@ -1299,6 +1321,7 @@ export class GroupsService {
             numericGroupId,
             numericUserId,
             'joined',
+            depositAmountPaid,
           ]);
 
           console.log('✅ Raw SQL INSERT 성공:', {
@@ -2296,6 +2319,33 @@ export class GroupsService {
       throw new NotFoundException('심판 신청 내역이 없습니다.');
     }
     return { success: true, message: '심판 신청이 취소되었습니다.' };
+  }
+
+  /** 슈퍼 노출: 글 작성자만 포인트 사용 시 리스트 최상단 고정 24시간 */
+  private readonly BOOST_COST = 500;
+  private readonly BOOST_DURATION_MS = 24 * 60 * 60 * 1000;
+
+  async boostGroup(groupId: number, userId: number): Promise<Group> {
+    const group = await this.groupRepository.findOne({
+      where: { id: groupId },
+      relations: [],
+    });
+    if (!group) {
+      throw new NotFoundException('모임을 찾을 수 없습니다.');
+    }
+    if (group.creatorId !== userId) {
+      throw new ForbiddenException('글 작성자만 슈퍼 노출을 사용할 수 있습니다.');
+    }
+    await this.pointsService.addTransaction(
+      userId,
+      -this.BOOST_COST,
+      PointTransactionType.BOOST,
+      `슈퍼 노출: ${group.name}`,
+    );
+    const boostedUntil = new Date(Date.now() + this.BOOST_DURATION_MS);
+    await this.groupRepository.update(groupId, { boostedUntil });
+    group.boostedUntil = boostedUntil;
+    return group;
   }
 
   /**

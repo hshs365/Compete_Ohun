@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { XMarkIcon, MapPinIcon, ClockIcon, UserGroupIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, MapPinIcon, ClockIcon, UserGroupIcon, ChatBubbleLeftRightIcon, BoltIcon } from '@heroicons/react/24/outline';
 import NaverMap from './NaverMap';
 import { useChat } from '../contexts/ChatContext';
 import type { SelectedGroup } from '../types/selected-group';
@@ -77,6 +77,10 @@ interface GroupDetailData {
   isUserParticipant?: boolean;
   isClosed?: boolean;
   participants?: ParticipantItem[];
+  /** 슈퍼 노출 종료 시각 (이후까지 리스트 최상단 고정) */
+  boostedUntil?: string | null;
+  /** 노쇼 방지 예치금 (용병 참가 시, 경기 종료 후 환급) */
+  depositAmount?: number | null;
 }
 
 function formatMeetingTime(dt: string | null | undefined, meetingTime?: string | null): string {
@@ -148,6 +152,7 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isBoosting, setIsBoosting] = useState(false);
 
   useEffect(() => {
     if (!group?.id) return;
@@ -223,6 +228,30 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
     }
   };
 
+  const handleBoost = async () => {
+    if (!group?.id || !user) return;
+    const ok = await showConfirm(
+      '500P를 사용해 이 글을 리스트 최상단에 24시간 동안 노출합니다. 진행할까요?',
+      '슈퍼 노출',
+      '적용',
+      '취소',
+    );
+    if (!ok) return;
+    setIsBoosting(true);
+    try {
+      await api.post(`/api/groups/${group.id}/boost`);
+      await showSuccess('슈퍼 노출이 적용되었습니다. 리스트 최상단에 24시간 노출됩니다.', '완료');
+      onParticipantChange?.();
+      if (detail) setDetail((d) => (d ? { ...d, boostedUntil: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() } : d));
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+      const str = Array.isArray(msg) ? msg[0] : msg;
+      showError(str ?? '슈퍼 노출 적용에 실패했습니다.', '실패');
+    } finally {
+      setIsBoosting(false);
+    }
+  };
+
   const handleChatInquiry = () => {
     if (!user) {
       showInfo('로그인 후 채팅할 수 있습니다.', '로그인 필요');
@@ -264,6 +293,8 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
   const mannerConfig: MannerGradeConfig = getMannerGradeConfig(creatorManner);
   const canJoin = !detail?.isUserParticipant && !detail?.isClosed && user;
   const isCreator = Boolean(user && (user.id === detail?.creator?.id || user.id === group?.creator?.id));
+  const boostedUntil = detail?.boostedUntil ?? group?.boostedUntil ?? null;
+  const isCurrentlyBoosted = boostedUntil ? new Date(boostedUntil) > new Date() : false;
 
   return (
     <>
@@ -345,6 +376,17 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
               </div>
             </div>
           </div>
+
+          {/* 노쇼 방지 예치금 */}
+          {((detail?.depositAmount ?? group.depositAmount) ?? 0) > 0 && (
+            <div className="rounded-xl p-3 bg-amber-500/10 border border-amber-500/30">
+              <p className="text-xs text-amber-400/80 mb-0.5">노쇼 방지 예치금</p>
+              <p className="text-sm font-semibold text-amber-400">
+                {(detail?.depositAmount ?? group.depositAmount)?.toLocaleString()}P
+              </p>
+              <p className="text-xs text-white/50 mt-1">참가 시 예치금 부과 · 경기 종료 후 환급 (수수료 500P 차감)</p>
+            </div>
+          )}
 
           {/* 모집 급수/레벨 */}
           {levelStr !== '-' && (
@@ -466,7 +508,25 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
 
         {/* 하단 고정 버튼 (모임 생성자: 삭제, 비생성자: 문의/참여) */}
         {isCreator ? (
-          <div className="flex-shrink-0 p-4 pt-2 border-t border-white/10 bg-black/20 backdrop-blur-md">
+          <div className="flex-shrink-0 p-4 pt-2 border-t border-white/10 bg-black/20 backdrop-blur-md space-y-2">
+            {!isCurrentlyBoosted && (
+              <button
+                type="button"
+                onClick={handleBoost}
+                disabled={isBoosting}
+                className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed border-2"
+                style={{ borderColor: '#f59e0b', color: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)' }}
+              >
+                <BoltIcon className="w-5 h-5" />
+                {isBoosting ? '적용 중...' : '슈퍼 노출 (500P)'}
+              </button>
+            )}
+            {isCurrentlyBoosted && (
+              <p className="text-center text-sm text-amber-400/90 py-1 flex items-center justify-center gap-1">
+                <BoltIcon className="w-4 h-4" />
+                슈퍼 노출 중
+              </p>
+            )}
             <button
               type="button"
               onClick={handleDelete}

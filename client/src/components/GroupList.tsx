@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { CurrencyDollarIcon } from '@heroicons/react/24/solid';
 import { getMannerGradeConfig } from '../utils/mannerGrade';
 import { SPORT_CHIP_STYLES } from '../constants/sports';
@@ -52,6 +52,10 @@ interface GroupListProps {
   onEmptyWriteClick?: () => void;
   /** 용병 모드에서 전체 종목 조회 시, 지역 필터 적용된 목록의 종목별 개수 (지역별 정렬용) */
   onCategoryCountsChange?: (counts: Record<string, number>) => void;
+  /** 용병 모드: true면 내 활동시간에 해당하는 매치만 표시, false면 모두 표시 */
+  filterByActivityTime?: boolean;
+  /** 내 활동 가능 시간표 (filterByActivityTime일 때 사용) */
+  activityTimeSlots?: Array<{ dayOfWeek: number; timeSlots: Array<{ start: string; end: string }> }>;
 }
 
 interface GroupResponse {
@@ -84,6 +88,9 @@ interface GroupResponse {
     mannerScore?: number;
     noShowCount?: number;
   };
+  boostedUntil?: string | null;
+  isBoosted?: boolean;
+  depositAmount?: number | null;
 }
 
 /** 목록용 매치 일시 표기 (예: "2/10(화) 08:00" 또는 "2/10(화) 08:00~10:00") */
@@ -236,11 +243,50 @@ const GroupTitle = ({ title, groupId }: { title: string; groupId: number }) => {
   );
 };
 
-const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sportFilterValues, selectedRegion: propSelectedRegion, selectedCity = '전체', selectedDays = [], filterDate = null, hideClosed = true, onlyRanker = false, gender = null, includeCompleted = false, onGroupClick, refreshTrigger, mapBounds = null, matchType = 'general', userCoords = null, onGroupsChange, onLoadingChange, groupsOverride, mercenaryOnly = false, optimisticParticipantCount, emptyStateSport, onEmptyWriteClick, onCategoryCountsChange }) => {
+/** meeting 시간(분 단위)이 timeSlots 내에 있는지 (start/end는 "HH:mm") */
+function isMeetingInActivitySlots(
+  meetingDate: Date,
+  slots: Array<{ dayOfWeek: number; timeSlots: Array<{ start: string; end: string }> }>
+): boolean {
+  const dayOfWeek = meetingDate.getDay();
+  const meetingMinutes = meetingDate.getHours() * 60 + meetingDate.getMinutes();
+  const daySlots = slots.filter((s) => s.dayOfWeek === dayOfWeek);
+  for (const day of daySlots) {
+    for (const ts of day.timeSlots ?? []) {
+      const [sh, sm] = (ts.start || '00:00').split(':').map(Number);
+      const [eh, em] = (ts.end || '23:59').split(':').map(Number);
+      const startM = sh * 60 + (sm || 0);
+      const endM = eh * 60 + (em || 0);
+      if (meetingMinutes >= startM && meetingMinutes <= endM) return true;
+    }
+  }
+  return false;
+}
+
+const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sportFilterValues, selectedRegion: propSelectedRegion, selectedCity = '전체', selectedDays = [], filterDate = null, hideClosed = true, onlyRanker = false, gender = null, includeCompleted = false, onGroupClick, refreshTrigger, mapBounds = null, matchType = 'general', userCoords = null, onGroupsChange, onLoadingChange, groupsOverride, mercenaryOnly = false, optimisticParticipantCount, emptyStateSport, onEmptyWriteClick, onCategoryCountsChange, filterByActivityTime = false, activityTimeSlots }) => {
   const selectedRegion = propSelectedRegion ?? selectedCity;
   const [groups, setGroups] = useState<SelectedGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 표시할 목록: groupsOverride 사용 시 해당 목록, 아니면 state. 활동시간만 보기 시 필터 적용
+  const displayedGroups = useMemo(() => {
+    const list = groupsOverride !== undefined && groupsOverride ? groupsOverride : groups;
+    if (!mercenaryOnly || !filterByActivityTime || !activityTimeSlots?.length) return list;
+    return list.filter((group) => {
+      let meetingDate: Date | null = group.parsedMeetingTime ?? null;
+      if (!meetingDate && group.meetingTime) {
+        const s = group.meetingTime.trim();
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) meetingDate = new Date(s.slice(0, 16));
+        else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(s)) {
+          const startPart = s.split('~')[0]?.trim() || s;
+          meetingDate = new Date(startPart.replace(' ', 'T') + ':00');
+        }
+      }
+      if (!meetingDate || isNaN(meetingDate.getTime())) return false;
+      return isMeetingInActivitySlots(meetingDate, activityTimeSlots);
+    });
+  }, [groupsOverride, groups, mercenaryOnly, filterByActivityTime, activityTimeSlots]);
 
   // sportFilterValues 객체 참조 대신 직렬화된 값으로 의존성 안정화 (무한 fetch 방지)
   const sportFilterKey = sportFilterValues && typeof sportFilterValues === 'object' && Object.keys(sportFilterValues).length > 0
@@ -416,6 +462,9 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
                      mannerScore: creator.mannerScore ?? 80,
                      noShowCount: creator.noShowCount ?? 0,
                    } : undefined,
+                   boostedUntil: (group as GroupResponse & { boostedUntil?: string | null }).boostedUntil ?? null,
+                   isBoosted: (group as GroupResponse & { isBoosted?: boolean }).isBoosted ?? false,
+                   depositAmount: (group as GroupResponse & { depositAmount?: number | null }).depositAmount ?? null,
                  } as SelectedGroup;
                });
 
@@ -497,6 +546,8 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
                  });
                }
 
+               // (활동시간 필터는 아래 useMemo에서 적용 — 토글 시 재계산만 하면 되도록)
+
                // ⭐ 정렬: 내 주소지와 가까운 순, 동일 거리면 일정 빠른 순
                mappedGroups.sort((a, b) => {
                  if (userCoords && userCoords.length === 2) {
@@ -577,8 +628,8 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
         }
       `}</style>
       <div className="space-y-2 md:space-y-2.5">
-        {groups.length > 0 ? (
-          groups.map((group, index) => (
+        {displayedGroups.length > 0 ? (
+          displayedGroups.map((group, index) => (
             <button
               onClick={() => onGroupClick(group)}
               className="list-item-fade-in w-full text-left block p-2 md:p-3 bg-[var(--color-bg-card)] rounded-lg md:rounded-xl border border-[var(--color-border-card)] transition-all duration-300 hover:scale-[1.02] hover:border-[var(--color-blue-primary)] cursor-pointer opacity-0"
@@ -593,6 +644,12 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
                   </div>
                   {/* 배지 표시 */}
                   <div className="flex items-center gap-1.5 flex-wrap flex-shrink-0">
+                    {group.isBoosted && (
+                      <span className="px-2 py-0.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-white text-xs font-bold rounded-full flex items-center gap-1 shadow-md" title="슈퍼 노출 중">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                        슈퍼 노출
+                      </span>
+                    )}
                     {group.badges?.isNew && (
                       <span className="px-2 py-0.5 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold rounded-full animate-pulse shadow-md">
                         NEW!
@@ -640,19 +697,19 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
                     {group.location}
                   </span>
                 </div>
-                {/* 매치 일시 · 포인트 (볼드 + 포인트 아이콘) */}
+                {/* 매치 일시 (참가비 있을 때만 포인트 표시) */}
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--color-text-secondary)] mb-1.5">
                   {formatMeetingTimeForList(group.meetingTime, group.parsedMeetingTime) && (
                     <span className="font-bold text-[var(--color-text-primary)]">
                       일시: {formatMeetingTimeForList(group.meetingTime, group.parsedMeetingTime)}
                     </span>
                   )}
-                  <span className="font-bold text-[var(--color-text-primary)] flex items-center gap-1">
-                    <CurrencyDollarIcon className="w-3.5 h-3.5 text-[var(--color-blue-primary)]" aria-hidden />
-                    포인트: {group.hasFee && group.feeAmount != null && group.feeAmount > 0
-                      ? `${Number(group.feeAmount).toLocaleString()}P`
-                      : '참가비 없음'}
-                  </span>
+                  {group.hasFee && group.feeAmount != null && group.feeAmount > 0 && (
+                    <span className="font-bold text-[var(--color-text-primary)] flex items-center gap-1">
+                      <CurrencyDollarIcon className="w-3.5 h-3.5 text-[var(--color-blue-primary)]" aria-hidden />
+                      포인트: {Number(group.feeAmount).toLocaleString()}P
+                    </span>
+                  )}
                 </div>
               </div>
               {/* 매치장 신뢰도·노쇼 배지 (매너 등급 아이콘: 그린/옐로/레드) */}

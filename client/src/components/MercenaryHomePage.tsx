@@ -32,6 +32,7 @@ const MercenaryHomePage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sportFilterValues, setSportFilterValues] = useState<Record<string, string | string[]>>({});
   const [selectedGender, setSelectedGender] = useState<'male' | 'female' | null>(null);
+  const [filterByActivityTime, setFilterByActivityTime] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<SelectedGroup | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [recruitFormOpen, setRecruitFormOpen] = useState(false);
@@ -242,6 +243,9 @@ const MercenaryHomePage = () => {
             onSportFilterChange={(key, value) => setSportFilterValues((prev) => ({ ...prev, [key]: value }))}
             selectedGender={selectedGender}
             onGenderChange={setSelectedGender}
+            showActivityCheckbox={!!user}
+            filterByActivityTime={filterByActivityTime}
+            onActivityTimeFilterChange={setFilterByActivityTime}
           />
 
           {/* 용병 구하는 매치 목록 */}
@@ -263,6 +267,8 @@ const MercenaryHomePage = () => {
               onEmptyWriteClick={() => setRecruitFormOpen(true)}
               optimisticParticipantCount={optimisticParticipantCount}
               onCategoryCountsChange={setCategoryCountsFromRegion}
+              filterByActivityTime={filterByActivityTime}
+              activityTimeSlots={user?.mercenaryAvailability}
             />
           </div>
 
@@ -281,19 +287,19 @@ const MercenaryHomePage = () => {
         />
       )}
 
-      {/* FAB: QR 스캔 (왼쪽) — 용병 구하기 탭에서만 표시. 모바일: 하단 네비(64px)+safe-area 위에 배치 */}
-      {activeTab === 'find' && (
+      {/* FAB: QR 스캔 (왼쪽) — 용병 구하기 탭, 모바일에서만 표시, 로그인 시에만 */}
+      {activeTab === 'find' && user && (
         <button
           type="button"
           onClick={() => setQrScannerOpen(true)}
-          className="fixed bottom-28 left-6 md:bottom-8 md:left-8 z-[9010] flex items-center justify-center w-12 h-12 rounded-2xl text-white font-semibold shadow-lg hover:opacity-95 active:scale-[0.98] transition-all md:safe-area-bottom bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)]"
+          className="md:hidden fixed bottom-28 left-6 z-[9010] flex items-center justify-center w-12 h-12 rounded-2xl text-white font-semibold shadow-lg hover:opacity-95 active:scale-[0.98] transition-all bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)]"
           aria-label="QR 인증 스캔"
         >
           <CameraIcon className="w-6 h-6 shrink-0" aria-hidden />
         </button>
       )}
-      {/* FAB: 용병 구하기 작성 (당근마켓 글쓰기 스타일) — 용병 구하기 탭에서만 표시. 모바일: 하단 네비(64px)+safe-area 위에 배치 */}
-      {activeTab === 'find' && (
+      {/* FAB: 용병 구하기 작성 — 용병 구하기 탭, 로그인 시에만 표시 */}
+      {activeTab === 'find' && user && (
         <button
           type="button"
           onClick={() => setRecruitFormOpen(true)}

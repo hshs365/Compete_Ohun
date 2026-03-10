@@ -20,6 +20,19 @@ export const getApiBaseUrl = (): string => {
 
 const API_BASE_URL = getApiBaseUrl();
 
+/** 카카오톡·인스타·네이버 등 인앱 브라우저 여부 (나갔다 들어와도 localStorage 사용해 로그인 유지) */
+export function isInAppBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return (
+    /KAKAOTALK/i.test(ua) ||
+    /Instagram/i.test(ua) ||
+    /NAVER/i.test(ua) ||
+    /Line\//i.test(ua) ||
+    /FBAN|FBAV/i.test(ua) // Facebook
+  );
+}
+
 /** 업로드 이미지 URL: API 베이스가 별도 오리진이면 절대 경로로 변환 (깨짐 방지) */
 export function getImageUrl(url: string | null | undefined): string {
   if (!url) return '';

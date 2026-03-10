@@ -287,6 +287,11 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Enter 키 등으로 인한 조기 제출: 아직 마지막 단계가 아니면 다음 단계로만 이동
+    if (step < TOTAL_STEPS) {
+      handleNext();
+      return;
+    }
     if (!schema || schema.fields.length === 0) {
       showError('이 종목은 아직 용병 구인 폼을 지원하지 않습니다.', '안내');
       return;

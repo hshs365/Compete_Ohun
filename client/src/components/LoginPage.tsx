@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EnvelopeIcon, LockClosedIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../contexts/AuthContext';
-import { getApiBaseUrl } from '../utils/api';
+import { getApiBaseUrl, isInAppBrowser } from '../utils/api';
 import AppLogo from './AppLogo';
 
 const LoginPage = () => {
@@ -13,7 +13,8 @@ const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(() => {
-    // localStorage에서 자동 로그인 설정 확인
+    // 인앱 브라우저(카카오톡 등)에서는 나갔다 들어와도 로그인 유지 위해 기본 체크
+    if (isInAppBrowser()) return true;
     return localStorage.getItem('remember_me') === 'true';
   });
   const [error, setError] = useState<string>('');

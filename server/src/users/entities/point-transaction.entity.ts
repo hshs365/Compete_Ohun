@@ -16,6 +16,9 @@ export enum PointTransactionType {
   REVIEW = 'review', // 선수 리뷰 작성 완료 보상
   FACILITY_REVIEW = 'facility_review', // 시설 리뷰 작성 완료 보상
   ACHIEVEMENT = 'achievement', // 업적 달성 보상
+  BOOST = 'boost', // 슈퍼 노출 (리스트 상단 고정)
+  DEPOSIT_PAY = 'deposit_pay', // 노쇼 방지 예치금 납부
+  DEPOSIT_REFUND = 'deposit_refund', // 예치금 환급
 }
 
 @Entity('point_transactions')
