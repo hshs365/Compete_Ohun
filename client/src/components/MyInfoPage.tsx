@@ -413,13 +413,21 @@ const MyInfoPage = () => {
       setIsLoading(true);
       const data = await api.get<UserProfileData>('/api/auth/me');
       
-      // 저장된 프로필 사진 확인 (localStorage에서)
-      // 현재 사용자 ID와 일치하는 프로필 사진만 사용 (재가입 시 이전 사진 방지)
-      const savedProfileImage = localStorage.getItem(`profileImage_${data.id}`);
-      // 현재 사용자 ID와 일치하는지 확인 (안전장치)
-      const profileDataWithImage = (savedProfileImage && data.id) 
-        ? { ...data, profileImage: savedProfileImage }
-        : data;
+      // 프로필 사진: API 응답(profileImageUrl) 우선. localStorage는 백엔드 형식(/uploads/...)일 때만 보조 사용
+      // 이전 배포 등에서 잘못된 형식(/upload/s/prof_10/ 등)이 캐시되면 무시
+      const apiImage = data.profileImageUrl ?? null;
+      const savedProfileImage = data.id ? localStorage.getItem(`profileImage_${data.id}`) : null;
+      const isValidUrl = (url: string) =>
+        url.startsWith('/uploads/') || url.startsWith('http') || url.startsWith('data:');
+      let profileImage = apiImage ?? null;
+      if (savedProfileImage && isValidUrl(savedProfileImage) && !apiImage) {
+        profileImage = savedProfileImage;
+      }
+      // 잘못된 형식이 localStorage에 있으면 제거 (다음 로드 시 API 값 사용)
+      if (savedProfileImage && !isValidUrl(savedProfileImage) && data.id) {
+        localStorage.removeItem(`profileImage_${data.id}`);
+      }
+      const profileDataWithImage = { ...data, profileImage };
       
       // 다른 사용자의 프로필 사진이 localStorage에 남아있을 수 있으므로 정리
       // 현재 사용자 ID와 일치하지 않는 프로필 사진 삭제
@@ -580,10 +588,11 @@ const MyInfoPage = () => {
       const res = await api.post<{ success: boolean; message?: string }>('/api/users/athlete-register');
       if (res?.success) {
         const data = await api.get<UserProfileData>('/api/auth/me');
-        const savedProfileImage = profileData?.id ? localStorage.getItem(`profileImage_${profileData.id}`) : null;
-        const profileDataWithImage = (savedProfileImage && data?.id)
-          ? { ...data, profileImage: savedProfileImage }
-          : { ...data, profileImage: data?.profileImageUrl ?? null };
+        const apiImg = data?.profileImageUrl ?? null;
+        const savedImg = profileData?.id ? localStorage.getItem(`profileImage_${profileData.id}`) : null;
+        const valid = (u: string) => u.startsWith('/uploads/') || u.startsWith('http') || u.startsWith('data:');
+        const profileImage = apiImg ?? (savedImg && valid(savedImg) ? savedImg : null);
+        const profileDataWithImage = { ...data, profileImage };
         setProfileData(profileDataWithImage);
         await showSuccess('대한체육회 선수로 등록되어 있습니다. 선수 뱃지가 적용되었습니다.', '선수 등록 완료');
       } else {
