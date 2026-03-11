@@ -51,6 +51,12 @@ export class Conversation {
   @Column({ name: 'creator_last_read_at', type: 'timestamp', nullable: true })
   creatorLastReadAt: Date | null;
 
+  @Column({ name: 'participant_left_at', type: 'timestamp', nullable: true })
+  participantLeftAt: Date | null;
+
+  @Column({ name: 'creator_left_at', type: 'timestamp', nullable: true })
+  creatorLeftAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

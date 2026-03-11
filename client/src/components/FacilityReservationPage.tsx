@@ -257,7 +257,7 @@ const FacilityReservationPage = () => {
       stars.push(<StarIconSolid key="half" className="w-4 h-4 text-yellow-400 opacity-50" />);
     }
     for (let i = stars.length; i < 5; i++) {
-      stars.push(<StarIcon key={i} className="w-4 h-4 text-gray-300" />);
+      stars.push(<StarIcon key={i} className="w-4 h-4 text-[var(--color-text-secondary)] opacity-60" />);
     }
     return stars;
   };

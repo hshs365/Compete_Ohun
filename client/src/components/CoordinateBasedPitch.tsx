@@ -3,7 +3,7 @@
  * positionX/positionY가 없으면 positionToDefaultCoords(positionCode, slotLabel)로 기본 위치 사용.
  */
 import React, { useRef, useCallback, useState } from 'react';
-import { ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
+import { ArrowsPointingOutIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import { positionToDefaultCoords, coordsToPositionAndLabel } from '../utils/tacticalPositionUtils';
 import { rpToGrade } from '../constants/rankGrade';
 import { getPremiumCardTheme } from '../constants/premiumRankCard';
@@ -226,7 +226,7 @@ export default function CoordinateBasedPitch({
                     {p.profileImageUrl ? (
                       <img src={p.profileImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover object-center" />
                     ) : (
-                      <ArrowsPointingOutIcon className={isModal ? 'w-5 h-5 text-white/40' : 'w-6 h-6 text-white/40'} />
+                      <UserCircleIcon className={isModal ? 'w-5 h-5 text-white/60' : 'w-6 h-6 text-white/60'} />
                     )}
                   </div>
                 </div>

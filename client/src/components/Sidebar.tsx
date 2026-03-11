@@ -1,11 +1,10 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useChat } from '../contexts/ChatContext';
 import {
   UserIcon,
   CalendarIcon,
-  ChatBubbleLeftEllipsisIcon,
   Cog6ToothIcon,
+  EnvelopeIcon,
   HomeIcon,
   MegaphoneIcon,
   TrophyIcon,
@@ -16,7 +15,6 @@ import {
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { openChatList } = useChat();
 
   const handleHomeClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -38,10 +36,9 @@ const Sidebar = () => {
     { name: '가이드', icon: BookOpenIcon, path: '/guide' },
   ];
 
-  const footerMenuItems: Array<{ name: string; icon: typeof MegaphoneIcon; path?: string; onOpenChat?: () => void }> = [
+  const footerMenuItems: Array<{ name: string; icon: typeof MegaphoneIcon | typeof EnvelopeIcon | typeof Cog6ToothIcon; path: string }> = [
     { name: '공지사항', icon: MegaphoneIcon, path: '/notice' },
-    { name: '채팅', icon: ChatBubbleLeftEllipsisIcon, onOpenChat: openChatList },
-    { name: '문의하기', icon: ChatBubbleLeftEllipsisIcon, path: '/contact' },
+    { name: '문의하기', icon: EnvelopeIcon, path: '/contact' },
     { name: '앱 설정', icon: Cog6ToothIcon, path: '/settings' },
   ];
 
@@ -85,30 +82,15 @@ const Sidebar = () => {
       <div className="mt-auto w-full pt-6">
         <nav className="flex flex-col items-center space-y-7 w-full">
           {footerMenuItems.map((item) => {
-            const active = item.path
-              ? location.pathname === item.path || location.pathname.startsWith(item.path + '/')
-              : false;
+            const active = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
             const baseClass = 'relative flex flex-col items-center transition-colors duration-200 w-full border-l-2 border-transparent';
             const activeClass = active
               ? 'text-white border-transparent before:content-[""] before:block before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-cyan-400'
               : 'text-gray-400 hover:text-white';
-            if (item.onOpenChat) {
-              return (
-                <button
-                  key={item.name}
-                  type="button"
-                  onClick={item.onOpenChat}
-                  className={`${baseClass} ${activeClass} cursor-pointer bg-transparent border-none`}
-                >
-                  <item.icon className="h-6 w-6" />
-                  <span className="text-xs mt-1 whitespace-nowrap">{item.name}</span>
-                </button>
-              );
-            }
             return (
               <Link
                 key={item.name}
-                to={item.path!}
+                to={item.path}
                 className={`${baseClass} ${activeClass}`}
               >
                 <item.icon className="h-6 w-6" />

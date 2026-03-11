@@ -16,6 +16,7 @@ import NotificationPanel from './components/NotificationPanel';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ChatProvider } from './contexts/ChatContext';
 import FloatingChatWidget from './components/FloatingChatWidget';
+import FloatingChatButton from './components/FloatingChatButton';
 import { api } from './utils/api';
 import { showInfo } from './utils/swal';
 import { getUserCity, type KoreanCity } from './utils/locationUtils';
@@ -36,6 +37,7 @@ import FacilityDetailPage from './components/FacilityDetailPage';
 import FacilityRegisterPage from './components/FacilityRegisterPage';
 import HallOfFamePage from './components/HallOfFamePage'; // HallOfFamePage 컴포넌트 import
 import MercenaryHomePage from './components/MercenaryHomePage';
+import MercenaryCardPage from './components/MercenaryCardPage';
 import MoreMenuPage from './components/MoreMenuPage';
 import BottomNav from './components/BottomNav';
 import SportsEquipmentPage from './components/SportsEquipmentPage';
@@ -756,6 +758,7 @@ const MainLayout = () => {
                 <FollowersPage />
               </ProtectedRoute>
             } />
+            <Route path="mercenary-card/:userId" element={<MercenaryCardPage />} />
             <Route path="match-entry/:groupId" element={
               <ProtectedRoute>
                 <MatchEntryPage />
@@ -783,6 +786,8 @@ const MainLayout = () => {
         )}
         {/* 알림 우측 슬라이드 드로어 (모든 페이지에서 접근) */}
         <NotificationPanel />
+        {/* 플로팅 채팅 버튼 (스캐너처럼 클릭 시 채팅 목록 열기) */}
+        <FloatingChatButton />
         {/* 플로팅 채팅 위젯 (우측 하단 고정, 스크롤해도 유지) */}
         <FloatingChatWidget />
         {/* 모바일 하단 네비게이션 */}

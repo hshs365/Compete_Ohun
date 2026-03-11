@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { UserGroupIcon, UserPlusIcon, UserMinusIcon, MagnifyingGlassIcon, SparklesIcon } from '@heroicons/react/24/outline';
+import { UserGroupIcon, UserPlusIcon, UserMinusIcon, MagnifyingGlassIcon, SparklesIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import { api } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { showSuccess, showError } from '../utils/swal';
@@ -334,9 +334,7 @@ const FollowersPage = () => {
                   {listUser.profileImageUrl ? (
                     <img src={listUser.profileImageUrl} alt={listUser.nickname} className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-lg font-bold text-[var(--color-text-primary)]">
-                      {(listUser.nickname || '?').charAt(0).toUpperCase()}
-                    </span>
+                    <UserCircleIcon className="w-10 h-10 text-[var(--color-text-secondary)]" />
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -413,9 +411,7 @@ const FollowersPage = () => {
                         {recUser.profileImageUrl ? (
                           <img src={recUser.profileImageUrl} alt={recUser.nickname} className="w-full h-full object-cover" />
                         ) : (
-                          <span className="text-sm font-bold text-[var(--color-text-primary)]">
-                            {(recUser.nickname || '?').charAt(0).toUpperCase()}
-                          </span>
+                          <UserCircleIcon className="w-8 h-8 text-[var(--color-text-secondary)]" />
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -463,9 +459,7 @@ const FollowersPage = () => {
                     {recUser.profileImageUrl ? (
                       <img src={recUser.profileImageUrl} alt={recUser.nickname} className="w-full h-full object-cover" />
                     ) : (
-                      <span className="text-lg font-bold text-[var(--color-text-primary)]">
-                        {(recUser.nickname || '?').charAt(0).toUpperCase()}
-                      </span>
+                      <UserCircleIcon className="w-10 h-10 text-[var(--color-text-secondary)]" />
                     )}
                   </div>
                   <span className="text-xs font-medium text-[var(--color-text-primary)] truncate w-full text-center">

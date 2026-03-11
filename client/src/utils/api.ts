@@ -33,12 +33,19 @@ export function isInAppBrowser(): boolean {
   );
 }
 
-/** 업로드 이미지 URL: API 베이스가 별도 오리진이면 절대 경로로 변환 (깨짐 방지) */
+/**
+ * 업로드 이미지 URL: 프로필·시설 등 이미지 로드 시 사용
+ * - /uploads/... 경로는 API(백엔드)에서 서빙하므로, base가 있으면 반드시 붙임
+ * - production에서 base가 ''이면 same-origin → Nginx 등에서 /uploads를 백엔드로 프록시해야 함
+ */
 export function getImageUrl(url: string | null | undefined): string {
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
   const base = getApiBaseUrl();
-  return base ? `${base.replace(/\/$/, '')}${url.startsWith('/') ? url : `/${url}`}` : url;
+  const path = url.startsWith('/') ? url : `/${url}`;
+  if (base) return `${base.replace(/\/$/, '')}${path}`;
+  // same-origin: /uploads/... 요청은 Nginx에서 백엔드(포트 3000)로 프록시 필요
+  return path;
 }
 
 /** Socket.io 연결용 URL (API와 동일 오리진) */

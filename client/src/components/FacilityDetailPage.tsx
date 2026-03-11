@@ -147,7 +147,7 @@ const FacilityDetailPage: React.FC = () => {
       stars.push(<StarIconSolid key="half" className="w-5 h-5 text-yellow-400 opacity-50" />);
     }
     for (let i = stars.length; i < 5; i++) {
-      stars.push(<StarIcon key={i} className="w-5 h-5 text-gray-300" />);
+      stars.push(<StarIcon key={i} className="w-5 h-5 text-[var(--color-text-secondary)] opacity-60" />);
     }
     return stars;
   };

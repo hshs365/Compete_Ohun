@@ -10,6 +10,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { HallOfFameQueryDto } from './dto/hall-of-fame-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { User } from './entities/user.entity';
 import { PointTransactionType } from './entities/point-transaction.entity';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -410,6 +411,42 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   async syncMyAchievements(@CurrentUser() user: User) {
     return this.achievementsService.syncAchievements(user.id);
+  }
+
+  /**
+   * 용병 명함 공개 정보 (QR 스캔 시 비로그인도 조회 가능). 토큰이 있으면 isFollowing 포함.
+   */
+  @Get(':id/mercenary-card')
+  @Public()
+  @UseGuards(JwtAuthGuard)
+  async getMercenaryCard(
+    @CurrentUser() currentUser: User | null,
+    @Param('id', ParseIntPipe) userId: number,
+  ) {
+    const targetUser = await this.usersService.findById(userId);
+    if (!targetUser) {
+      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    }
+    const effectiveRanks = getEffectiveAllcourtplayRanks(targetUser);
+    let isFollowing: boolean | undefined;
+    if (currentUser && currentUser.id !== userId) {
+      isFollowing = await this.followService.isFollowing(currentUser.id, userId);
+    }
+    return {
+      id: targetUser.id,
+      nickname: targetUser.nickname,
+      tag: targetUser.tag,
+      profileImageUrl: targetUser.profileImageUrl,
+      mannerScore: targetUser.mannerScore ?? 80,
+      interestedSports: targetUser.interestedSports || [],
+      effectiveRanks: Object.keys(effectiveRanks).length ? effectiveRanks : undefined,
+      sportPositions: targetUser.sportPositions || [],
+      mercenaryAvailability: targetUser.mercenaryAvailability || [],
+      mercenaryActiveBySport: targetUser.mercenaryActiveBySport || {},
+      mercenaryActivityStatus: targetUser.mercenaryActivityStatus ?? 'paused',
+      sportEquipment: targetUser.sportEquipment || [],
+      ...(isFollowing !== undefined && { isFollowing }),
+    };
   }
 
   /**

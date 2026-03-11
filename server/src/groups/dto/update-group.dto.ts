@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsArray, IsOptional, IsLatitude, IsLongitude, MaxLength, MinLength, IsBoolean } from 'class-validator';
+import { IsString, IsNumber, IsArray, IsOptional, IsLatitude, IsLongitude, MaxLength, MinLength, IsBoolean, IsDateString } from 'class-validator';
 
 export class UpdateGroupDto {
   @IsString()
@@ -35,6 +35,11 @@ export class UpdateGroupDto {
   @IsOptional()
   @MaxLength(200)
   meetingTime?: string;
+
+  /** 실제 모임 일시 (ISO 문자열). meetingTime보다 우선 */
+  @IsOptional()
+  @IsDateString()
+  meetingDateTime?: string;
 
   @IsString()
   @IsOptional()

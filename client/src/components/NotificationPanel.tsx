@@ -25,25 +25,25 @@ function isImportant(type: Notification['type']) {
   return IMPORTANT_TYPES.includes(type);
 }
 
-/** 알림 타입별 강조 색상: 왼쪽 테두리 + 읽지 않았을 때 배경 틴트 */
+/** 알림 타입별 강조 색상: 왼쪽 테두리 + 읽지 않았을 때 배경 틴트 (라이트/다크 테마 공통) */
 function getTypeStyle(type: Notification['type'], isRead: boolean): { border: string; bg: string } {
   if (IMPORTANT_TYPES.includes(type)) {
-    return { border: 'border-l-red-500', bg: isRead ? '' : 'bg-red-950/30 dark:bg-red-950/25' };
+    return { border: 'border-l-red-500', bg: isRead ? '' : 'bg-red-100/80 dark:bg-red-950/25' };
   }
   switch (type) {
     case 'new_follower':
-      return { border: 'border-l-blue-500', bg: isRead ? '' : 'bg-blue-950/30 dark:bg-blue-950/25' };
+      return { border: 'border-l-blue-500', bg: isRead ? '' : 'bg-blue-100/80 dark:bg-blue-950/25' };
     case 'mercenary_recruit':
-      return { border: 'border-l-amber-500', bg: isRead ? '' : 'bg-amber-950/30 dark:bg-amber-950/25' };
+      return { border: 'border-l-amber-500', bg: isRead ? '' : 'bg-amber-100/80 dark:bg-amber-950/25' };
     case 'group_join':
     case 'group_closed':
     case 'group_waitlist_spot_open':
     case 'creator_new_match':
-      return { border: 'border-l-emerald-500', bg: isRead ? '' : 'bg-emerald-950/20 dark:bg-emerald-950/20' };
+      return { border: 'border-l-emerald-500', bg: isRead ? '' : 'bg-emerald-100/70 dark:bg-emerald-950/20' };
     case 'referee_rank_match_in_region':
-      return { border: 'border-l-violet-500', bg: isRead ? '' : 'bg-violet-950/20 dark:bg-violet-950/20' };
+      return { border: 'border-l-violet-500', bg: isRead ? '' : 'bg-violet-100/70 dark:bg-violet-950/20' };
     case 'facility_reservation':
-      return { border: 'border-l-cyan-500', bg: isRead ? '' : 'bg-cyan-950/20 dark:bg-cyan-950/20' };
+      return { border: 'border-l-cyan-500', bg: isRead ? '' : 'bg-cyan-100/70 dark:bg-cyan-950/20' };
     default:
       return { border: 'border-l-neutral-500', bg: '' };
   }
@@ -164,7 +164,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
   const getNotificationCardClass = (notification: Notification) => {
     const important = isImportant(notification.type);
     const { border, bg } = getTypeStyle(notification.type, notification.isRead);
-    const cardBase = 'bg-neutral-700/90 dark:bg-neutral-800/95 border border-neutral-600/50 dark:border-neutral-600/40 text-[var(--color-text-primary)] border-l-4';
+    const cardBase = 'bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)] border-l-4';
     return `${cardBase} ${border} ${bg}`.trim();
   };
 
@@ -220,7 +220,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
         tabIndex={0}
         onClick={() => handleNotificationClick(notification)}
         onKeyDown={(e) => e.key === 'Enter' && handleNotificationClick(notification)}
-        className={`${cardClass} rounded-lg p-3 flex items-start gap-3 transition-colors ${!notification.isRead ? 'ring-1 ring-neutral-400/50' : 'opacity-90'} ${isCancelled ? 'cursor-default' : 'cursor-pointer hover:bg-neutral-600/90 dark:hover:bg-neutral-700/90'}`}
+        className={`${cardClass} rounded-lg p-3 flex items-start gap-3 transition-colors ${!notification.isRead ? 'ring-1 ring-[var(--color-border-card)]' : 'opacity-90'} ${isCancelled ? 'cursor-default' : 'cursor-pointer hover:bg-[var(--color-bg-primary)]'}`}
       >
         {important ? (
           <ExclamationTriangleIcon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${getTypeIconColor(notification.type)}`} />
@@ -231,11 +231,11 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
           <div className="flex items-center gap-2 mb-1">
             <p className="text-xs font-semibold">{notification.title}</p>
             {notification.isRead && (
-              <span className="text-xs opacity-60">(읽음)</span>
+              <span className="text-xs text-[var(--color-text-secondary)]">(읽음)</span>
             )}
           </div>
           <p className="text-sm break-words">{notification.message}</p>
-          <p className="text-xs opacity-75 mt-1">
+          <p className="text-xs text-[var(--color-text-secondary)] mt-1">
             {new Date(notification.createdAt).toLocaleString('ko-KR', {
               year: 'numeric',
               month: 'short',
@@ -250,7 +250,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
             e.stopPropagation();
             removeNotification(notification.id);
           }}
-          className="flex-shrink-0 p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+          className="flex-shrink-0 p-1 rounded hover:bg-[var(--color-bg-primary)] transition-colors text-[var(--color-text-secondary)]"
           aria-label="알림 삭제"
         >
           <XMarkIcon className="w-4 h-4" />
@@ -272,19 +272,19 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
         aria-hidden
       />
 
-      {/* 우측 슬라이드 드로어: 진한 무채색 배경 */}
+      {/* 우측 슬라이드 드로어: 테마 배경/텍스트 적용 */}
       <aside
-        className={`fixed top-0 right-0 h-full w-full max-w-sm sm:max-w-md bg-neutral-800/98 dark:bg-neutral-900/98 border-l border-neutral-600/50 shadow-2xl z-[9999] flex flex-col transition-transform duration-300 ease-out ${isDrawerOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed top-0 right-0 h-full w-full max-w-sm sm:max-w-md bg-[var(--color-bg-card)] border-l border-[var(--color-border-card)] shadow-2xl z-[9999] flex flex-col transition-transform duration-300 ease-out ${isDrawerOpen ? 'translate-x-0' : 'translate-x-full'}`}
         aria-label="알림"
         aria-hidden={!isDrawerOpen}
       >
         {/* 헤더: 스크롤 시에도 상단 고정(Sticky) + 모두 읽음 */}
-        <div className="sticky top-0 z-20 flex-shrink-0 p-4 border-b border-neutral-600/50 flex flex-col gap-3 bg-neutral-800/98 dark:bg-neutral-900/98">
+        <div className="sticky top-0 z-20 flex-shrink-0 p-4 border-b border-[var(--color-border-card)] flex flex-col gap-3 bg-[var(--color-bg-card)]">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">알림</h2>
             <button
               onClick={closeDrawer}
-              className="p-2 hover:bg-neutral-700 rounded-lg transition-colors text-neutral-300"
+              className="p-2 hover:bg-[var(--color-bg-secondary)] rounded-lg transition-colors text-[var(--color-text-secondary)]"
               aria-label="알림 패널 닫기"
             >
               <XMarkIcon className="w-5 h-5" />
@@ -294,7 +294,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
             <button
               type="button"
               onClick={markAllAsRead}
-              className="w-full py-2 px-3 text-sm font-medium rounded-lg bg-neutral-700 hover:bg-neutral-600 text-neutral-200 transition-colors"
+              className="w-full py-2 px-3 text-sm font-medium rounded-lg bg-[var(--color-bg-secondary)] hover:opacity-90 text-[var(--color-text-primary)] transition-colors"
             >
               모두 읽음
             </button>
@@ -305,18 +305,18 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
         <div className="flex-1 overflow-y-auto min-h-0">
           {isLoading ? (
             <div className="p-6 text-center">
-              <p className="text-sm text-neutral-400">알림을 불러오는 중...</p>
+              <p className="text-sm text-[var(--color-text-secondary)]">알림을 불러오는 중...</p>
             </div>
           ) : notifications.length === 0 ? (
             <div className="p-8 text-center">
-              <BellIcon className="w-12 h-12 text-neutral-500 mx-auto mb-3 opacity-50" />
-              <p className="text-sm text-neutral-400">알림이 없습니다.</p>
+              <BellIcon className="w-12 h-12 text-[var(--color-text-secondary)] mx-auto mb-3 opacity-50" />
+              <p className="text-sm text-[var(--color-text-secondary)]">알림이 없습니다.</p>
             </div>
           ) : (
             <div className="p-3 space-y-3">
               {/* 중요 알림: 최상단 고정(스티키) */}
               {importantList.length > 0 && (
-                <div className="sticky top-0 z-10 space-y-2 pb-2 -mx-1 px-1 bg-neutral-800/98 dark:bg-neutral-900/98 pt-1">
+                <div className="sticky top-0 z-10 space-y-2 pb-2 -mx-1 px-1 bg-[var(--color-bg-card)] pt-1">
                   <p className="text-xs font-semibold text-red-500 uppercase tracking-wide">중요</p>
                   {importantList.map((n) => renderNotificationItem(n, true))}
                 </div>

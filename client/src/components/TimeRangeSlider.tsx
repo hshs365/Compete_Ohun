@@ -45,7 +45,8 @@ const TimeRangeSlider: React.FC<TimeRangeSliderProps> = ({
   pointColor = '#22c55e',
 }) => {
   const trackRef = useRef<HTMLDivElement>(null);
-  const [activeHandle, setActiveHandle] = useState<'start' | 'end' | null>(null);
+  const [activeHandle, setActiveHandle] = useState<'start' | 'end' | 'bar' | null>(null);
+  const barDragRef = useRef<{ clientX: number; startSlot: number; endSlot: number } | null>(null);
 
   const rawStart = timeToSlot(startTime || '18:00');
   const rawEnd = timeToSlot(endTime || '20:00');
@@ -74,31 +75,63 @@ const TimeRangeSlider: React.FC<TimeRangeSliderProps> = ({
       } else if (activeHandle === 'end') {
         const newEnd = Math.max(clampedSlot, startSlot + MIN_SLOTS);
         onChange(slotToTime(startSlot), slotToTime(newEnd));
+      } else if (activeHandle === 'bar' && barDragRef.current) {
+        const { clientX: initX, startSlot: initStart, endSlot: initEnd } = barDragRef.current;
+        const initSlot = Math.round(getSlotFromClientX(initX));
+        const deltaSlots = slot - initSlot;
+        const duration = initEnd - initStart;
+        let newStart = initStart + deltaSlots;
+        let newEnd = initEnd + deltaSlots;
+        if (newStart < 0) {
+          newStart = 0;
+          newEnd = Math.min(SLOT_COUNT, duration);
+        } else if (newEnd > SLOT_COUNT) {
+          newEnd = SLOT_COUNT;
+          newStart = Math.max(0, SLOT_COUNT - duration);
+        }
+        onChange(slotToTime(newStart), slotToTime(newEnd));
       }
     },
     [activeHandle, startSlot, endSlot, getSlotFromClientX, onChange]
   );
 
-  const handleMouseDown = (e: React.MouseEvent, handle: 'start' | 'end') => {
+  const handleMouseDown = (e: React.MouseEvent, handle: 'start' | 'end' | 'bar') => {
     e.preventDefault();
+    if (handle === 'bar') {
+      barDragRef.current = { clientX: e.clientX, startSlot, endSlot };
+    }
     setActiveHandle(handle);
   };
 
-  const handleTouchStart = (_e: React.TouchEvent, handle: 'start' | 'end') => {
+  const handleTouchStart = (e: React.TouchEvent, handle: 'start' | 'end' | 'bar') => {
+    if (handle === 'bar' && e.touches[0]) {
+      barDragRef.current = {
+        clientX: e.touches[0].clientX,
+        startSlot,
+        endSlot,
+      };
+    }
     setActiveHandle(handle);
   };
+
 
   React.useEffect(() => {
     if (activeHandle === null) return;
 
     const onMouseMove = (e: MouseEvent) => handleMove(e.clientX);
-    const onMouseUp = () => setActiveHandle(null);
+    const onMouseUp = () => {
+      barDragRef.current = null;
+      setActiveHandle(null);
+    };
 
     const onTouchMove = (e: TouchEvent) => {
       e.preventDefault();
       if (e.touches[0]) handleMove(e.touches[0].clientX);
     };
-    const onTouchEnd = () => setActiveHandle(null);
+    const onTouchEnd = () => {
+      barDragRef.current = null;
+      setActiveHandle(null);
+    };
 
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
@@ -145,14 +178,19 @@ const TimeRangeSlider: React.FC<TimeRangeSliderProps> = ({
           />
         ))}
 
-        {/* 선택된 범위 */}
+        {/* 선택된 범위 (바 전체 드래그로 이동) */}
         <div
-          className="absolute top-0 h-full rounded-full transition-colors"
+          className="absolute top-0 h-full rounded-full transition-colors cursor-grab active:cursor-grabbing touch-manipulation z-[5]"
           style={{
             left: `${startPct}%`,
             width: `${rangePct}%`,
             backgroundColor: pointColor + '50',
           }}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            handleMouseDown(e, 'bar');
+          }}
+          onTouchStart={(e) => handleTouchStart(e, 'bar')}
         />
 
         {/* 시작 핸들 (모바일 터치 타겟 44px) */}

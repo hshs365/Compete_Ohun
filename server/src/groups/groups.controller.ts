@@ -375,5 +375,31 @@ export class GroupsController {
       overall: body.overall,
     });
   }
+
+  /** 용병 구하기 매치: 호스트 전용 용병 리뷰 작성 가능 여부 및 목록 */
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/mercenary-review-eligibility')
+  async getMercenaryReviewEligibility(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+  ) {
+    return this.groupsService.getMercenaryReviewEligibility(id, user.id);
+  }
+
+  /** 용병 리뷰 제출 (노쇼/장비 미지참/매너 좋음 선택) */
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/mercenary-review')
+  @HttpCode(HttpStatus.CREATED)
+  async submitMercenaryReview(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: User,
+    @Body() body: { noShowIds?: number[]; noEquipmentIds?: number[]; goodMannerIds?: number[] },
+  ) {
+    return this.groupsService.submitMercenaryReview(id, user.id, {
+      noShowIds: body.noShowIds ?? [],
+      noEquipmentIds: body.noEquipmentIds ?? [],
+      goodMannerIds: body.goodMannerIds ?? [],
+    });
+  }
 }
 

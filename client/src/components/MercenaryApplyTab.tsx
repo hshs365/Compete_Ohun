@@ -91,7 +91,7 @@ const MercenaryApplyTab: React.FC<MercenaryApplyTabProps> = ({
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <StarIcon className="w-5 h-5" style={{ color: trustColors.point }} />
-              <span className={`font-bold ${trustColors.text}`}>{mannerScore}점</span>
+              <span className="badge-text-contrast font-bold">{mannerScore}점</span>
               <span className="text-xs text-[var(--color-text-secondary)]">매너</span>
             </div>
             {Object.keys(effectiveRanks).length > 0 && (

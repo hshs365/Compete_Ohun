@@ -6,7 +6,8 @@ import {
   XCircleIcon,
 } from '@heroicons/react/24/solid';
 import { PencilSquareIcon as PencilIcon } from '@heroicons/react/24/outline';
-import { SPORT_ICONS, SPORT_CHIP_STYLES } from '../constants/sports';
+import { QRCodeSVG } from 'qrcode.react';
+import { SPORT_ICONS, SPORT_CHIP_STYLES, SPORT_POINT_COLORS } from '../constants/sports';
 import { getRankDisplayLabel } from '../constants/allcourtplayRank';
 import { getMannerTrustColors } from '../utils/mannerTrustColors';
 import { getMannerGradeConfig } from '../utils/mannerGrade';
@@ -47,11 +48,17 @@ const MercenaryJobseekerDashboard: React.FC = () => {
   const effectiveRanks = profile?.effectiveRanks ?? user?.effectiveRanks ?? user?.ohunRanks ?? {};
   const mainSports = user?.interestedSports ?? [];
   const sportPositions = user?.sportPositions ?? [];
+  const sportEquipment = user?.sportEquipment ?? [];
   const activityStatus = user?.mercenaryActivityStatus ?? 'paused';
   const availability = user?.mercenaryAvailability ?? [];
   const activeBySport = user?.mercenaryActiveBySport ?? {};
 
   const hasProfile = mainSports.length > 0 || Object.keys(effectiveRanks).length > 0;
+
+  /** 내정보에서 등록한 프로필 사진: API URL 우선, 없으면 localStorage (내정보 업로드 시 저장) */
+  const profileImageUrl =
+    user?.profileImageUrl ??
+    (user?.id && typeof localStorage !== 'undefined' ? localStorage.getItem(`profileImage_${user.id}`) : null);
 
   const handleActivityStatusChange = async (next: 'active' | 'paused') => {
     try {
@@ -151,11 +158,11 @@ const MercenaryJobseekerDashboard: React.FC = () => {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      {/* 내 용병 명함 카드 — 모바일 터치 영역 확대 */}
+      {/* 내 용병 명함 카드 — 화이트모드: 부드러운 중성 배경, 뱃지는 명함과 구분 */}
       <section className="shrink-0 p-4 md:p-5">
         <div
-          className={`rounded-2xl border-2 p-5 md:p-6 ${trustColors.bg} ${trustColors.border}`}
-          style={{ borderColor: trustColors.point + '60' }}
+          className="rounded-2xl border-2 border-l-4 p-5 md:p-6 bg-slate-50/95 dark:bg-emerald-900/20 border-slate-200/90 dark:border-emerald-500/30"
+          style={{ borderLeftColor: trustColors.point }}
         >
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-[var(--color-text-secondary)]">
@@ -173,8 +180,8 @@ const MercenaryJobseekerDashboard: React.FC = () => {
           </div>
           <div className="flex gap-4 mb-4">
             <div className="w-20 h-20 shrink-0 rounded-full overflow-hidden bg-[var(--color-bg-secondary)] border-2 flex items-center justify-center" style={{ borderColor: trustColors.point + '60' }}>
-              {user?.profileImageUrl ? (
-                <img src={getImageUrl(user.profileImageUrl)} alt={user.nickname ?? '프로필'} className="w-full h-full object-cover" />
+              {profileImageUrl ? (
+                <img src={getImageUrl(profileImageUrl)} alt={user?.nickname ?? '프로필'} className="w-full h-full object-cover" />
               ) : (
                 <UserCircleIcon className="w-12 h-12 text-[var(--color-text-secondary)]" />
               )}
@@ -187,8 +194,8 @@ const MercenaryJobseekerDashboard: React.FC = () => {
                     <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${mannerConfig.bg} ${mannerConfig.border} min-h-[44px]`}>
                       <span className="text-xl" aria-hidden>{mannerConfig.icon}</span>
                       <div>
-                        <span className={`text-lg font-bold ${mannerConfig.textColor}`}>{mannerScore}</span>
-                        <span className="text-sm text-[var(--color-text-secondary)] ml-1">점 · {mannerConfig.label}</span>
+                        <span className="badge-text-contrast text-lg font-bold">{mannerScore}</span>
+                        <span className="badge-text-contrast text-sm ml-1 opacity-90">점 · {mannerConfig.label}</span>
                       </div>
                     </div>
                   );
@@ -199,11 +206,12 @@ const MercenaryJobseekerDashboard: React.FC = () => {
               )}
               <div className="flex flex-wrap gap-2">
                 {mainSports.map((sport) => {
-                  const chip = SPORT_CHIP_STYLES[sport] ?? SPORT_CHIP_STYLES['전체'];
+                  const sportColor = SPORT_POINT_COLORS[sport] ?? POINT_COLOR;
                   return (
                     <span
                       key={sport}
-                      className={`px-3 py-1 rounded-lg text-sm font-medium border ${chip.bg} ${chip.border} ${chip.text}`}
+                      className="px-3 py-1.5 rounded-lg text-sm font-medium border bg-white/95 dark:bg-white/10 shadow-sm text-[var(--color-text-primary)]"
+                      style={{ borderColor: sportColor + '99' }}
                     >
                       {SPORT_ICONS[sport] ?? '●'} {sport}
                     </span>
@@ -216,12 +224,13 @@ const MercenaryJobseekerDashboard: React.FC = () => {
             <div className="flex flex-wrap gap-2 mb-3">
               <span className="text-xs text-[var(--color-text-secondary)] w-full">종목별 등급</span>
               {Object.entries(effectiveRanks).map(([sport, grade]) => {
-                const chip = SPORT_CHIP_STYLES[sport] ?? SPORT_CHIP_STYLES['전체'];
+                const rankBadgeColor = SPORT_POINT_COLORS[sport] ?? POINT_COLOR;
                 const displayGrade = getRankDisplayLabel(sport, grade);
                 return (
                   <span
                     key={sport}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium border ${chip.bg} ${chip.border} ${chip.text}`}
+                    className="px-3 py-1.5 rounded-lg text-sm font-medium border bg-white/95 dark:bg-white/10 shadow-sm text-[var(--color-text-primary)]"
+                    style={{ borderColor: rankBadgeColor + '99' }}
                   >
                     {SPORT_ICONS[sport] ?? ''} {displayGrade}
                   </span>
@@ -234,6 +243,33 @@ const MercenaryJobseekerDashboard: React.FC = () => {
               선호 역할: {sportPositions.map((sp) => `${sp.sport} ${sp.positions.join(', ')}`).join(' / ')}
             </p>
           )}
+          {sportEquipment.length > 0 && (
+            <div className="pt-4 mt-4 border-t border-[var(--color-border-card)]">
+              <p className="text-xs text-[var(--color-text-secondary)] mb-2">종목별 보유 장비</p>
+              <div className="space-y-2">
+                {sportEquipment.map(({ sport, equipment }) =>
+                  equipment.length > 0 ? (
+                    <p key={sport} className="text-sm text-[var(--color-text-primary)]">
+                      {SPORT_ICONS[sport] ?? '●'} {sport}: {equipment.join(', ')}
+                    </p>
+                  ) : null
+                )}
+              </div>
+            </div>
+          )}
+          <div className="mt-4 pt-4 border-t border-[var(--color-border-card)] flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs text-[var(--color-text-secondary)] mb-1">QR로 명함 공유</p>
+              <p className="text-sm text-[var(--color-text-primary)]">스캔하면 내 용병 명함이 열려요</p>
+            </div>
+            <div className="shrink-0 p-2 bg-white dark:bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border-card)]">
+              <QRCodeSVG
+                value={typeof window !== 'undefined' ? `${window.location.origin}/mercenary-card/${user?.id ?? ''}` : ''}
+                size={80}
+                level="M"
+              />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -288,7 +324,7 @@ const MercenaryJobseekerDashboard: React.FC = () => {
                       key={sport}
                       className={`flex flex-col sm:flex-row sm:items-center gap-3 py-3 border-b border-[var(--color-border-card)] last:border-0 ${disabled ? 'opacity-60' : ''}`}
                     >
-                      <span className={`inline-flex items-center w-fit px-3 py-1.5 rounded-lg text-sm font-medium border ${chip.bg} ${chip.border} ${chip.text}`}>
+                      <span className={`badge-text-contrast inline-flex items-center w-fit px-3 py-1.5 rounded-lg text-sm font-medium border ${chip.bg} ${chip.border}`}>
                         {SPORT_ICONS[sport] ?? '●'} {sport}
                       </span>
                       <div className="flex rounded-xl p-1 bg-[var(--color-bg-secondary)] w-full sm:w-auto sm:min-w-[180px]">

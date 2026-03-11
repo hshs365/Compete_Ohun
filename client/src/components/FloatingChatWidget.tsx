@@ -10,6 +10,9 @@ import {
   PaperAirplaneIcon,
   ChevronLeftIcon,
   ChatBubbleLeftRightIcon,
+  MapPinIcon,
+  ArrowRightOnRectangleIcon,
+  UserCircleIcon,
 } from '@heroicons/react/24/outline';
 import { useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
@@ -20,10 +23,30 @@ import {
   type ConversationListItem,
 } from '../contexts/ChatContext';
 import { getMannerGradeConfig } from '../utils/mannerGrade';
-import { showError } from '../utils/swal';
+import { showError, showConfirm } from '../utils/swal';
 
 const CHAT_PRIMARY = '#8b5cf6';
 const CHAT_HISTORY_KEY = 'chat_widget_open';
+const CHAT_PINNED_IDS_KEY = 'chat_pinned_ids';
+
+function getPinnedIds(): number[] {
+  try {
+    const s = localStorage.getItem(CHAT_PINNED_IDS_KEY);
+    if (!s) return [];
+    const arr = JSON.parse(s);
+    return Array.isArray(arr) ? arr.filter((x) => typeof x === 'number') : [];
+  } catch {
+    return [];
+  }
+}
+
+function setPinnedIds(ids: number[]) {
+  try {
+    localStorage.setItem(CHAT_PINNED_IDS_KEY, JSON.stringify(ids));
+  } catch {
+    /* ignore */
+  }
+}
 /** 모바일 하단 네비게이션 높이 (채팅 패널이 하단바를 가리지 않도록 여백 확보) */
 const BOTTOM_NAV_HEIGHT = 64;
 
@@ -86,6 +109,14 @@ const FloatingChatWidget: React.FC = () => {
   const socketRef = useRef<Socket | null>(null);
   const touchStartY = useRef(0);
   const touchCurrentY = useRef(0);
+  const [pinnedIds, setPinnedIdsState] = useState<number[]>(() => getPinnedIds());
+  const [contextMenu, setContextMenu] = useState<{
+    convId: number;
+    isPinned: boolean;
+    rect: DOMRect;
+  } | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ignoreNextClick = useRef(false);
 
   const fetchConversations = useCallback(async () => {
     if (!user) return;
@@ -331,6 +362,72 @@ const FloatingChatWidget: React.FC = () => {
     }
   };
 
+  const closeContextMenu = useCallback(() => {
+    ignoreNextClick.current = false;
+    setContextMenu(null);
+  }, []);
+
+  const togglePin = useCallback((convId: number) => {
+    setPinnedIdsState((prev) => {
+      const next = prev.includes(convId) ? prev.filter((id) => id !== convId) : [convId, ...prev];
+      setPinnedIds(next);
+      return next;
+    });
+    closeContextMenu();
+  }, [closeContextMenu]);
+
+  const handleLeaveConversation = useCallback(
+    async (convId: number) => {
+      const ok = await showConfirm('채팅방을 나가시겠습니까? 나가면 대화 내용이 목록에서 사라집니다.', '채팅방 나가기', '나가기', '취소');
+      if (!ok) return;
+      closeContextMenu();
+      try {
+        await api.delete(`/api/chat/conversations/${convId}`);
+        setConversations((prev) => prev.filter((c) => c.id !== convId));
+        if (activeConversationId === convId) {
+          goBackToList();
+          fetchConversations();
+        }
+        setPinnedIdsState((prev) => {
+          const next = prev.filter((id) => id !== convId);
+          setPinnedIds(next);
+          return next;
+        });
+      } catch {
+        showError('채팅방 나가기에 실패했습니다.', '실패');
+      }
+    },
+    [activeConversationId, goBackToList, fetchConversations, setConversations, closeContextMenu]
+  );
+
+  const handleChatItemContextMenu = useCallback((e: React.MouseEvent | React.TouchEvent, convId: number, isPinned: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    setContextMenu({ convId, isPinned, rect });
+  }, []);
+
+  const handleChatItemTouchStart = useCallback((convId: number, isPinned: boolean) => {
+    ignoreNextClick.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressTimer.current = null;
+      ignoreNextClick.current = true;
+      const chatItem = document.querySelector(`[data-chat-conv-id="${convId}"]`) as HTMLElement;
+      if (chatItem) {
+        const rect = chatItem.getBoundingClientRect();
+        setContextMenu({ convId, isPinned, rect });
+      }
+    }, 500);
+  }, []);
+
+  const handleChatItemTouchEnd = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -364,12 +461,8 @@ const FloatingChatWidget: React.FC = () => {
       )}
 
       <div
-        className="fixed z-[9999] flex flex-col overflow-hidden border border-white/10 shadow-2xl transition-all duration-200 ease-out md:bottom-4 md:right-4 md:rounded-2xl"
+        className="fixed z-[9999] flex flex-col overflow-hidden bg-[var(--color-bg-card)] border border-[var(--color-border-card)] shadow-2xl transition-all duration-200 ease-out md:bottom-4 md:right-4 md:rounded-2xl"
         style={{
-          background:
-            'linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(30,41,59,0.98) 100%)',
-          backdropFilter: 'blur(16px)',
-          boxShadow: `0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(139,92,246,0.2)`,
           ...(isMobileView
             ? {
                 top: viewportOffsetTop,
@@ -391,7 +484,7 @@ const FloatingChatWidget: React.FC = () => {
       >
         {/* 헤더 */}
         <div
-          className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-white/10"
+          className="shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-[var(--color-border-card)]"
           style={{ borderBottomColor: `${CHAT_PRIMARY}30` }}
           onTouchStart={isMobileView ? handleTouchStart : undefined}
           onTouchMove={isMobileView ? handleTouchMove : undefined}
@@ -399,7 +492,7 @@ const FloatingChatWidget: React.FC = () => {
         >
           {isMobileView && (
             <div className="flex justify-center pt-2 pb-1 absolute top-0 left-0 right-0">
-              <div className="w-10 h-1 rounded-full bg-white/30" aria-hidden />
+              <div className="w-10 h-1 rounded-full bg-[var(--color-text-secondary)] opacity-50" aria-hidden />
             </div>
           )}
           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -407,18 +500,18 @@ const FloatingChatWidget: React.FC = () => {
               <button
                 type="button"
                 onClick={handleBackToList}
-                className="shrink-0 p-1.5 rounded-lg hover:bg-white/10 text-white/80 touch-manipulation"
+                className="shrink-0 p-1.5 rounded-lg hover:bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] touch-manipulation"
                 aria-label="뒤로"
               >
                 <ChevronLeftIcon className="w-5 h-5" />
               </button>
             )}
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-white truncate">
+              <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">
                 {headerTitle}
               </p>
               {meta && (
-                <p className="text-xs text-white/60 truncate">
+                <p className="text-xs text-[var(--color-text-secondary)] truncate">
                   {meta.otherNickname}
                   {meta.meetingDateTime && ` · ${formatMeetingDate(meta.meetingDateTime)}`}
                 </p>
@@ -428,7 +521,7 @@ const FloatingChatWidget: React.FC = () => {
           <button
             type="button"
             onClick={handleRequestClose}
-            className="shrink-0 p-2 rounded-lg active:bg-white/10 text-white/80 touch-manipulation"
+            className="shrink-0 p-2 rounded-lg active:bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] touch-manipulation"
             aria-label="닫기"
           >
             <XMarkIcon className="w-5 h-5" />
@@ -442,11 +535,11 @@ const FloatingChatWidget: React.FC = () => {
               {!user ? (
                 <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
                   <ChatBubbleLeftRightIcon
-                    className="w-12 h-12 text-white/30 mb-3"
+                    className="w-12 h-12 text-[var(--color-text-secondary)] opacity-50 mb-3"
                     aria-hidden
                   />
-                  <p className="text-white/80 text-sm font-medium">로그인이 필요합니다</p>
-                  <p className="text-white/50 text-xs mt-1 mb-5">
+                  <p className="text-[var(--color-text-primary)] text-sm font-medium">로그인이 필요합니다</p>
+                  <p className="text-[var(--color-text-secondary)] text-xs mt-1 mb-5">
                     채팅을 이용하려면 로그인해 주세요.
                   </p>
                   <button
@@ -462,51 +555,79 @@ const FloatingChatWidget: React.FC = () => {
                   </button>
                 </div>
               ) : isLoadingList ? (
-                <div className="flex justify-center py-8 text-white/50 text-sm">
+                <div className="flex justify-center py-8 text-[var(--color-text-secondary)] text-sm">
                   불러오는 중...
                 </div>
               ) : conversations.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
                   <ChatBubbleLeftRightIcon
-                    className="w-12 h-12 text-white/30 mb-2"
+                    className="w-12 h-12 text-[var(--color-text-secondary)] opacity-50 mb-2"
                     aria-hidden
                   />
-                  <p className="text-white/50 text-sm">아직 대화가 없습니다</p>
-                  <p className="text-white/40 text-xs mt-1">
+                  <p className="text-[var(--color-text-secondary)] text-sm">아직 대화가 없습니다</p>
+                  <p className="text-[var(--color-text-secondary)] text-xs mt-1 opacity-80">
                     용병 상세에서 채팅으로 문의하기를 눌러 시작하세요
                   </p>
                 </div>
               ) : (
-                <div className="divide-y divide-white/5">
-                  {conversations.map((c) => (
+                <div className="divide-y divide-[var(--color-border-card)]">
+                  {(() => {
+                    const pinned = conversations.filter((c) => pinnedIds.includes(c.id));
+                    const unpinned = conversations.filter((c) => !pinnedIds.includes(c.id));
+                    const sortedPinned = pinnedIds
+                      .filter((id) => conversations.some((c) => c.id === id))
+                      .map((id) => conversations.find((c) => c.id === id)!)
+                      .filter(Boolean);
+                    const sorted = [...sortedPinned, ...unpinned];
+                    return sorted.map((c) => {
+                      const isPinned = pinnedIds.includes(c.id);
+                      return (
                     <button
                       key={c.id}
+                      data-chat-conv-id={c.id}
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
+                        if (contextMenu || ignoreNextClick.current) {
+                          ignoreNextClick.current = false;
+                          return;
+                        }
                         openConversation(c.id, {
                           groupName: c.groupName ?? '',
                           meetingDateTime: c.meetingDateTime,
                           otherNickname: c.otherUser?.nickname ?? '알 수 없음',
                           otherMannerScore: 80,
                           isHost: c.isHost,
-                        })
-                      }
-                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/5 active:bg-white/10 transition-colors"
+                        });
+                      }}
+                      onContextMenu={(e) => handleChatItemContextMenu(e, c.id, isPinned)}
+                      onTouchStart={() => handleChatItemTouchStart(c.id, isPinned)}
+                      onTouchEnd={handleChatItemTouchEnd}
+                      onTouchCancel={handleChatItemTouchEnd}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[var(--color-bg-secondary)] active:bg-[var(--color-bg-primary)] transition-colors relative"
                     >
-                      <div className="shrink-0 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white font-semibold">
-                        {(c.otherUser?.nickname ?? '?').charAt(0)}
+                      <div className="shrink-0 w-10 h-10 rounded-full bg-[var(--color-bg-secondary)] flex items-center justify-center text-[var(--color-text-secondary)] relative">
+                        <UserCircleIcon className="w-8 h-8" />
+                        {isPinned && (
+                          <span
+                            className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center"
+                            style={{ backgroundColor: CHAT_PRIMARY }}
+                            title="상단 고정"
+                          >
+                            <MapPinIcon className="w-2.5 h-2.5 text-white" strokeWidth={2.5} />
+                          </span>
+                        )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-white truncate">
+                        <p className="text-sm font-medium text-[var(--color-text-primary)] truncate">
                           {c.otherUser?.nickname ?? '알 수 없음'}
                         </p>
-                        <p className="text-xs text-white/50 truncate">
+                        <p className="text-xs text-[var(--color-text-secondary)] truncate">
                           {c.isHost ? c.groupName : `매치: ${c.groupName}`}
                           {c.meetingDateTime &&
                             ` · ${formatMeetingDate(c.meetingDateTime)}`}
                         </p>
                         {c.lastMessage && (
-                          <p className="text-xs text-white/40 truncate mt-0.5">
+                          <p className="text-xs text-[var(--color-text-secondary)] truncate mt-0.5 opacity-90">
                             {c.lastMessage.content}
                           </p>
                         )}
@@ -520,15 +641,56 @@ const FloatingChatWidget: React.FC = () => {
                         </span>
                       )}
                     </button>
-                  ))}
+                      );
+                    });
+                  })()}
                 </div>
+              )}
+
+              {/* 컨텍스트 메뉴: 상단 고정 / 채팅방 나가기 (롱프레스·우클릭) */}
+              {contextMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-[10001]"
+                    onClick={closeContextMenu}
+                    aria-hidden
+                  />
+                  <div
+                    className="fixed z-[10002] rounded-xl border border-[var(--color-border-card)] bg-[var(--color-bg-card)] shadow-lg overflow-hidden min-w-[160px]"
+                    style={
+                      isMobileView
+                        ? { left: 16, right: 16, bottom: BOTTOM_NAV_HEIGHT + 16 }
+                        : {
+                            top: Math.min(contextMenu.rect.bottom + 4, window.innerHeight - 120),
+                            left: Math.min(contextMenu.rect.left, window.innerWidth - 180),
+                          }
+                    }
+                  >
+                    <button
+                      type="button"
+                      onClick={() => togglePin(contextMenu.convId)}
+                      className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] transition-colors"
+                    >
+                      <MapPinIcon className="w-4 h-4" />
+                      {contextMenu.isPinned ? '고정 해제' : '상단 고정'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleLeaveConversation(contextMenu.convId)}
+                      className="w-full flex items-center gap-2 px-4 py-3 text-left text-sm text-red-500 hover:bg-red-500/10 transition-colors"
+                    >
+                      <ArrowRightOnRectangleIcon className="w-4 h-4" />
+                      채팅방 나가기
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           ) : (
             /* 개별 대화 */
             <>
               {meta && (
-                <div className="shrink-0 px-4 py-1.5 border-b border-white/5 flex items-center gap-2">
+                <div className="shrink-0 px-4 py-1.5 border-b border-[var(--color-border-card)] flex items-center gap-2">
                   <span
                     className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
                       mannerConfig?.badgeClass ?? ''
@@ -536,7 +698,7 @@ const FloatingChatWidget: React.FC = () => {
                   >
                     {mannerConfig?.icon} {meta.otherMannerScore}점
                   </span>
-                  <span className="text-xs text-white/50">
+                  <span className="text-xs text-[var(--color-text-secondary)]">
                     {meta.groupName}
                     {meta.meetingDateTime &&
                       ` · ${formatMeetingDate(meta.meetingDateTime)}`}
@@ -545,7 +707,7 @@ const FloatingChatWidget: React.FC = () => {
               )}
               {error ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
-                  <p className="text-white/60 text-sm text-center">{error}</p>
+                  <p className="text-[var(--color-text-secondary)] text-sm text-center">{error}</p>
                   <button
                     type="button"
                     onClick={handleBackToList}
@@ -556,7 +718,7 @@ const FloatingChatWidget: React.FC = () => {
                   </button>
                 </div>
               ) : isLoading ? (
-                <div className="flex-1 flex items-center justify-center text-white/50 text-sm">
+                <div className="flex-1 flex items-center justify-center text-[var(--color-text-secondary)] text-sm">
                   불러오는 중...
                 </div>
               ) : (
@@ -566,7 +728,7 @@ const FloatingChatWidget: React.FC = () => {
                     className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-2 overscroll-contain"
                   >
                     {messages.length === 0 ? (
-                      <p className="text-center text-white/50 text-xs py-6">
+                      <p className="text-center text-[var(--color-text-secondary)] text-xs py-6">
                         첫 메시지를 보내보세요!
                       </p>
                     ) : (
@@ -583,7 +745,7 @@ const FloatingChatWidget: React.FC = () => {
                               className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${
                                 isMe
                                   ? 'text-white rounded-br-sm'
-                                  : 'bg-white/10 border border-white/10 text-white rounded-bl-sm'
+                                  : 'bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)] rounded-bl-sm'
                               }`}
                               style={
                                 isMe
@@ -596,7 +758,7 @@ const FloatingChatWidget: React.FC = () => {
                               </p>
                               <p
                                 className={`text-[10px] mt-0.5 flex items-center gap-1 ${
-                                  isMe ? 'text-white/80' : 'text-white/50'
+                                  isMe ? 'text-white/80' : 'text-[var(--color-text-secondary)]'
                                 }`}
                               >
                                 {new Date(m.createdAt).toLocaleTimeString(
@@ -616,7 +778,7 @@ const FloatingChatWidget: React.FC = () => {
                     )}
                   </div>
                   <div
-                    className="shrink-0 p-3 border-t border-white/10 pb-[env(safe-area-inset-bottom)]"
+                    className="shrink-0 p-3 border-t border-[var(--color-border-card)] pb-[env(safe-area-inset-bottom)]"
                     style={{ borderTopColor: `${CHAT_PRIMARY}30` }}
                   >
                     <div className="flex gap-2 items-end">
@@ -627,7 +789,7 @@ const FloatingChatWidget: React.FC = () => {
                         placeholder="메시지를 입력하세요"
                         rows={2}
                         maxLength={1000}
-                        className="flex-1 min-h-[44px] max-h-[88px] px-3 py-2.5 rounded-xl border bg-white/5 text-white placeholder:text-white/40 resize-none focus:outline-none focus:ring-2 focus:ring-[#6ee7b7]/50 text-base touch-manipulation"
+                        className="flex-1 min-h-[44px] max-h-[88px] px-3 py-2.5 rounded-xl border bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] resize-none focus:outline-none focus:ring-2 focus:ring-[#6ee7b7]/50 text-base touch-manipulation border-[var(--color-border-card)]"
                         style={{ borderColor: 'rgba(139,92,246,0.4)' }}
                         disabled={isSending}
                       />

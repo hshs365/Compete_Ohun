@@ -1111,7 +1111,7 @@ const MyInfoPage = () => {
                 {profileData.profileImage ? (
                   <img src={getImageUrl(profileData.profileImage)} alt="" className="w-full h-full object-cover" />
                 ) : (
-                  (profileData.nickname || '?').charAt(0)
+                  <UserCircleIcon className="w-12 h-12 sm:w-16 sm:h-16 text-white/90" />
                 )}
               </div>
               <label className="absolute bottom-0 right-0 bg-white/90 text-gray-800 rounded-full p-1.5 sm:p-2 cursor-pointer hover:bg-white shadow-md touch-manipulation min-w-[36px] min-h-[36px] flex items-center justify-center">
@@ -1163,16 +1163,6 @@ const MyInfoPage = () => {
                 </div>
               )}
               <div className="flex items-center gap-1.5 sm:gap-2 mt-1 flex-wrap">
-                {(profileData.interestedSports?.length ?? 0) > 0 ? (
-                  profileData.interestedSports!.map((sport) => (
-                    <span key={sport} className="px-2.5 sm:px-3 py-1 bg-white/20 rounded-full text-xs sm:text-sm font-semibold flex items-center gap-1">
-                      <span>{SPORT_ICONS[sport] ?? '●'}</span>
-                      <span>{sport}</span>
-                    </span>
-                  ))
-                ) : (
-                  <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-semibold">전체</span>
-                )}
                 {(() => {
                   const grade = getFollowerGrade(myProfileSummary?.followersCount ?? followStats.followers);
                   return grade ? (
@@ -1191,58 +1181,58 @@ const MyInfoPage = () => {
               <StarIcon className="w-5 h-5 text-yellow-500 shrink-0" />
               프로필 정보
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-              <div className="min-w-0">
-                <p className="text-xs text-[var(--color-text-secondary)] mb-0.5 sm:mb-1">가입일</p>
-                <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{joinDate ? new Date(joinDate).toLocaleDateString('ko-KR') : '-'}</p>
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-[var(--color-text-secondary)] mb-0.5 sm:mb-1">주 활동지역</p>
-                <p className="text-sm font-semibold text-[var(--color-text-primary)] flex items-center gap-1 truncate">
-                  <MapPinIcon className="w-4 h-4 shrink-0" />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+              <div className="min-w-0 p-3 sm:p-4 rounded-xl bg-[var(--color-bg-secondary)]/50">
+                <p className="text-sm font-medium text-[var(--color-text-secondary)] mb-1">주 활동지역</p>
+                <p className="text-lg sm:text-xl font-bold text-[var(--color-text-primary)] flex items-center gap-2">
+                  <MapPinIcon className="w-5 h-5 shrink-0 text-[var(--color-blue-primary)]" />
                   <span className="truncate">{profileData.residenceSido || '-'}</span>
                 </p>
               </div>
-              <div className="min-w-0">
-                <p className="text-xs text-[var(--color-text-secondary)] mb-0.5 sm:mb-1">매너점수</p>
-                <p className="text-sm font-semibold text-[var(--color-text-primary)] flex items-center gap-1.5 flex-wrap">
+              <div className="min-w-0 p-3 sm:p-4 rounded-xl bg-[var(--color-bg-secondary)]/50">
+                <p className="text-sm font-medium text-[var(--color-text-secondary)] mb-1">매너점수</p>
+                <p className="text-lg sm:text-xl font-bold text-[var(--color-text-primary)] flex items-center gap-2 flex-wrap">
                   {(() => {
                     const mannerScore = profileData.mannerScore ?? myProfileSummary?.mannerScore ?? 80;
                     const mannerConfig = getMannerGradeConfig(mannerScore);
                     return (
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${mannerConfig.badgeClass}`}>
-                        {mannerConfig.icon} {mannerScore}점
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-base font-semibold badge-text-contrast ${mannerConfig.bg} ${mannerConfig.border}`}>
+                        {mannerConfig.icon} <span>{mannerScore}</span>점
                       </span>
                     );
                   })()}
                 </p>
               </div>
-              <div className="min-w-0">
-                <p className="text-xs text-[var(--color-text-secondary)] mb-0.5 sm:mb-1">팔로워 / 팔로잉</p>
-                <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-                  <FormatNumber value={myProfileSummary?.followersCount ?? followStats.followers} /> / <FormatNumber value={myProfileSummary?.followingCount ?? followStats.following} />
-                </p>
-                <button onClick={() => navigate('/followers')} className="text-xs text-[var(--color-blue-primary)] hover:underline mt-0.5 min-h-[28px] touch-manipulation">보기</button>
-              </div>
-            </div>
-            {(profileData.interestedSports?.length ?? 0) > 0 && (
-              <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-[var(--color-border-card)]">
-                <p className="text-xs text-[var(--color-text-secondary)] mb-1.5 sm:mb-2">용병 신청 명함에 등록한 종목</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {profileData.interestedSports!.map((sport) => {
-                    const chip = SPORT_CHIP_STYLES[sport] ?? SPORT_CHIP_STYLES['전체'];
-                    return (
-                      <span
-                        key={sport}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border ${chip.bg} ${chip.border} ${chip.text}`}
-                      >
-                        {SPORT_ICONS[sport] ?? '●'} {sport}
-                      </span>
-                    );
-                  })}
+              <div className="min-w-0 p-3 sm:p-4 rounded-xl bg-[var(--color-bg-secondary)]/50">
+                <p className="text-sm font-medium text-[var(--color-text-secondary)] mb-1">주 종목</p>
+                <div className="flex flex-wrap gap-2 mt-0.5">
+                  {(profileData.interestedSports?.length ?? 0) > 0 ? (
+                    profileData.interestedSports!.map((sport) => {
+                      const chip = SPORT_CHIP_STYLES[sport] ?? SPORT_CHIP_STYLES['전체'];
+                      return (
+                        <span
+                          key={sport}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border badge-text-contrast ${chip.bg} ${chip.border}`}
+                        >
+                          {SPORT_ICONS[sport] ?? '●'} {sport}
+                        </span>
+                      );
+                    })
+                  ) : (
+                    <span className="text-base font-semibold text-[var(--color-text-secondary)]">전체</span>
+                  )}
                 </div>
               </div>
-            )}
+            </div>
+            <div className="mt-4 pt-4 border-t border-[var(--color-border-card)] flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <p className="text-sm font-medium text-[var(--color-text-secondary)]">팔로워 / 팔로잉</p>
+                <p className="text-base font-semibold text-[var(--color-text-primary)]">
+                  <FormatNumber value={myProfileSummary?.followersCount ?? followStats.followers} /> / <FormatNumber value={myProfileSummary?.followingCount ?? followStats.following} />
+                </p>
+              </div>
+              <button onClick={() => navigate('/followers')} className="min-h-[36px] px-4 py-2 text-sm text-[var(--color-blue-primary)] hover:underline touch-manipulation">보기</button>
+            </div>
           </div>
 
           <div className="bg-[var(--color-bg-primary)] rounded-xl p-3 sm:p-4 border border-[var(--color-border-card)]">
@@ -1264,18 +1254,18 @@ const MyInfoPage = () => {
                     >
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className="text-lg">{SPORT_ICONS[category] ?? '●'}</span>
-                        <span className={`text-sm font-semibold ${chip.text}`}>{category}</span>
+                        <span className="text-sm font-semibold badge-text-contrast">{category}</span>
                       </div>
-                      <p className="text-xs text-[var(--color-text-secondary)]">
+                      <p className="text-xs badge-text-contrast text-[var(--color-text-secondary)]">
                         참여 {participations}건 · 생성 {creations}건
                       </p>
                       <p className="text-xs mt-1">
                         {hasRank ? (
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded font-medium bg-gradient-to-r ${getAllcourtplayRankStyle(rank)}`}>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded font-medium badge-text-contrast bg-gradient-to-r ${getAllcourtplayRankStyle(rank)}`}>
                             {rankLabel}
                           </span>
                         ) : (
-                          <span className="text-[var(--color-text-secondary)]">급수없음</span>
+                          <span className="badge-text-contrast text-[var(--color-text-secondary)]">급수없음</span>
                         )}
                       </p>
                     </div>
@@ -1414,6 +1404,19 @@ const MyInfoPage = () => {
             >
               {isCharging ? '충전 중...' : '충전하기'}
             </button>
+          </div>
+
+          {/* 가입일 */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 border-b border-[var(--color-border-card)]">
+            <div className="flex items-center space-x-3 min-w-0">
+              <CalendarIcon className="w-5 h-5 text-[var(--color-text-secondary)] shrink-0" />
+              <div>
+                <div className="text-sm text-[var(--color-text-secondary)]">가입일</div>
+                <div className="text-[var(--color-text-primary)] font-medium">
+                  {joinDate ? new Date(joinDate).toLocaleDateString('ko-KR') : '-'}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* 이메일 (수정 불가) */}

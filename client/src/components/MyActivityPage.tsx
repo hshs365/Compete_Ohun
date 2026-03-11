@@ -314,7 +314,7 @@ const MyActivityPage = () => {
                   <div>
                     <p className="text-xs font-medium text-[var(--color-text-secondary)]">{config.label}</p>
                     <div className="flex items-baseline gap-1.5">
-                      <p className={`text-xl font-bold ${config.textColor}`}>{mannerScore}</p>
+                      <p className="badge-text-contrast text-xl font-bold">{mannerScore}</p>
                       <p className="text-xs text-[var(--color-text-secondary)]">점 · {config.desc}</p>
                     </div>
                   </div>
@@ -521,7 +521,7 @@ const MyActivityPage = () => {
                                     {resultStr && (
                                       <>
                                         <span>·</span>
-                                        <span className={`font-medium ${result === 'win' ? 'text-emerald-400' : result === 'loss' ? 'text-gray-400' : 'text-amber-400'}`}>
+                                        <span className={`font-medium ${result === 'win' ? 'text-emerald-600 dark:text-emerald-400' : result === 'loss' ? 'text-[var(--color-text-secondary)] dark:text-gray-400' : 'text-amber-600 dark:text-amber-400'}`}>
                                           {resultStr}
                                         </span>
                                       </>

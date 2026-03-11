@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { XMarkIcon, MapPinIcon, UsersIcon, WrenchScrewdriverIcon, TrashIcon, LockClosedIcon, LockOpenIcon, UserGroupIcon, TrophyIcon, StarIcon, CurrencyDollarIcon, BuildingOfficeIcon, ClipboardDocumentCheckIcon, HeartIcon, PencilSquareIcon, ChevronLeftIcon, ChevronRightIcon, QrCodeIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, MapPinIcon, UsersIcon, WrenchScrewdriverIcon, TrashIcon, LockClosedIcon, LockOpenIcon, UserGroupIcon, TrophyIcon, StarIcon, CurrencyDollarIcon, BuildingOfficeIcon, ClipboardDocumentCheckIcon, HeartIcon, PencilSquareIcon, ChevronLeftIcon, ChevronRightIcon, QrCodeIcon, DevicePhoneMobileIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid, HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
 import type { SelectedGroup } from '../types/selected-group';
 import { api } from '../utils/api';
@@ -8,7 +8,10 @@ import { useAuth } from '../contexts/AuthContext';
 import UserDetailModal from './UserDetailModal';
 import FootballPitch from './FootballPitch';
 import MatchReviewModal from './MatchReviewModal';
+import MercenaryReviewModal from './MercenaryReviewModal';
 import HostQRModal from './HostQRModal';
+import EditGroupModal from './EditGroupModal';
+import { QRCodeSVG } from 'qrcode.react';
 import { showError, showSuccess, showInfo, showConfirm } from '../utils/swal';
 import { extractCityFromAddress, getUserCityForJoin } from '../utils/locationUtils';
 import { MANNER_SCORE_THRESHOLD } from '../constants/penalty';
@@ -108,6 +111,8 @@ interface GroupDetailData {
   isUserOnWaitlist?: boolean;
   /** 예약 대기 순서 (1부터) */
   waitlistPosition?: number | null;
+  /** 용병 구하기 매치 여부 */
+  isMercenaryRecruit?: boolean;
 }
 
 const FOOTBALL_FEE_NORMAL = 10000;
@@ -213,7 +218,10 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
   const [referees, setReferees] = useState<Array<{ id: number; userId: number; user: { id: number; nickname: string; tag?: string } }>>([]);
   const [isUserReferee, setIsUserReferee] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showMercenaryReviewModal, setShowMercenaryReviewModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [isMercenaryRecruit, setIsMercenaryRecruit] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [isFavoriteLoading, setIsFavoriteLoading] = useState(false);
   /** 매치 유형: normal=일반(매치장 진행), rank=랭크(심판), event=이벤트 */
@@ -339,6 +347,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
       setGroupType(groupData.type === 'rank' || groupData.type === 'event' ? groupData.type : 'normal');
       setIsUserOnWaitlist(groupData.isUserOnWaitlist ?? false);
       setWaitlistPosition(groupData.waitlistPosition ?? null);
+      setIsMercenaryRecruit((groupData as { isMercenaryRecruit?: boolean }).isMercenaryRecruit ?? false);
 
       // 이미 활동이 끝난 매치 여부 (종료된 매치는 수정/삭제/마감 불가)
       const ended =
@@ -906,15 +915,15 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
                 const parent = target.parentElement;
                 if (parent) {
                   const fallback = document.createElement('div');
-                  fallback.className = 'w-10 h-10 rounded-full bg-[var(--color-blue-primary)] flex items-center justify-center text-white font-semibold';
-                  fallback.textContent = participant.user.nickname.charAt(0);
+                  fallback.className = 'w-10 h-10 rounded-full bg-[var(--color-blue-primary)] flex items-center justify-center text-white';
+                  fallback.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8"><path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>';
                   parent.appendChild(fallback);
                 }
               }}
             />
           ) : (
-            <div className="w-10 h-10 rounded-full bg-[var(--color-blue-primary)] flex items-center justify-center text-white font-semibold">
-              {participant.user.nickname.charAt(0)}
+            <div className="w-10 h-10 rounded-full bg-[var(--color-blue-primary)] flex items-center justify-center text-white">
+              <UserCircleIcon className="w-8 h-8" />
             </div>
           )}
           {isCreator && (
@@ -1007,15 +1016,15 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
                 const parent = target.parentElement;
                 if (parent) {
                   const fallback = document.createElement('div');
-                  fallback.className = 'w-10 h-10 rounded-full bg-[var(--color-blue-primary)] flex items-center justify-center text-white font-semibold';
-                  fallback.textContent = creator.nickname.charAt(0);
+                  fallback.className = 'w-10 h-10 rounded-full bg-[var(--color-blue-primary)] flex items-center justify-center text-white';
+                  fallback.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8"><path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>';
                   parent.appendChild(fallback);
                 }
               }}
             />
           ) : (
-            <div className="w-10 h-10 rounded-full bg-[var(--color-blue-primary)] flex items-center justify-center text-white font-semibold">
-              {creator.nickname.charAt(0)}
+            <div className="w-10 h-10 rounded-full bg-[var(--color-blue-primary)] flex items-center justify-center text-white">
+              <UserCircleIcon className="w-8 h-8" />
             </div>
           )}
           <div className="absolute -top-1 -right-1 bg-yellow-500 rounded-full p-0.5 flex items-center justify-center">
@@ -1198,6 +1207,22 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
               </div>
             )}
           </div>
+
+          {/* PC 전용: QR로 모바일에서 바로 보기 */}
+          {typeof window !== 'undefined' && (
+            <div className="hidden md:flex flex-col items-center py-4 px-3 rounded-xl border border-[var(--color-border-card)] bg-[var(--color-bg-secondary)]">
+              <DevicePhoneMobileIcon className="w-5 h-5 text-[var(--color-text-secondary)] mb-2" />
+              <QRCodeSVG
+                value={`${window.location.origin}/matches?group=${group.id}`}
+                size={120}
+                level="M"
+                className="rounded-lg"
+              />
+              <p className="text-xs text-[var(--color-text-secondary)] text-center mt-2 max-w-[140px]">
+                카메라로 QR 찍고 핸드폰에서 보기
+              </p>
+            </div>
+          )}
 
           {/* 상세 정보 */}
           <div className="border-t border-[var(--color-border-card)] pt-4">
@@ -1574,7 +1599,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
                     {getProfileImage(creator.id, creator.profileImage) ? (
                       <img src={getProfileImage(creator.id, creator.profileImage)!} alt={creator.nickname} className="w-10 h-10 rounded-full object-cover border-2 border-amber-400/60 group-hover:ring-2 group-hover:ring-amber-400/50" />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-[var(--color-text-primary)] font-semibold text-sm border-2 border-amber-400/40">{(creator.nickname || '?').charAt(0)}</div>
+                      <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center border-2 border-amber-400/40"><UserCircleIcon className="w-7 h-7 text-[var(--color-text-primary)]" /></div>
                     )}
                     <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-amber-500 flex items-center justify-center">
                       <StarIconSolid className="w-2 h-2 text-white" />
@@ -1598,7 +1623,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
                       {profileImage ? (
                         <img src={profileImage} alt={participant.user.nickname} className="w-10 h-10 rounded-full object-cover border-2 border-[var(--color-border-card)] group-hover:ring-2 group-hover:ring-[var(--color-blue-primary)]/50" />
                       ) : (
-                        <div className="w-10 h-10 rounded-full bg-[var(--color-blue-primary)]/20 flex items-center justify-center text-white font-semibold text-sm border-2 border-[var(--color-border-card)]">{(participant.user.nickname || '?').charAt(0)}</div>
+                        <div className="w-10 h-10 rounded-full bg-[var(--color-blue-primary)]/20 flex items-center justify-center border-2 border-[var(--color-border-card)]"><UserCircleIcon className="w-7 h-7 text-[var(--color-text-primary)]" /></div>
                       )}
                       {isRanker && (
                         <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-amber-500 flex items-center justify-center text-[8px]">🏆</span>
@@ -1763,6 +1788,15 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
                     </button>
                   )}
                   <button
+                    onClick={() => setShowEditModal(true)}
+                    disabled={isLoading}
+                    className="group relative flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-700 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <PencilSquareIcon className="w-5 h-5 relative z-10" />
+                    <span className="relative z-10">{isLoading ? '처리 중...' : '매치 수정'}</span>
+                  </button>
+                  <button
                     onClick={handleDelete}
                     disabled={isLoading}
                     className="group relative flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg font-semibold shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
@@ -1817,9 +1851,16 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
                 </>
               )}
               {isPastMatch && (
-                <button type="button" onClick={() => setShowReviewModal(true)} className="w-full py-2.5 px-3 rounded-lg text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-colors flex items-center justify-center gap-1.5">
-                  <PencilSquareIcon className="w-4 h-4" /> 리뷰 작성
-                </button>
+                <div className="flex flex-col gap-2">
+                  <button type="button" onClick={() => setShowReviewModal(true)} className="w-full py-2.5 px-3 rounded-lg text-sm font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-colors flex items-center justify-center gap-1.5">
+                    <PencilSquareIcon className="w-4 h-4" /> 리뷰 작성
+                  </button>
+                  {isMercenaryRecruit && (
+                    <button type="button" onClick={() => setShowMercenaryReviewModal(true)} className="w-full py-2.5 px-3 rounded-lg text-sm font-semibold bg-emerald-500 text-white hover:bg-emerald-600 transition-colors flex items-center justify-center gap-1.5">
+                      <UserGroupIcon className="w-4 h-4" /> 용병 리뷰
+                    </button>
+                  )}
+                </div>
               )}
             </>
           ) : isParticipant ? (
@@ -1902,12 +1943,33 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
         />
       )}
 
+      {/* 용병 리뷰 모달 (용병 구하기 매치 호스트 전용) */}
+      {group && showMercenaryReviewModal && (
+        <MercenaryReviewModal
+          groupId={group.id}
+          groupName={group.name}
+          isOpen={showMercenaryReviewModal}
+          onClose={() => setShowMercenaryReviewModal(false)}
+          onSubmitted={fetchGroupDetail}
+        />
+      )}
+
       {/* 호스트용 QR 인증 모달 */}
       {group && (
         <HostQRModal
           groupId={group.id}
           isOpen={showQRModal}
           onClose={() => setShowQRModal(false)}
+        />
+      )}
+
+      {/* 매치 수정 모달 */}
+      {group && (
+        <EditGroupModal
+          groupId={group.id}
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={fetchGroupDetail}
         />
       )}
 

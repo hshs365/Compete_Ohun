@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TrophyIcon, SparklesIcon, UserCircleIcon } from '@heroicons/react/24/solid';
-import { TrophyIcon as TrophyOutlineIcon, FunnelIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
+import { TrophyIcon as TrophyOutlineIcon, FunnelIcon, Bars3Icon, XMarkIcon, UserCircleIcon as UserCircleOutlineIcon } from '@heroicons/react/24/outline';
 import { SPORTS_CATEGORIES } from '../constants/sports';
 import { KOREAN_CITIES, getRegionDisplayName } from '../utils/locationUtils';
 import { api } from '../utils/api';
@@ -151,13 +151,13 @@ const HallOfFamePage = () => {
               명예의 전당
             </h1>
           </div>
-          <p className="text-[var(--color-text-secondary)] max-w-2xl">
+          <p className="badge-text-contrast max-w-2xl">
             참가 횟수, 활동한 종목 수, 매너점수를 합산한 최고의 용병을 소개합니다.
           </p>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto w-full px-4 md:px-6 py-6 relative z-10 flex flex-row">
+      <div className="max-w-7xl mx-auto w-full px-4 md:px-6 py-6 relative z-10 flex flex-col md:flex-row">
         <aside
           className={`flex-shrink-0 border-r border-[var(--color-border-card)] pr-6 transition-all duration-200 ${
             sidebarOpen ? 'w-56 min-w-[14rem] md:w-64 md:min-w-[16rem]' : 'w-0 overflow-hidden pr-0 opacity-0'
@@ -217,7 +217,7 @@ const HallOfFamePage = () => {
           </div>
         </aside>
 
-        <main className="flex-1 min-w-0 pl-6 pb-24">
+        <main className="flex-1 min-w-0 pb-24 pt-2 md:pt-0 md:pl-6">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <button
               type="button"
@@ -226,7 +226,7 @@ const HallOfFamePage = () => {
             >
               {sidebarOpen ? <><XMarkIcon className="w-4 h-4" /> 필터 숨기기</> : <><Bars3Icon className="w-4 h-4" /> 필터 보기</>}
             </button>
-            <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
+            <div className="flex items-center gap-2 text-sm badge-text-contrast">
               <SparklesIcon className="w-4 h-4 text-cyan-400/80" />
               <span>{selectedYear}년 · {getRegionDisplayName(selectedRegion)} · {selectedSport}</span>
             </div>
@@ -259,7 +259,7 @@ const HallOfFamePage = () => {
                           second.avatar ? (
                             <img src={second.avatar} alt="" className="w-full h-full object-cover" />
                           ) : (
-                            <span className="text-white">{second.nickname.charAt(0)}</span>
+                            <UserCircleOutlineIcon className="w-10 h-10 text-white/80" />
                           )
                         ) : (
                           <TrophyOutlineIcon className="w-10 h-10 text-white/40" />
@@ -279,8 +279,8 @@ const HallOfFamePage = () => {
                       </>
                     ) : (
                       <>
-                        <p className="text-sm font-medium text-[var(--color-text-secondary)] text-center px-1">아직 2위가 없어요</p>
-                        <p className="text-xs text-white/60 mt-0.5">도전해 보세요!</p>
+                        <p className="badge-text-contrast text-sm font-medium text-center px-1">아직 2위가 없어요</p>
+                        <p className="badge-text-contrast text-xs mt-0.5 opacity-80">도전해 보세요!</p>
                       </>
                     )}
                     <div
@@ -294,7 +294,7 @@ const HallOfFamePage = () => {
                       }}
                     >
                       <span className="text-2xl">🥈</span>
-                      <span className="text-xs font-semibold text-white/90 mt-1">2nd</span>
+                      <span className="badge-text-contrast text-xs font-semibold mt-1">2nd</span>
                     </div>
                   </div>
 
@@ -320,7 +320,7 @@ const HallOfFamePage = () => {
                           first.avatar ? (
                             <img src={first.avatar} alt="" className="w-full h-full object-cover" />
                           ) : (
-                            <span className="text-white">{first.nickname.charAt(0)}</span>
+                            <UserCircleOutlineIcon className="w-14 h-14 text-white/80" />
                           )
                         ) : (
                           <TrophyOutlineIcon className="w-14 h-14 text-white/50" />
@@ -342,8 +342,8 @@ const HallOfFamePage = () => {
                       </>
                     ) : (
                       <>
-                        <p className="text-base font-bold text-amber-200/90 text-center px-1">아직 1위가 없어요</p>
-                        <p className="text-sm text-amber-200/70 mt-0.5">여기에 이름을 올려 보세요!</p>
+                        <p className="badge-text-contrast text-base font-bold text-center px-1">아직 1위가 없어요</p>
+                        <p className="badge-text-contrast text-sm mt-0.5 opacity-90">여기에 이름을 올려 보세요!</p>
                       </>
                     )}
                     <div
@@ -357,7 +357,7 @@ const HallOfFamePage = () => {
                       }}
                     >
                       <span className="text-4xl">🥇</span>
-                      <span className="text-sm font-bold text-amber-200 mt-1">1st</span>
+                      <span className="badge-text-contrast text-sm font-bold mt-1">1st</span>
                     </div>
                   </div>
 
@@ -378,7 +378,7 @@ const HallOfFamePage = () => {
                           third.avatar ? (
                             <img src={third.avatar} alt="" className="w-full h-full object-cover" />
                           ) : (
-                            <span className="text-white">{third.nickname.charAt(0)}</span>
+                            <UserCircleOutlineIcon className="w-10 h-10 text-white/80" />
                           )
                         ) : (
                           <TrophyOutlineIcon className="w-10 h-10 text-white/40" />
@@ -398,8 +398,8 @@ const HallOfFamePage = () => {
                       </>
                     ) : (
                       <>
-                        <p className="text-sm font-medium text-[var(--color-text-secondary)] text-center px-1">아직 3위가 없어요</p>
-                        <p className="text-xs text-white/60 mt-0.5">도전해 보세요!</p>
+                        <p className="badge-text-contrast text-sm font-medium text-center px-1">아직 3위가 없어요</p>
+                        <p className="badge-text-contrast text-xs mt-0.5 opacity-80">도전해 보세요!</p>
                       </>
                     )}
                     <div
@@ -413,7 +413,7 @@ const HallOfFamePage = () => {
                       }}
                     >
                       <span className="text-2xl">🥉</span>
-                      <span className="text-xs font-semibold text-white/90 mt-1">3rd</span>
+                      <span className="badge-text-contrast text-xs font-semibold mt-1">3rd</span>
                     </div>
                   </div>
                 </div>
@@ -449,7 +449,7 @@ const HallOfFamePage = () => {
                             {ranker.avatar ? (
                               <img src={ranker.avatar} alt="" className="w-full h-full object-cover" />
                             ) : (
-                              ranker.nickname.charAt(0)
+                              <UserCircleOutlineIcon className="w-8 h-8 text-white/80" />
                             )}
                           </div>
                         </div>

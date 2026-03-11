@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { XMarkIcon, UserGroupIcon, MagnifyingGlassIcon, UserPlusIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, UserGroupIcon, MagnifyingGlassIcon, UserPlusIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import { api } from '../utils/api';
 import { showSuccess, showError } from '../utils/swal';
 import { TEAM_PAGE_SPORTS } from '../constants/sports';
@@ -277,7 +277,7 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
                       {u.profileImageUrl ? (
                         <img src={u.profileImageUrl} alt="" className="w-full h-full object-cover" />
                       ) : (
-                        <UserGroupIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
+                        <UserCircleIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
                       )}
                     </div>
                     <span className="text-sm text-[var(--color-text-primary)]">

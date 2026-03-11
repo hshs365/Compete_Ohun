@@ -132,6 +132,68 @@ export class GroupsSchedulerService {
     }
   }
 
+  /** 매 10분마다 실행. 매치 1시간 전 참가자에게 알림 전송 */
+  @Cron('*/10 * * * *')
+  async sendMatchReminders() {
+    if (process.env.GROUPS_SCHEDULER_ENABLED === 'false') return;
+
+    try {
+      const now = new Date();
+      const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+      const oneHourTenFromNow = new Date(now.getTime() + 70 * 60 * 1000);
+
+      const groupsToRemind = await this.groupRepository
+        .createQueryBuilder('group')
+        .where('group.meetingDateTime >= :start', { start: oneHourFromNow })
+        .andWhere('group.meetingDateTime < :end', { end: oneHourTenFromNow })
+        .andWhere('group.isActive = :isActive', { isActive: true })
+        .andWhere('group.isClosed = :isClosed', { isClosed: false })
+        .select(['group.id', 'group.name', 'group.category', 'group.creatorId'])
+        .getMany();
+
+      if (groupsToRemind.length === 0) return;
+
+      this.logger.log(`매치 1시간 전 알림: ${groupsToRemind.length}건`);
+      for (const group of groupsToRemind) {
+        const participants = await this.participantRepository.find({
+          where: { groupId: group.id },
+          relations: ['user'],
+        });
+        const notifiedIds = new Set<number>();
+        for (const p of participants) {
+          if (notifiedIds.has(p.userId)) continue;
+          try {
+            await this.notificationsService.createNotification(
+              p.userId,
+              NotificationType.MATCH_REMINDER,
+              '매치 1시간 전',
+              `[${group.name}] ${group.category} 매치가 1시간 후 시작됩니다. 준비하세요!`,
+              { groupId: group.id, groupName: group.name, category: group.category },
+            );
+            notifiedIds.add(p.userId);
+          } catch (err) {
+            this.logger.error(`참가자 ${p.userId} 알림 실패:`, err);
+          }
+        }
+        if (!notifiedIds.has(group.creatorId)) {
+          try {
+            await this.notificationsService.createNotification(
+              group.creatorId,
+              NotificationType.MATCH_REMINDER,
+              '매치 1시간 전',
+              `[${group.name}] ${group.category} 매치가 1시간 후 시작됩니다. 준비하세요!`,
+              { groupId: group.id, groupName: group.name, category: group.category },
+            );
+          } catch (err) {
+            this.logger.error(`모임장 ${group.creatorId} 알림 실패:`, err);
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.error('매치 1시간 전 알림 전송 오류:', error);
+    }
+  }
+
   /** 매 10분마다 실행. meetingDateTime + 3시간 지난 용병 구하기 모임의 예치금 환급 */
   @Cron('*/10 * * * *')
   async refundDeposits() {

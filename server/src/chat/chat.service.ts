@@ -92,12 +92,18 @@ export class ChatService {
     return withSender || saved;
   }
 
-  /** 내 대화 목록 (참가자/호스트 모두) */
+  /** 내 대화 목록 (참가자/호스트 모두, 나간 방 제외) */
   async getMyConversations(userId: number) {
     const list = await this.conversationRepo.find({
       where: [{ participantId: userId }, { creatorId: userId }],
       relations: ['group', 'participant', 'creator'],
       order: { createdAt: 'DESC' },
+    });
+    // 나간 방 제외
+    const filtered = list.filter((c) => {
+      if (c.participantId === userId && c.participantLeftAt) return false;
+      if (c.creatorId === userId && c.creatorLeftAt) return false;
+      return true;
     });
     const result: {
       id: number;
@@ -109,7 +115,7 @@ export class ChatService {
       lastMessage: { content: string; createdAt: Date } | null;
       unreadCount: number;
     }[] = [];
-    for (const c of list) {
+    for (const c of filtered) {
       const lastMsg = await this.messageRepo.findOne({
         where: { conversationId: c.id },
         order: { createdAt: 'DESC' },
@@ -143,13 +149,24 @@ export class ChatService {
       });
     }
     // 가장 최근 메시지가 있는 대화가 상단으로 오도록 정렬
-    const createdAtByConvId = new Map(list.map((c) => [c.id, c.createdAt]));
+    const createdAtByConvId = new Map(filtered.map((c) => [c.id, c.createdAt]));
     result.sort((a, b) => {
       const aAt = a.lastMessage?.createdAt ?? createdAtByConvId.get(a.id) ?? new Date(0);
       const bAt = b.lastMessage?.createdAt ?? createdAtByConvId.get(b.id) ?? new Date(0);
       return new Date(bAt).getTime() - new Date(aAt).getTime();
     });
     return result;
+  }
+
+  /** 채팅방 나가기 (참가자/호스트 모두 가능) */
+  async leaveConversation(conversationId: number, userId: number): Promise<void> {
+    const c = await this.getConversation(conversationId, userId);
+    const now = new Date();
+    if (c.participantId === userId) {
+      await this.conversationRepo.update(conversationId, { participantLeftAt: now });
+    } else {
+      await this.conversationRepo.update(conversationId, { creatorLeftAt: now });
+    }
   }
 
   async markAsRead(conversationId: number, userId: number): Promise<void> {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { XMarkIcon, TrophyIcon, StarIcon, FireIcon, CalendarIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, TrophyIcon, StarIcon, FireIcon, CalendarIcon, MapPinIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import { TrophyIcon as TrophySolidIcon } from '@heroicons/react/24/solid';
 
 interface Participant {
@@ -130,7 +130,7 @@ const ParticipantDetail: React.FC<ParticipantDetailProps> = ({ participant, onCl
                   className="w-full h-full rounded-full object-cover"
                 />
               ) : (
-                participant.user.nickname.charAt(0)
+                <UserCircleIcon className="w-14 h-14 text-white/90" />
               )}
             </div>
             <div className="flex-1">

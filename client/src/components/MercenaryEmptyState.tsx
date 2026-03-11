@@ -24,9 +24,11 @@ interface MercenaryEmptyStateProps {
   /** 선택된 종목 (null이면 '전체') */
   selectedSport: string | null;
   onWriteClick: () => void;
+  /** 비로그인 시 버튼 숨김 (기본 true) */
+  showWriteButton?: boolean;
 }
 
-const MercenaryEmptyState: React.FC<MercenaryEmptyStateProps> = ({ selectedSport, onWriteClick }) => {
+const MercenaryEmptyState: React.FC<MercenaryEmptyStateProps> = ({ selectedSport, onWriteClick, showWriteButton = true }) => {
   const sport = selectedSport || '전체';
   const icon = SPORT_ILLUSTRATIONS[sport] ?? SPORT_ILLUSTRATIONS['전체'];
   const message = EMPTY_MESSAGES[sport] ?? EMPTY_MESSAGES['전체'];
@@ -43,14 +45,16 @@ const MercenaryEmptyState: React.FC<MercenaryEmptyStateProps> = ({ selectedSport
       <p className="text-base text-[var(--color-text-secondary)] mb-6 max-w-[280px]">
         {message}
       </p>
-      <button
-        type="button"
-        onClick={onWriteClick}
-        className="px-6 py-3 rounded-xl font-semibold text-white transition-opacity hover:opacity-90"
-        style={{ backgroundColor: pointColor }}
-      >
-        용병 구하기 작성
-      </button>
+      {showWriteButton && (
+        <button
+          type="button"
+          onClick={onWriteClick}
+          className="px-6 py-3 rounded-xl font-semibold text-white transition-opacity hover:opacity-90"
+          style={{ backgroundColor: pointColor }}
+        >
+          용병 구하기 작성
+        </button>
+      )}
     </div>
   );
 };

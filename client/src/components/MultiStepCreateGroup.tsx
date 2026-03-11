@@ -90,6 +90,22 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
   const freeMatchSubTypeRef = useRef<FreeMatchSubType | null>(null);
   /** 이전 정보 불러오기 토글 — ON일 때만 내 정보 주소·이전 매치 데이터 적용 */
   const [loadPreviousInfo, setLoadPreviousInfo] = useState(false);
+  /** 같은 종목 이전 게시글 있으면 "이전 정보 불러오시겠습니까?" 프롬프트 (한 번만 표시) */
+  const [previousInfoPrompt, setPreviousInfoPrompt] = useState<{
+    matchType: MatchType;
+    category: string;
+    saved: {
+      name?: string;
+      location?: string;
+      meetingDate?: string;
+      meetingTime?: string;
+      meetingEndDate?: string;
+      meetingEndTime?: string;
+      description?: string;
+      [key: string]: unknown;
+    };
+  } | null>(null);
+  const previousInfoPromptDismissedRef = useRef<Set<string>>(new Set());
 
   // 사용자 위치 가져오기 (좌표만)
   const getUserLocation = (): [number, number] => {
@@ -389,6 +405,8 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
     if (!isOpen) {
       setCurrentStep(1);
       setLoadPreviousInfo(false);
+      setPreviousInfoPrompt(null);
+      previousInfoPromptDismissedRef.current.clear();
       setFormData(getEmptyFormState(false));
       setShowMap(false);
       return;
@@ -473,6 +491,36 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
       }));
     }
   }, [formData.category, formData.matchType, isOpen, loadPreviousInfo]);
+
+  // 같은 종목 이전 게시글 있으면 "이전 정보를 불러오시겠습니까?" 프롬프트 표시 (한 번만)
+  useEffect(() => {
+    if (!isOpen || !formData.category || !formData.matchType) return;
+    const key = getBookingStorageKey(formData.matchType as MatchType, formData.category);
+    if (previousInfoPromptDismissedRef.current.has(key)) return;
+    if (previousInfoPrompt) return;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as { name?: string; location?: string; meetingDate?: string; meetingTime?: string; meetingEndDate?: string; meetingEndTime?: string; description?: string; [key: string]: unknown };
+      if (saved && (saved.name || saved.location || saved.description)) {
+        setPreviousInfoPrompt({
+          matchType: formData.matchType as MatchType,
+          category: formData.category,
+          saved: {
+            name: saved.name,
+            location: saved.location,
+            meetingDate: saved.meetingDate,
+            meetingTime: saved.meetingTime,
+            meetingEndDate: saved.meetingEndDate,
+            meetingEndTime: saved.meetingEndTime,
+            description: saved.description,
+          },
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }, [isOpen, formData.category, formData.matchType, previousInfoPrompt]);
 
   // 모달 열릴 때 사용자 거주지(시·도)로 지도 중심 맞추기 (저장된 위치가 없고 기본값이 서울일 때)
   useEffect(() => {
@@ -1092,12 +1140,76 @@ const MultiStepCreateGroup: React.FC<MultiStepCreateGroupProps> = ({
   const modalMatchType = formData.matchType || initialMatchType;
   const modalAccentHex = MATCH_TYPE_THEME[modalMatchType]?.accentHex ?? MATCH_TYPE_THEME.general.accentHex;
 
+  const handleLoadPreviousInfo = () => {
+    if (!previousInfoPrompt) return;
+    const key = getBookingStorageKey(previousInfoPrompt.matchType, previousInfoPrompt.category);
+    previousInfoPromptDismissedRef.current.add(key);
+    loadPreviousBooking(previousInfoPrompt.matchType, previousInfoPrompt.category);
+    setPreviousInfoPrompt(null);
+  };
+
+  const handleDismissPreviousInfo = () => {
+    if (!previousInfoPrompt) return;
+    const key = getBookingStorageKey(previousInfoPrompt.matchType, previousInfoPrompt.category);
+    previousInfoPromptDismissedRef.current.add(key);
+    setPreviousInfoPrompt(null);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/30 z-[1000] flex items-center justify-center p-4" aria-modal="true">
       <div
-        className="bg-[var(--color-bg-card)] rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-x-hidden overflow-y-auto border border-[var(--color-border-card)]"
+        className="relative bg-[var(--color-bg-card)] rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-x-hidden overflow-y-auto border border-[var(--color-border-card)]"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* 같은 종목 이전 게시글 있을 때: 이전 정보 불러오기 프롬프트 */}
+        {previousInfoPrompt && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-black/50 p-4">
+            <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border-card)] max-w-md w-full p-6 shadow-xl">
+              <h3 className="text-lg font-semibold text-[var(--color-text-primary)] mb-2">이전 정보를 불러오시겠습니까?</h3>
+              <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+                같은 종목의 게시글을 다시 만들 때 이전에 등록한 내용을 불러올 수 있습니다. 날짜만 수정해서 등록할 수 있습니다.
+              </p>
+              <div className="rounded-lg bg-[var(--color-bg-primary)] p-4 mb-4 text-sm space-y-2">
+                {previousInfoPrompt.saved.name && (
+                  <p><span className="text-[var(--color-text-secondary)]">제목 </span><span className="text-[var(--color-text-primary)]">{previousInfoPrompt.saved.name}</span></p>
+                )}
+                {previousInfoPrompt.saved.location && (
+                  <p><span className="text-[var(--color-text-secondary)]">장소 </span><span className="text-[var(--color-text-primary)]">{previousInfoPrompt.saved.location}</span></p>
+                )}
+                {(previousInfoPrompt.saved.meetingDate || previousInfoPrompt.saved.meetingTime) && (
+                  <p>
+                    <span className="text-[var(--color-text-secondary)]">일시 </span>
+                    <span className="text-[var(--color-text-primary)]">
+                      {[previousInfoPrompt.saved.meetingDate, previousInfoPrompt.saved.meetingTime].filter(Boolean).join(' ')}
+                      {previousInfoPrompt.saved.meetingEndTime ? ` ~ ${previousInfoPrompt.saved.meetingEndTime}` : ''}
+                    </span>
+                  </p>
+                )}
+                {previousInfoPrompt.saved.description && (
+                  <p><span className="text-[var(--color-text-secondary)]">설명 </span><span className="text-[var(--color-text-primary)]">{(previousInfoPrompt.saved.description || '').slice(0, 80)}{(previousInfoPrompt.saved.description?.length ?? 0) > 80 ? '…' : ''}</span></p>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleLoadPreviousInfo}
+                  className="flex-1 py-3 rounded-xl font-medium text-white transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: modalAccentHex ?? '#3b82f6' }}
+                >
+                  이전 정보 불러오기
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDismissPreviousInfo}
+                  className="flex-1 py-3 rounded-xl font-medium bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-primary)] transition-colors"
+                >
+                  새로 작성
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 헤더 */}
         <div className="sticky top-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)] p-4 md:p-6 flex items-center justify-between z-10">
           <div>

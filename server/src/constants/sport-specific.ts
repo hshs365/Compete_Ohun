@@ -57,9 +57,11 @@ export function validateSportSpecificData(
 
   for (const [key, _desc] of Object.entries(required)) {
     const val = obj[key];
-    if (val === undefined || val === null || val === '') {
+    if (val === undefined || val === null) {
       return { valid: false, message: `${key}는(은) 필수입니다.` };
     }
+    // '' 또는 'all'은 "상관없음"으로 유효
+    if (val === '' || val === 'all') continue;
     if (Array.isArray(val) && val.length === 0) {
       return { valid: false, message: `${key}는(은) 최소 1개 이상 선택해야 합니다.` };
     }

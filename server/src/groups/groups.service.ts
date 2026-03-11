@@ -8,6 +8,7 @@ import { GroupParticipantPosition } from './entities/group-participant-position.
 import { GroupReferee } from './entities/group-referee.entity';
 import { GroupFavorite } from './entities/group-favorite.entity';
 import { MatchReview } from './entities/match-review.entity';
+import { MercenaryReview, MercenaryReviewType } from './entities/mercenary-review.entity';
 import { GroupProvisionalFacility } from './entities/group-provisional-facility.entity';
 import { GroupWaitlist } from './entities/group-waitlist.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -68,6 +69,8 @@ export class GroupsService {
     private favoriteRepository: Repository<GroupFavorite>,
     @InjectRepository(MatchReview)
     private matchReviewRepository: Repository<MatchReview>,
+    @InjectRepository(MercenaryReview)
+    private mercenaryReviewRepository: Repository<MercenaryReview>,
     @InjectRepository(GroupProvisionalFacility)
     private provisionalFacilityRepository: Repository<GroupProvisionalFacility>,
     @InjectRepository(GroupWaitlist)
@@ -145,7 +148,7 @@ export class GroupsService {
   }
 
   async create(createGroupDto: CreateGroupDto, creatorId: number): Promise<Group> {
-    const allowedCategories = ['축구', '풋살', '농구', '야구', '테니스', '배드민턴'];
+    const allowedCategories = ['축구', '풋살', '농구', '야구', '테니스', '배드민턴', '핸드볼', '배구', '탁구', '골프'];
     if (!createGroupDto.category || !allowedCategories.includes(createGroupDto.category)) {
       throw new BadRequestException(`현재 지원하는 종목은 ${allowedCategories.join(', ')}입니다.`);
     }
@@ -2625,6 +2628,147 @@ export class GroupsService {
     dto: { cleanliness: number; suitableForGame: number; overall: number },
   ) {
     return this.facilityReviewsService.submitForGroup(groupId, facilityId, userId, dto);
+  }
+
+  /**
+   * 용병 구하기 매치 종료 후, 호스트가 용병 리뷰 작성 가능 여부 및 용병 목록 반환
+   */
+  async getMercenaryReviewEligibility(
+    groupId: number,
+    userId: number,
+  ): Promise<{
+    canReview: boolean;
+    reason?: string;
+    alreadySubmitted: boolean;
+    noShowList: { id: number; nickname: string; tag: string | null; profileImageUrl: string | null }[];
+    mercenaryList: { id: number; nickname: string; tag: string | null; profileImageUrl: string | null }[];
+  }> {
+    const group = await this.groupRepository.findOne({
+      where: { id: groupId },
+      select: ['id', 'creatorId', 'isMercenaryRecruit', 'isCompleted', 'meetingDateTime'],
+    });
+    if (!group) throw new NotFoundException('모임을 찾을 수 없습니다.');
+    if (!group.isMercenaryRecruit)
+      return {
+        canReview: false,
+        reason: '용병 구하기 매치에서만 용병 리뷰를 작성할 수 있습니다.',
+        alreadySubmitted: false,
+        noShowList: [],
+        mercenaryList: [],
+      };
+    if (group.creatorId !== userId)
+      return {
+        canReview: false,
+        reason: '매치 생성자(구인자)만 용병 리뷰를 작성할 수 있습니다.',
+        alreadySubmitted: false,
+        noShowList: [],
+        mercenaryList: [],
+      };
+
+    const now = new Date();
+    const meetingEnded =
+      group.isCompleted || (group.meetingDateTime != null && new Date(group.meetingDateTime) <= now);
+    if (!meetingEnded)
+      return {
+        canReview: false,
+        reason: '매치가 종료된 후에 리뷰를 작성할 수 있습니다.',
+        alreadySubmitted: false,
+        noShowList: [],
+        mercenaryList: [],
+      };
+
+    const participants = await this.participantRepository.find({
+      where: { groupId, status: 'joined' },
+      relations: ['user'],
+    });
+
+    const mercenaryParticipants = participants.filter((p) => p.userId !== group.creatorId);
+    const noShowParticipants = mercenaryParticipants.filter((p) => p.qrVerifiedAt == null);
+    const toUserInfo = (p: GroupParticipant) => ({
+      id: (p.user as { id: number; nickname: string; tag: string | null; profileImageUrl: string | null })?.id ?? p.userId,
+      nickname: (p.user as { nickname?: string })?.nickname ?? '',
+      tag: (p.user as { tag?: string | null })?.tag ?? null,
+      profileImageUrl: (p.user as { profileImageUrl?: string | null })?.profileImageUrl ?? null,
+    });
+
+    const submittedCount = await this.mercenaryReviewRepository.count({ where: { groupId } });
+    const alreadySubmitted = submittedCount > 0;
+
+    return {
+      canReview: !alreadySubmitted,
+      reason: alreadySubmitted ? '이미 용병 리뷰를 작성하셨습니다.' : undefined,
+      alreadySubmitted,
+      noShowList: noShowParticipants.map(toUserInfo),
+      mercenaryList: mercenaryParticipants.map(toUserInfo),
+    };
+  }
+
+  /**
+   * 용병 리뷰 제출. 노쇼/장비 미지참/매너 좋음 선택 반영
+   */
+  async submitMercenaryReview(
+    groupId: number,
+    hostUserId: number,
+    dto: { noShowIds?: number[]; noEquipmentIds?: number[]; goodMannerIds?: number[] },
+  ): Promise<{ success: boolean; message: string }> {
+    const eligibility = await this.getMercenaryReviewEligibility(groupId, hostUserId);
+    if (eligibility.alreadySubmitted || !eligibility.canReview)
+      throw new BadRequestException(eligibility.reason ?? '리뷰를 작성할 수 없습니다.');
+
+    const noShowIds = dto.noShowIds ?? [];
+    const noEquipmentIds = dto.noEquipmentIds ?? [];
+    const goodMannerIds = dto.goodMannerIds ?? [];
+    const mercenaryIds = new Set(eligibility.mercenaryList.map((m) => m.id));
+
+    const toCreate: { groupId: number; revieweeUserId: number; reviewType: MercenaryReviewType }[] = [];
+
+    for (const uid of noShowIds) {
+      if (mercenaryIds.has(uid)) toCreate.push({ groupId, revieweeUserId: uid, reviewType: 'no_show' });
+    }
+    for (const uid of noEquipmentIds) {
+      if (mercenaryIds.has(uid)) toCreate.push({ groupId, revieweeUserId: uid, reviewType: 'no_equipment' });
+    }
+    for (const uid of goodMannerIds) {
+      if (mercenaryIds.has(uid)) toCreate.push({ groupId, revieweeUserId: uid, reviewType: 'good_manner' });
+    }
+
+    await this.mercenaryReviewRepository.save(toCreate.map((r) => this.mercenaryReviewRepository.create(r)));
+
+    for (const uid of noShowIds) {
+      if (mercenaryIds.has(uid)) {
+        try {
+          await this.usersService.incrementNoShowCount(uid);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    for (const uid of goodMannerIds) {
+      if (mercenaryIds.has(uid)) {
+        try {
+          const u = await this.usersService.findById(uid);
+          if (!u) continue;
+          const current = u.mannerScore ?? 80;
+          await this.usersService.updateUser(uid, { mannerScore: Math.min(200, current + 1) });
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    for (const uid of noEquipmentIds) {
+      if (mercenaryIds.has(uid)) {
+        try {
+          const u = await this.usersService.findById(uid);
+          if (!u) continue;
+          const current = u.mannerScore ?? 80;
+          await this.usersService.updateUser(uid, { mannerScore: Math.max(0, current - 5) });
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
+    return { success: true, message: '용병 리뷰가 저장되었습니다.' };
   }
 }
 

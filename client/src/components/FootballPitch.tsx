@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
+import { ArrowsPointingOutIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import {
   FOOTBALL_POSITION_ORDER,
   getFormation,
@@ -215,10 +215,7 @@ function ParticipantTradingCard({
               />
             </>
           ) : (
-            <span className="text-white font-semibold text-xs truncate max-w-full">
-              {(participant.nickname || '모임장').slice(0, 2)}
-              {participant.isCreator && '★'}
-            </span>
+            <UserCircleIcon className="w-6 h-6 sm:w-7 sm:h-7 text-white/80" />
           )}
         </div>
       </div>
@@ -527,10 +524,7 @@ export default function FootballPitch({
                                   <img src={slot.participant.profileImageUrl} alt="" className="w-full h-full object-cover" />
                                 )}
                                 {mode === 'match' && slot.participant && !slot.participant.profileImageUrl && (
-                                  <span className="truncate max-w-full text-center font-semibold" title={(slot.participant.nickname || '') + (slot.participant.tag || '')}>
-                                    {(slot.participant.nickname || '모임장').slice(0, 2)}
-                                    {slot.participant.isCreator && <span className="text-white/80 ml-0.5">★</span>}
-                                  </span>
+                                  <UserCircleIcon className="w-8 h-8 sm:w-9 sm:h-9 text-white/80" />
                                 )}
                                 {mode === 'match' && isEmpty && <span className="text-white/95 text-sm sm:text-base leading-none">+</span>}
                                 {mode === 'stats' && <span>{slot.count ?? 0}회</span>}
@@ -636,15 +630,7 @@ export default function FootballPitch({
                               <img src={slot.participant.profileImageUrl} alt="" className="w-full h-full object-cover" />
                             )}
                             {mode === 'match' && slot.participant && !slot.participant.profileImageUrl && (
-                              <span
-                                className="truncate max-w-full text-center font-semibold"
-                                title={(slot.participant.nickname || '') + (slot.participant.tag || '')}
-                              >
-                                {(slot.participant.nickname || '모임장').slice(0, 2)}
-                                {slot.participant.isCreator && (
-                                  <span className="text-white/80 ml-0.5">★</span>
-                                )}
-                              </span>
+                              <UserCircleIcon className="w-8 h-8 sm:w-9 sm:h-9 text-white/80" />
                             )}
                             {mode === 'match' && isEmpty && (
                               <span className="text-white/95 text-sm sm:text-base leading-none">+</span>

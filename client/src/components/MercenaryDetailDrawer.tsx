@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { XMarkIcon, MapPinIcon, ClockIcon, UserGroupIcon, ChatBubbleLeftRightIcon, BoltIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, MapPinIcon, ClockIcon, UserGroupIcon, ChatBubbleLeftRightIcon, BoltIcon, PencilSquareIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import NaverMap from './NaverMap';
 import { useChat } from '../contexts/ChatContext';
 import type { SelectedGroup } from '../types/selected-group';
@@ -8,6 +8,7 @@ import { api } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { getMannerGradeConfig } from '../utils/mannerGrade';
 import { SPORT_ICONS, SPORT_POINT_COLORS } from '../constants/sports';
+import EditGroupModal from './EditGroupModal';
 import { showError, showSuccess, showInfo, showConfirm } from '../utils/swal';
 import type { MannerGradeConfig } from '../utils/mannerGrade';
 
@@ -153,6 +154,12 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
   const [isJoining, setIsJoining] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isBoosting, setIsBoosting] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+
+  const refetchDetail = React.useCallback(() => {
+    if (!group?.id) return;
+    api.get<GroupDetailData>(`/api/groups/${group.id}`).then(setDetail).catch(() => setDetail(null));
+  }, [group?.id]);
 
   useEffect(() => {
     if (!group?.id) return;
@@ -441,12 +448,12 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
                           />
                         ) : null}
                         <div
-                          className={`participant-fallback w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm border-2 border-white/20 ${
+                          className={`participant-fallback w-10 h-10 rounded-full flex items-center justify-center border-2 border-white/20 ${
                             imgUrl ? 'hidden' : ''
                           }`}
                           style={{ backgroundColor: pointColor + '80' }}
                         >
-                          {(p.user.nickname || '?').charAt(0)}
+                          <UserCircleIcon className="w-8 h-8 text-white/90" />
                         </div>
                         {isCreator && (
                           <span
@@ -495,7 +502,7 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
               <p className="text-xs text-white/60 mb-1.5">매치장 신뢰도</p>
               <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${mannerConfig.badgeClass}`}>
                 <span aria-hidden>{mannerConfig.icon}</span>
-                <span className={`font-bold ${mannerConfig.textColor}`}>{creatorManner}점</span>
+                <span className="badge-text-contrast font-bold">{creatorManner}점</span>
                 <span className="text-xs text-white/70">{mannerConfig.label}</span>
               </div>
               <p className="text-xs text-white/50 mt-1.5">
@@ -527,6 +534,15 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
                 슈퍼 노출 중
               </p>
             )}
+            <button
+              type="button"
+              onClick={() => setShowEditModal(true)}
+              className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-opacity hover:opacity-90 border-2"
+              style={{ borderColor: pointColor, color: pointColor, backgroundColor: 'transparent' }}
+            >
+              <PencilSquareIcon className="w-5 h-5" />
+              매치 수정
+            </button>
             <button
               type="button"
               onClick={handleDelete}
@@ -562,6 +578,18 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
           </div>
         )}
       </div>
+
+      {group && (
+        <EditGroupModal
+          groupId={group.id}
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={() => {
+            refetchDetail();
+            onParticipantChange?.();
+          }}
+        />
+      )}
     </>
   );
 };

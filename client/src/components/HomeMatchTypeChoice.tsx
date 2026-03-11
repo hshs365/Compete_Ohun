@@ -133,7 +133,7 @@ const HomeMatchTypeChoice: React.FC<HomeMatchTypeChoiceProps> = ({ onSelect }) =
               <span className={`text-2xl md:text-3xl font-bold tracking-tight ${theme.text}`}>
                 {theme.label}
               </span>
-              <p className="text-sm md:text-base text-gray-300 text-center w-full px-1 break-words">
+              <p className="text-sm md:text-base text-white/95 text-center w-full px-1 break-words">
                 {DESCRIPTIONS[type]}
               </p>
 
@@ -154,14 +154,14 @@ const HomeMatchTypeChoice: React.FC<HomeMatchTypeChoiceProps> = ({ onSelect }) =
               </div>
 
               {isRank && !canJoinRankMatch && user && (
-                <p className="text-xs text-amber-200/90 text-center max-w-[280px]">
+                <p className="text-xs text-white/95 text-center max-w-[280px]">
                   그린카드 유저만 참여할 수 있습니다.
                   <br />
                   매너 점수 60점 이상이 되어야 합니다.
                 </p>
               )}
               {isRank && !user && (
-                <p className="text-xs text-amber-200/90 text-center max-w-[280px]">
+                <p className="text-xs text-white/95 text-center max-w-[280px]">
                   로그인 후 그린카드 유저만 참여 가능합니다.
                 </p>
               )}

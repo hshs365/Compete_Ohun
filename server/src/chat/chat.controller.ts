@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -45,6 +46,13 @@ export class ChatController {
       user.id,
       creatorId,
     );
+  }
+
+  /** 채팅방 나가기 */
+  @Delete('conversations/:id')
+  async leaveConversation(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: User) {
+    await this.chatService.leaveConversation(id, user.id);
+    return { ok: true };
   }
 
   /** 대화 읽음 처리 */

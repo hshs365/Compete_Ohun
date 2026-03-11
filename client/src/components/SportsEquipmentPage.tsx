@@ -197,7 +197,7 @@ const SportsEquipmentPage = () => {
   const renderStars = (rating: number) => {
     const stars = [];
     for (let i = 0; i < Math.floor(rating); i++) stars.push(<StarSolidIcon key={i} className="w-3.5 h-3.5 text-yellow-400" />);
-    for (let i = stars.length; i < 5; i++) stars.push(<StarIcon key={i} className="w-3.5 h-3.5 text-gray-400" />);
+    for (let i = stars.length; i < 5; i++) stars.push(<StarIcon key={i} className="w-3.5 h-3.5 text-[var(--color-text-secondary)] opacity-60" />);
     return stars;
   };
 

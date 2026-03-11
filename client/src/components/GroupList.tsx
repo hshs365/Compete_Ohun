@@ -50,6 +50,8 @@ interface GroupListProps {
   emptyStateSport?: string | null;
   /** 빈 상태에서 '용병 구하기 작성' 클릭 시 */
   onEmptyWriteClick?: () => void;
+  /** 비로그인 시 빈 상태의 작성 버튼 숨김 (기본 true) */
+  showEmptyWriteButton?: boolean;
   /** 용병 모드에서 전체 종목 조회 시, 지역 필터 적용된 목록의 종목별 개수 (지역별 정렬용) */
   onCategoryCountsChange?: (counts: Record<string, number>) => void;
   /** 용병 모드: true면 내 활동시간에 해당하는 매치만 표시, false면 모두 표시 */
@@ -263,7 +265,7 @@ function isMeetingInActivitySlots(
   return false;
 }
 
-const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sportFilterValues, selectedRegion: propSelectedRegion, selectedCity = '전체', selectedDays = [], filterDate = null, hideClosed = true, onlyRanker = false, gender = null, includeCompleted = false, onGroupClick, refreshTrigger, mapBounds = null, matchType = 'general', userCoords = null, onGroupsChange, onLoadingChange, groupsOverride, mercenaryOnly = false, optimisticParticipantCount, emptyStateSport, onEmptyWriteClick, onCategoryCountsChange, filterByActivityTime = false, activityTimeSlots }) => {
+const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sportFilterValues, selectedRegion: propSelectedRegion, selectedCity = '전체', selectedDays = [], filterDate = null, hideClosed = true, onlyRanker = false, gender = null, includeCompleted = false, onGroupClick, refreshTrigger, mapBounds = null, matchType = 'general', userCoords = null, onGroupsChange, onLoadingChange, groupsOverride, mercenaryOnly = false, optimisticParticipantCount, emptyStateSport, onEmptyWriteClick, showEmptyWriteButton = true, onCategoryCountsChange, filterByActivityTime = false, activityTimeSlots }) => {
   const selectedRegion = propSelectedRegion ?? selectedCity;
   const [groups, setGroups] = useState<SelectedGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -723,7 +725,7 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
                         title={`신뢰도: ${group.creator.mannerScore ?? 80}점 · ${mannerConfig.label}`}
                       >
                         <span aria-hidden>{mannerConfig.icon}</span>
-                        <span className={mannerConfig.textColor}>{group.creator.mannerScore ?? 80}점</span>
+                        <span className="badge-text-contrast">{group.creator.mannerScore ?? 80}점</span>
                       </span>
                     );
                   })()}
@@ -780,7 +782,7 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
                 {(() => {
                   const chipStyle = SPORT_CHIP_STYLES[group.category] ?? SPORT_CHIP_STYLES['전체'];
                   return (
-                    <span className={`px-1.5 py-0.5 text-xs font-semibold rounded-full self-start md:self-auto border ${chipStyle.bg} ${chipStyle.border} ${chipStyle.text}`}>
+                    <span className={`badge-text-contrast px-1.5 py-0.5 text-xs font-semibold rounded-full self-start md:self-auto border ${chipStyle.bg} ${chipStyle.border}`}>
                       {group.category}
                     </span>
                   );
@@ -792,6 +794,7 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
           <MercenaryEmptyState
             selectedSport={emptyStateSport}
             onWriteClick={onEmptyWriteClick}
+            showWriteButton={showEmptyWriteButton}
           />
         ) : (
           <p className="p-3 text-[var(--color-text-secondary)] italic text-center text-sm">

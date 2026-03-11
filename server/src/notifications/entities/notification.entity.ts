@@ -15,6 +15,7 @@ export enum NotificationType {
   GROUP_CLOSED = 'group_closed', // 모임 마감
   GROUP_DELETED = 'group_deleted', // 모임 삭제
   GROUP_CANCELLED = 'group_cancelled', // 모임 취소 (최소 인원 미달 등)
+  MATCH_REMINDER = 'match_reminder', // 매치 1시간 전 참가 알림
   GROUP_WAITLIST_SPOT_OPEN = 'group_waitlist_spot_open', // 예약 대기: 매치 빈 자리 생김
   REFEREE_RANK_MATCH_IN_REGION = 'referee_rank_match_in_region', // 내 지역 랭크매치 생성 → 심판 신청 알림
   MERCENARY_RECRUIT = 'mercenary_recruit', // 용병 구하기 → 해당 종목 용병 알림 수신 유저에게 알림

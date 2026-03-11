@@ -9,6 +9,7 @@ import {
   UserGroupIcon,
   StarIcon,
   CalendarIcon,
+  UserCircleIcon,
 } from '@heroicons/react/24/outline';
 import { TrophyIcon as TrophySolidIcon } from '@heroicons/react/24/solid';
 import { api } from '../utils/api';
@@ -201,7 +202,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
                       className="w-full h-full rounded-full object-cover"
                     />
                   ) : (
-                    (profileSummary?.nickname ?? user.nickname).charAt(0)
+                    <UserCircleIcon className="w-14 h-14 text-white/90" />
                   )}
                 </div>
                 <div className="flex-1">

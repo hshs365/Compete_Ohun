@@ -265,6 +265,7 @@ const MercenaryHomePage = () => {
               mercenaryOnly={true}
               emptyStateSport={selectedCategory}
               onEmptyWriteClick={() => setRecruitFormOpen(true)}
+              showEmptyWriteButton={!!user}
               optimisticParticipantCount={optimisticParticipantCount}
               onCategoryCountsChange={setCategoryCountsFromRegion}
               filterByActivityTime={filterByActivityTime}

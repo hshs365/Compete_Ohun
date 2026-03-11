@@ -99,7 +99,7 @@ const MercenaryQRScanner: React.FC<MercenaryQRScannerProps> = ({
         <span className="text-white font-semibold">호스트의 QR 코드를 비춰주세요</span>
         <button
           onClick={onClose}
-          className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+          className="p-2 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
           aria-label="닫기"
         >
           <XMarkIcon className="w-6 h-6" />

@@ -4,39 +4,32 @@ import {
   HomeIcon,
   UserIcon,
   Squares2X2Icon,
-  ChatBubbleLeftEllipsisIcon,
+  CalendarIcon,
   TrophyIcon,
 } from '@heroicons/react/24/outline';
 import {
   HomeIcon as HomeIconSolid,
   UserIcon as UserIconSolid,
   Squares2X2Icon as Squares2X2IconSolid,
-  ChatBubbleLeftEllipsisIcon as ChatBubbleLeftEllipsisIconSolid,
+  CalendarIcon as CalendarIconSolid,
   TrophyIcon as TrophyIconSolid,
 } from '@heroicons/react/24/solid';
 import { useAuth } from '../contexts/AuthContext';
-import { useChat } from '../contexts/ChatContext';
 
 /** 모바일 전용 하단 네비게이션 바 */
 const BottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { openChatList } = useChat();
 
   const handleHomeClick = (e: React.MouseEvent) => {
     e.preventDefault();
     navigate('/');
   };
 
-  const handleChatClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    openChatList();
-  };
-
   const items = [
     { name: '용병', path: '/', icon: HomeIcon, iconSolid: HomeIconSolid, onClick: handleHomeClick, isHome: true },
-    { name: '채팅', path: 'chat', icon: ChatBubbleLeftEllipsisIcon, iconSolid: ChatBubbleLeftEllipsisIconSolid, onClick: handleChatClick },
+    { name: '내 일정', path: '/my-schedule', icon: CalendarIcon, iconSolid: CalendarIconSolid, protected: true },
     { name: '명예의 전당', path: '/hall-of-fame', icon: TrophyIcon, iconSolid: TrophyIconSolid },
     { name: '내정보', path: '/my-info', icon: UserIcon, iconSolid: UserIconSolid, protected: true },
     { name: '더보기', path: '/more', icon: Squares2X2Icon, iconSolid: Squares2X2IconSolid },
@@ -48,11 +41,9 @@ const BottomNav = () => {
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0)' }}
     >
       {items.map((item) => {
-        const isActive = item.onClick && item.path === 'chat'
-          ? false
-          : item.isHome
-            ? location.pathname === '/'
-            : location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+        const isActive = item.isHome
+          ? location.pathname === '/'
+          : location.pathname === item.path || location.pathname.startsWith(item.path + '/');
         const Icon = isActive ? item.iconSolid : item.icon;
         const disabled = item.protected && !user;
 
@@ -72,7 +63,7 @@ const BottomNav = () => {
         if (item.onClick) {
           return (
             <button
-              key={item.path === 'chat' ? 'chat' : item.path}
+              key={item.path}
               type="button"
               onClick={item.onClick}
               className={`flex-1 flex items-center justify-center min-w-0 h-full touch-manipulation active:bg-[var(--color-bg-secondary)] ${activeTabClass}`}

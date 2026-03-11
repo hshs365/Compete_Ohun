@@ -8,8 +8,8 @@
 }
 
 :root {
-  --color-text-primary: #1e293b; /* slate-900 */
-  --color-text-secondary: #475569; /* slate-600 */
+  --color-text-primary: #0f172a; /* slate-900 - 더 진한 색으로 가독성 강화 */
+  --color-text-secondary: #334155; /* slate-700 - 화이트모드에서 더 잘 보이도록 */
   --color-bg-primary: #f8fafc; /* slate-50 */
   --color-bg-secondary: #e2e8f0; /* slate-200 */
   --color-bg-card: #ffffff; /* white */
@@ -28,6 +28,11 @@ html.dark {
   --color-border-card: #2c3540; /* 테두리 - 선택된 항목 톤 */
   --color-blue-primary: #5e8fef; /* Docker 액센트 블루 */
   --color-bg-calendar-cell: #1a202c; /* 캘린더 셀 배경 */
+}
+
+/* 뱃지 텍스트: 테마에 맞는 대비 확보 (화이트모드=검정, 다크모드=밝음) - Tailwind 동적 클래스 무시 */
+.badge-text-contrast {
+  color: var(--color-text-primary) !important;
 }
 
 body {
@@ -331,6 +336,7 @@ html.dark .date-input-dark::-webkit-calendar-picker-indicator {
 }
 .schedule-calendar-wrapper .fc-event-main {
   padding: 0 2px;
+  color: var(--color-text-primary);
 }
 .schedule-calendar-wrapper .fc-daygrid-event {
   border-radius: 4px;

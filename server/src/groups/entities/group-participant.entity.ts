@@ -64,6 +64,10 @@ export class GroupParticipant {
   @Column({ type: 'timestamp', nullable: true })
   depositRefundedAt: Date | null;
 
+  /** QR 스캔 인증 완료 시각 (노쇼 판별: null이면 미스캔) */
+  @Column({ type: 'timestamp', nullable: true, name: 'qr_verified_at' })
+  qrVerifiedAt: Date | null;
+
   // 메타 정보
   @CreateDateColumn({ name: 'joined_at' })
   joinedAt: Date;

@@ -23,14 +23,27 @@ export class QrVerificationService {
     private participantRepository: Repository<GroupParticipant>,
   ) {}
 
-  /** 호스트 전용: QR 인증 토큰 생성 (1분 유효) */
+  /** 매치 시작 30분 지나면 QR 생성 불가 */
+  private static readonly QR_CUTOFF_MINUTES = 30;
+
+  /** 호스트 전용: QR 인증 토큰 생성 (1분 유효). 매치 시작 30분 지나면 생성 불가 */
   async generateToken(groupId: number, creatorId: number): Promise<{ token: string; expiresAt: string }> {
     const group = await this.groupRepository.findOne({
       where: { id: groupId },
-      select: ['id', 'creatorId'],
+      select: ['id', 'creatorId', 'meetingDateTime'],
     });
     if (!group || group.creatorId !== creatorId) {
       throw new ForbiddenException('매치 생성자만 QR 인증을 시작할 수 있습니다.');
+    }
+
+    const meeting = group.meetingDateTime;
+    if (meeting) {
+      const cutoff = new Date(meeting.getTime() + QrVerificationService.QR_CUTOFF_MINUTES * 60 * 1000);
+      if (new Date() > cutoff) {
+        throw new BadRequestException(
+          '매치 시작 30분이 지나 QR 인증을 받을 수 없습니다. 30분 내에 스캔하지 않은 참가자는 노쇼로 처리됩니다.',
+        );
+      }
     }
 
     const token = crypto.randomBytes(TOKEN_LEN).toString('hex');
@@ -81,6 +94,12 @@ export class QrVerificationService {
 
     const user = participant.user as { nickname?: string } | undefined;
     const nickname = user?.nickname ?? '용병';
+
+    // QR 인증 완료 시각 기록 (노쇼 판별용)
+    await this.participantRepository.update(
+      { id: participant.id },
+      { qrVerifiedAt: new Date() },
+    );
 
     // 토큰 1회 사용 후 무효화
     qrTokenStore.delete(token);

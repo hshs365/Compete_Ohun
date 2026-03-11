@@ -13,6 +13,7 @@ import { GroupParticipantPosition } from './entities/group-participant-position.
 import { GroupReferee } from './entities/group-referee.entity';
 import { GroupFavorite } from './entities/group-favorite.entity';
 import { MatchReview } from './entities/match-review.entity';
+import { MercenaryReview } from './entities/mercenary-review.entity';
 import { GroupProvisionalFacility } from './entities/group-provisional-facility.entity';
 import { GroupWaitlist } from './entities/group-waitlist.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -21,7 +22,7 @@ import { FacilitiesModule } from '../facilities/facilities.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Group, GroupParticipant, GroupGameSettings, GroupEvaluation, GroupParticipantPosition, GroupReferee, GroupFavorite, MatchReview, GroupProvisionalFacility, GroupWaitlist]),
+    TypeOrmModule.forFeature([Group, GroupParticipant, GroupGameSettings, GroupEvaluation, GroupParticipantPosition, GroupReferee, GroupFavorite, MatchReview, MercenaryReview, GroupProvisionalFacility, GroupWaitlist]),
     NotificationsModule,
     forwardRef(() => UsersModule),
     FacilitiesModule,

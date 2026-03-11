@@ -35,21 +35,44 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
   const pointColor = SPORT_POINT_COLORS[effectiveSport] ?? SPORT_POINT_COLORS['전체'];
   const chipStyle = SPORT_CHIP_STYLES[effectiveSport] ?? SPORT_CHIP_STYLES['전체'];
 
+  const getTodayString = useCallback(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  /** 스키마 기준 기본값: 희망급수/경기방식→상관없음, 포지션→전체 */
+  const getDefaultValues = useCallback((sport: string): Record<string, string | string[] | boolean> => {
+    const s = MERCENARY_RECRUIT_FORM[sport];
+    if (!s?.fields?.length) return {};
+    const defaults: Record<string, string | string[] | boolean> = {};
+    for (const f of s.fields) {
+      if (f.type === 'select') {
+        const hasAll = f.options?.some((o) => o.value === '' || o.value === 'all');
+        defaults[f.key] = hasAll ? (f.options?.find((o) => o.value === 'all')?.value ?? f.options?.find((o) => o.value === '')?.value ?? '') : '';
+      } else if (f.type === 'multiselect' && f.options?.some((o) => o.value === 'all')) {
+        defaults[f.key] = ['all'];
+      }
+    }
+    return defaults;
+  }, []);
+
   useEffect(() => {
     if (isOpen && isAllMode) {
       setModalSport(SPORT_OPTIONS.find((s) => MERCENARY_RECRUIT_FORM[s]) ?? SPORT_OPTIONS[0] ?? '배드민턴');
     }
   }, [isOpen, isAllMode]);
 
-  const getTodayString = useCallback(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }, []);
+  // 종목 변경 시 구인 조건(step4) 기본값 갱신
+  useEffect(() => {
+    if (!isOpen) return;
+    setValues((prev) => ({ ...getDefaultValues(effectiveSport), ...prev }));
+  }, [effectiveSport, isOpen, getDefaultValues]);
 
   useEffect(() => {
     if (!isOpen) return;
     setStep(1);
-    setValues({});
+    const defSport = isAllMode ? (SPORT_OPTIONS.find((s) => MERCENARY_RECRUIT_FORM[s]) ?? SPORT_OPTIONS[0] ?? '배드민턴') : selectedSport;
+    setValues(getDefaultValues(defSport));
     setTitle('');
     setLocation('');
     setCoordinates([36.3504, 127.3845]);
@@ -60,7 +83,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
     setGenderRestriction('');
     setSelectedEquipment([]);
     setMapKey((k) => k + 1);
-  }, [isOpen, getTodayString]);
+  }, [isOpen, getTodayString, isAllMode, selectedSport, getDefaultValues]);
 
   const [values, setValues] = useState<Record<string, string | string[] | boolean>>({});
   const [title, setTitle] = useState('');
@@ -204,14 +227,15 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
     const focusRing = { ['--tw-ring-color' as string]: pointColor };
 
     if (field.type === 'select') {
+      const hasDefaultOpt = (field.options ?? []).some((o) => o.value === '' || o.value === 'all');
       return (
         <select
-          value={typeof value === 'string' ? value : ''}
+          value={typeof value === 'string' ? value : (hasDefaultOpt ? (field.options?.find((o) => o.value === 'all')?.value ?? field.options?.find((o) => o.value === '')?.value ?? '') : '')}
           onChange={(e) => handleFieldChange(field.key, e.target.value)}
           className={baseInputClass}
           style={focusRing}
         >
-          <option value="">선택해 주세요</option>
+          {!hasDefaultOpt && <option value="">선택해 주세요</option>}
           {(field.options ?? []).map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
@@ -331,12 +355,13 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
     try {
       const sportSpecificData: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(values)) {
-        if (v !== undefined && v !== null && v !== '') {
-          if (Array.isArray(v)) {
-            sportSpecificData[k] = v.length > 0 ? v : undefined;
-          } else {
-            sportSpecificData[k] = v;
-          }
+        if (v === undefined || v === null) continue;
+        if (Array.isArray(v)) {
+          const filtered = v.filter((x) => x !== 'all');
+          if (filtered.length > 0) sportSpecificData[k] = filtered;
+        } else {
+          // '' 또는 'all'(상관없음)도 전송 — 백엔드에서 유효값으로 처리
+          sportSpecificData[k] = v;
         }
       }
       const meetingDateTime = meetingDate && meetingStartTime

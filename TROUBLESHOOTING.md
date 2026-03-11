@@ -220,11 +220,15 @@ http://localhost:3000
 ### 브라우저에서 이미지가 안 보일 때
 - API는 이미지 URL을 **`/uploads/profile/파일명`** 형태로 반환합니다.
 - 배포 환경에서 프론트가 `allcourtplay.com`이면, `img src="/uploads/profile/xxx"` 요청은 **`https://allcourtplay.com/uploads/profile/xxx`**로 갑니다.
-- **Nginx에서 `/uploads`를 백엔드로 프록시**해야 Nest가 제공하는 정적 파일(uploads 디렉터리)이 노출됩니다. 예:
+- **Nginx에서 `/uploads`를 백엔드로 프록시**해야 Nest가 제공하는 정적 파일(uploads 디렉터리)이 노출됩니다.
+  - 예시 설정: `docs/nginx-uploads-example.conf` 참고
   ```nginx
   location /uploads {
       proxy_pass http://127.0.0.1:3000;
       proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
   }
   ```
 - 서버에서 실제 파일 존재 여부 확인:  

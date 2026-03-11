@@ -1,5 +1,5 @@
 import React from 'react';
-import { XMarkIcon, TrophyIcon, StarIcon, FireIcon, CalendarIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, TrophyIcon, StarIcon, FireIcon, CalendarIcon, MapPinIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import { TrophyIcon as TrophySolidIcon } from '@heroicons/react/24/solid';
 
 interface Ranker {
@@ -101,8 +101,12 @@ const RankerDetail: React.FC<RankerDetailProps> = ({ ranker, onClose }) => {
           </button>
           
           <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-3xl font-bold border-4 border-white/30">
-              {ranker.nickname.charAt(0)}
+            <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border-4 border-white/30 overflow-hidden">
+              {ranker.avatar ? (
+                <img src={ranker.avatar} alt={ranker.nickname} className="w-full h-full object-cover" />
+              ) : (
+                <UserCircleIcon className="w-14 h-14 text-white/90" />
+              )}
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
