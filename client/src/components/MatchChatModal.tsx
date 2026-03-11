@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { XMarkIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
-import { api } from '../utils/api';
+import { io } from 'socket.io-client';
+import { api, getSocketUrl } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { showError } from '../utils/swal';
 
@@ -90,13 +91,38 @@ const MatchChatModal: React.FC<MatchChatModalProps> = ({
   };
 
   useEffect(() => {
-    if (!conversation?.id) return;
+    if (!conversation?.id || !user) return;
     fetchMessages(conversation.id);
+    // 내가 읽음 처리 (상대방의 메시지를 읽었음을 서버에 전달)
+    api.patch(`/api/chat/conversations/${conversation.id}/read`).catch(() => {});
     pollRef.current = setInterval(() => fetchMessages(conversation.id), 4000);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [conversation?.id]);
+  }, [conversation?.id, user]);
+
+  // 소켓: 상대방이 읽었을 때 read-receipt 실시간 수신 (otherLastReadAt 즉시 반영)
+  useEffect(() => {
+    if (!conversation?.id || !user) return;
+    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+    if (!token) return;
+    const socket = io(getSocketUrl(), {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+      auth: { token },
+    });
+    socket.emit('join-user', { userId: user.id });
+    socket.emit('join-conversation', { conversationId: conversation.id });
+    socket.on('read-receipt', (payload: { conversationId: number; readAt: string }) => {
+      if (payload.conversationId === conversation.id) {
+        setOtherLastReadAt(payload.readAt);
+      }
+    });
+    return () => {
+      socket.off('read-receipt');
+      socket.disconnect();
+    };
+  }, [conversation?.id, user]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
@@ -121,7 +147,8 @@ const MatchChatModal: React.FC<MatchChatModalProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // 한글 IME 조합 중 Enter 시 조합이 완료되지 않은 상태로 전송되는 것 방지
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       handleSend();
     }
@@ -129,7 +156,7 @@ const MatchChatModal: React.FC<MatchChatModalProps> = ({
 
   if (!user) {
     return (
-      <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50">
         <div className="rounded-2xl bg-[var(--color-bg-card)] p-6 max-w-sm w-full mx-4 shadow-xl border border-[var(--color-border-card)]">
           <p className="text-[var(--color-text-secondary)] text-center mb-4">로그인 후 채팅할 수 있습니다.</p>
           <button
@@ -213,8 +240,12 @@ const MatchChatModal: React.FC<MatchChatModalProps> = ({
                             hour: '2-digit',
                             minute: '2-digit',
                           })}
-                          {isMe && otherLastReadAt && new Date(m.createdAt).getTime() <= new Date(otherLastReadAt).getTime() && (
-                            <span className="text-white/90" title="읽음" aria-label="읽음">1</span>
+                          {isMe && (
+                            otherLastReadAt && new Date(m.createdAt).getTime() <= new Date(otherLastReadAt).getTime() ? (
+                              <span className="text-white/90" title="읽음" aria-label="읽음">읽음</span>
+                            ) : (
+                              <span className="text-white/70" title="안 읽음" aria-label="안 읽음">1</span>
+                            )
                           )}
                         </p>
                       </div>

@@ -765,10 +765,12 @@ const FloatingChatWidget: React.FC = () => {
                                   'ko-KR',
                                   { hour: '2-digit', minute: '2-digit' }
                                 )}
-                                {isMe && otherLastReadAt && new Date(m.createdAt).getTime() <= new Date(otherLastReadAt).getTime() && (
-                                  <span className="text-white/90" title="읽음" aria-label="읽음">
-                                    1
-                                  </span>
+                                {isMe && (
+                                  otherLastReadAt && new Date(m.createdAt).getTime() <= new Date(otherLastReadAt).getTime() ? (
+                                    <span className="text-white/90" title="읽음" aria-label="읽음">읽음</span>
+                                  ) : (
+                                    <span className="text-white/70" title="안 읽음" aria-label="안 읽음">1</span>
+                                  )
                                 )}
                               </p>
                             </div>
