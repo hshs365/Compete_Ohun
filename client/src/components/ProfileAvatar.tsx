@@ -27,11 +27,14 @@ const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
   const [imageError, setImageError] = useState(false);
   const resolvedUrl = profileImageUrl ? getImageUrl(profileImageUrl) : '';
   const showImage = resolvedUrl && !imageError;
+  // URL이 바뀌면 이전 로드 실패 상태 초기화 (업로드 직후 등)
+  const urlKey = profileImageUrl ?? '';
 
   return (
     <>
       {showImage ? (
         <img
+          key={urlKey}
           src={resolvedUrl}
           alt={alt}
           className={className}

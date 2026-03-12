@@ -5,7 +5,7 @@ import { api } from '../utils/api';
 import { ChevronLeftIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import TacticalBoardCanvas, { type BoardParticipant } from './TacticalBoardCanvas';
 import ExpandableQRCode from './ExpandableQRCode';
-import { showError, showSuccess } from '../utils/swal';
+import { showError, showToast } from '../utils/swal';
 
 interface Participant {
   id: number;
@@ -144,7 +144,7 @@ const MatchEntryPage: React.FC = () => {
           positionX: vx,
           positionY: vy,
         });
-        showSuccess('포지션이 저장되었습니다.', '저장');
+        showToast('포지션이 저장되었습니다.', 'success');
         await fetchGroup();
       } catch (e: any) {
         showError(e?.message ?? '포지션 저장에 실패했습니다.', '저장 실패');

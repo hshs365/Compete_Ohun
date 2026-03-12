@@ -374,11 +374,12 @@ export class AuthController {
   async uploadProfileImage(
     @CurrentUser() user: User,
     @UploadedFile() file?: Express.Multer.File,
-  ) {
+  ): Promise<{ profileImageUrl: string }> {
     if (!file) {
       throw new BadRequestException('프로필 이미지 파일을 선택해주세요.');
     }
-    return this.authService.updateProfileImage(user.id, file);
+    const updated = await this.authService.updateProfileImage(user.id, file);
+    return { profileImageUrl: updated.profileImageUrl ?? '' };
   }
 
   @UseGuards(JwtAuthGuard)

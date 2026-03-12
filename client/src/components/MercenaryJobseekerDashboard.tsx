@@ -16,7 +16,7 @@ import { api } from '../utils/api';
 import ProfileAvatar from './ProfileAvatar';
 import MercenaryProfileEditModal from './MercenaryProfileEditModal';
 import AvailabilityScheduleManager from './AvailabilityScheduleManager';
-import { showSuccess, showError } from '../utils/swal';
+import { showToast, showError } from '../utils/swal';
 
 const POINT_COLOR = '#22c55e';
 
@@ -66,9 +66,9 @@ const MercenaryJobseekerDashboard: React.FC = () => {
       await api.patch('/api/auth/me/mercenary-profile', {
         mercenaryActivityStatus: next,
       });
-      await showSuccess(
+      showToast(
         next === 'active' ? '플레이어 활동이 활성화되었습니다. 구인자 검색에 노출됩니다.' : '플레이어 활동이 일시 중지되었습니다.',
-        '저장 완료'
+        'success'
       );
       handleRefresh();
     } catch (err: unknown) {
@@ -83,7 +83,7 @@ const MercenaryJobseekerDashboard: React.FC = () => {
       await api.patch('/api/auth/me/mercenary-profile', {
         mercenaryAvailability: next,
       });
-      await showSuccess('활동 시간표가 저장되었습니다.', '저장 완료');
+      showToast('활동 시간표가 저장되었습니다.', 'success');
       handleRefresh();
     } catch (err: unknown) {
       showError(err instanceof Error ? err.message : '저장에 실패했습니다.', '오류');
@@ -96,9 +96,9 @@ const MercenaryJobseekerDashboard: React.FC = () => {
       await api.patch('/api/auth/me/mercenary-profile', {
         mercenaryActiveBySport: next,
       });
-      await showSuccess(
+      showToast(
         active ? `${sport} 플레이어 활동이 활성화되었습니다.` : `${sport} 플레이어 활동을 멈췄습니다.`,
-        '저장 완료'
+        'success'
       );
       handleRefresh();
     } catch (err: unknown) {

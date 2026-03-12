@@ -12,7 +12,7 @@ import MercenaryReviewModal from './MercenaryReviewModal';
 import HostQRModal from './HostQRModal';
 import EditGroupModal from './EditGroupModal';
 import ExpandableQRCode from './ExpandableQRCode';
-import { showError, showSuccess, showInfo, showConfirm } from '../utils/swal';
+import { showError, showSuccess, showInfo, showConfirm, showToast } from '../utils/swal';
 import { extractCityFromAddress, getUserCityForJoin } from '../utils/locationUtils';
 import { MANNER_SCORE_THRESHOLD } from '../constants/penalty';
 
@@ -1059,7 +1059,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
   const handleFollow = async (userId: number) => {
     try {
       await api.post(`/api/users/follow/${userId}`);
-      await showSuccess('팔로우했습니다.', '팔로우');
+      showToast('팔로우했습니다.', 'success');
       window.dispatchEvent(new CustomEvent('followStateChanged'));
     } catch (err) {
       console.error('팔로우 실패:', err);
@@ -1070,7 +1070,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
   const handleUnfollow = async (userId: number) => {
     try {
       await api.delete(`/api/users/follow/${userId}`);
-      await showSuccess('언팔로우했습니다.', '언팔로우');
+      showToast('언팔로우했습니다.', 'success');
       window.dispatchEvent(new CustomEvent('followStateChanged'));
     } catch (err) {
       console.error('언팔로우 실패:', err);
@@ -1084,7 +1084,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
       setIsFavoriteLoading(true);
       const res = await api.post<{ favorited: boolean }>(`/api/groups/${group.id}/favorite`);
       setIsFavorited(res.favorited);
-      showSuccess(res.favorited ? '찜 목록에 추가되었습니다.' : '찜이 해제되었습니다.');
+      showToast(res.favorited ? '찜 목록에 추가되었습니다.' : '찜이 해제되었습니다.', 'success');
     } catch (err) {
       console.error('찜 토글 실패:', err);
       showError('찜 처리에 실패했습니다.');

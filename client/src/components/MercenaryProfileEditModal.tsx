@@ -3,7 +3,7 @@ import { XMarkIcon } from '@heroicons/react/24/outline';
 import { SPORT_ICONS, SPORT_CHIP_STYLES, MAIN_CATEGORIES } from '../constants/sports';
 import { EQUIPMENT_OPTIONS } from '../constants/equipment';
 import { api } from '../utils/api';
-import { showSuccess, showError } from '../utils/swal';
+import { showToast, showError } from '../utils/swal';
 import type { User } from '../contexts/AuthContext';
 
 const GRADE_OPTIONS: Record<string, { value: string; label: string }[]> = {
@@ -218,7 +218,7 @@ const MercenaryProfileEditModal: React.FC<MercenaryProfileEditModalProps> = ({
         sportPositions: sportPositions.filter((sp) => sp.positions.length > 0),
         sportEquipment: sportEquipment.filter((sp) => sp.equipment.length > 0),
       });
-      await showSuccess('플레이어 프로필이 저장되었습니다.', '저장 완료');
+      showToast('플레이어 프로필이 저장되었습니다.', 'success');
       onSuccess?.();
       onClose();
     } catch (err: unknown) {

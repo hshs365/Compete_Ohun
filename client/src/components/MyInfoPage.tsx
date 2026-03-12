@@ -24,7 +24,7 @@ import {
   CalendarIcon,
 } from '@heroicons/react/24/outline';
 import { TrophyIcon as TrophySolidIcon } from '@heroicons/react/24/solid';
-import { showError, showSuccess, showWarning, showInfo, showConfirm } from '../utils/swal';
+import { showError, showSuccess, showWarning, showInfo, showConfirm, showToast } from '../utils/swal';
 import ToggleSwitch from './ToggleSwitch';
 import { useAuth } from '../contexts/AuthContext';
 import { api, getImageUrl } from '../utils/api';
@@ -402,7 +402,7 @@ const MyInfoPage = () => {
         password: changeBusinessNumberPassword,
         newBusinessNumber: formatted,
       });
-      await showSuccess('사업자번호가 변경되었습니다.', '변경 완료');
+      showToast('사업자번호가 변경되었습니다.', 'success');
       closeChangeBusinessNumberModal();
       fetchUserData();
     } catch (error: unknown) {
@@ -733,7 +733,7 @@ const MyInfoPage = () => {
       const formData = new FormData();
       formData.append('profileImage', file);
       const response = await api.post<{ profileImageUrl?: string | null }>('/api/auth/me/profile-image', formData);
-      const imageUrl = response?.profileImageUrl ?? null;
+      const imageUrl = (response && typeof response === 'object' && (response as { profileImageUrl?: string | null }).profileImageUrl) || null;
       if (imageUrl) {
         setProfileData((prev) => (prev ? { ...prev, profileImage: imageUrl } : prev));
         if (profileData.id) localStorage.setItem(`profileImage_${profileData.id}`, imageUrl);
@@ -749,9 +749,9 @@ const MyInfoPage = () => {
         setProfileData((prev) => (prev ? { ...prev, profileImage: dataUrl } : prev));
         if (profileData.id) localStorage.setItem(`profileImage_${profileData.id}`, dataUrl);
       }
-      await showSuccess('프로필 사진이 저장되었습니다.', '프로필 사진 업로드');
-      // 서버와 완전 동기화 (표시용 URL이 상대경로 등일 때 일관되게 표시)
-      fetchUserData();
+      // 먼저 서버에서 프로필 재조회해 화면에 반영한 뒤 성공 메시지 표시
+      await fetchUserData();
+      showToast('프로필 사진이 저장되었습니다.', 'success');
     } catch (error) {
       console.error('프로필 사진 업로드 실패:', error);
       await showError('프로필 사진 저장에 실패했습니다. 네트워크를 확인하고 다시 시도해주세요.', '저장 실패');
@@ -794,7 +794,7 @@ const MyInfoPage = () => {
       const updatedData = await api.put<{ nickname: string; tag: string | null; nicknameChangedAt: string | null }>('/api/auth/me', { nickname });
       setProfileData({ ...profileData, nickname: updatedData.nickname, tag: updatedData.tag, nicknameChangedAt: updatedData.nicknameChangedAt });
       setIsEditingNickname(false);
-      await showSuccess('닉네임이 변경되었습니다.', '닉네임 변경');
+      showToast('닉네임이 변경되었습니다.', 'success');
     } catch (error) {
       console.error('닉네임 저장 실패:', error);
       const errorMessage = error instanceof Error ? error.message : '닉네임 변경에 실패했습니다.';
@@ -864,7 +864,7 @@ const MyInfoPage = () => {
       setIsEditingPhone(false);
       setPhoneVerificationCode('');
       setPhoneCodeCountdown(0);
-      await showSuccess('연락처가 저장되었습니다.', '저장 완료');
+      showToast('연락처가 저장되었습니다.', 'success');
     } catch (error) {
       console.error('전화번호 저장 실패:', error);
       await showError(
@@ -962,7 +962,7 @@ const MyInfoPage = () => {
     try {
       await api.put('/api/auth/me', { notifyRefereeRankMatchInRegion: value });
       setProfileData({ ...profileData, notifyRefereeRankMatchInRegion: value });
-      showSuccess(value ? '내 지역 랭크매치 심판 알림을 켰어요.' : '내 지역 랭크매치 심판 알림을 껐어요.');
+      showToast(value ? '내 지역 랭크매치 심판 알림을 켰어요.' : '내 지역 랭크매치 심판 알림을 껐어요.', 'success');
     } catch (error) {
       console.error('심판 알림 설정 업데이트 실패:', error);
       showError('설정 저장에 실패했어요. 다시 시도해 주세요.');
@@ -1044,7 +1044,7 @@ const MyInfoPage = () => {
                 detail: locationData
               }));
 
-              await showSuccess('주소가 저장되었습니다.', '주소 저장');
+              showToast('주소가 저장되었습니다.', 'success');
             } catch (error) {
               console.error('주소 저장 실패:', error);
               const errorMessage = error instanceof Error ? error.message : '주소 저장에 실패했습니다. 다시 시도해주세요.';
@@ -1134,6 +1134,7 @@ const MyInfoPage = () => {
             <div className="relative shrink-0">
               <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] md:w-20 md:h-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 sm:border-4 border-white/30 text-2xl sm:text-3xl font-bold overflow-hidden">
                 <ProfileAvatar
+                  key={profileData.profileImage ?? `avatar-${profileData.id}`}
                   profileImageUrl={profileData.profileImage}
                   alt=""
                   className="w-full h-full object-cover"
