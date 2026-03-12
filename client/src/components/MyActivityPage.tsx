@@ -245,7 +245,7 @@ const MyActivityPage = () => {
     <div className="flex flex-col w-full bg-[var(--color-bg-primary)]">
       {/* 히어로 / 상단 배너 (스포츠용품 페이지와 동일 톤) */}
       <header className="flex-shrink-0 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)]">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 md:py-12">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-6">
           <div className="flex flex-wrap items-start justify-between gap-4 mb-2">
             <div>
               <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-text-primary)]">
@@ -256,77 +256,46 @@ const MyActivityPage = () => {
               </p>
             </div>
           </div>
-          {/* 대시보드 게이지: 이번 달 활동시간 + 매너등급 */}
-          <div className="flex flex-wrap gap-4 mt-6">
-            <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-[var(--color-bg-primary)] border border-[var(--color-border-card)]">
-              <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
-                <span className="text-xl">⏱</span>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-[var(--color-text-secondary)]">이번 달 누적 활동</p>
-                <p className="text-xl font-bold text-[var(--color-text-primary)]">{thisMonthActivityHours}시간</p>
-              </div>
-            </div>
+          {/* 요약: 이번 달 활동 + 매너 (한 줄 컴팩트) — 일반 뱃지는 내정보에서만 표시 */}
+          <div className="flex flex-wrap items-center gap-3 mt-4">
+            <span className="text-sm text-[var(--color-text-secondary)]">이번 달 누적</span>
+            <span className="text-base font-semibold text-[var(--color-text-primary)]">{thisMonthActivityHours}시간</span>
             {mannerScore != null && (() => {
               const config = getMannerGradeConfig(mannerScore);
               return (
-                <div className={`flex items-center gap-3 px-5 py-3 rounded-xl ${config.bg} border ${config.border}`}>
-                  <div className={`w-12 h-12 rounded-xl ${config.iconBg} flex items-center justify-center text-2xl`}>
-                    {config.icon}
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-[var(--color-text-secondary)]">{config.label}</p>
-                    <div className="flex items-baseline gap-1.5">
-                      <p className="badge-text-contrast text-xl font-bold">{mannerScore}</p>
-                      <p className="text-xs text-[var(--color-text-secondary)]">점 · {config.desc}</p>
-                    </div>
-                  </div>
-                </div>
+                <>
+                  <span className="text-[var(--color-text-secondary)]">·</span>
+                  <span className={`text-sm font-medium ${config.label ? 'text-[var(--color-text-primary)]' : ''}`}>{config.label}</span>
+                  <span className="text-base font-semibold badge-text-contrast">{mannerScore}점</span>
+                </>
               );
             })()}
           </div>
-          {earnedTitles.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-4">
-              {earnedTitles.map((title) => (
+          {/* 획득 타이틀: 일반 제외 (일반 뱃지는 내정보 프로필에서만) */}
+          {earnedTitles.filter((t) => t !== '일반').length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {earnedTitles.filter((t) => t !== '일반').map((title) => (
                 <span
                   key={title}
-                  className="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-semibold text-sm shadow-sm"
+                  className="px-3 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-semibold text-xs shadow-sm"
                 >
                   {title}
                 </span>
               ))}
             </div>
           )}
-          {/* 종목별 필터: 드롭다운 스타일 */}
-          <div className="flex flex-wrap items-center gap-4 mt-6">
+          {/* 종목별 보기: 드롭다운으로 정렬 조건만 표시 */}
+          <div className="flex flex-wrap items-center gap-2 mt-4">
             <span className="text-sm font-medium text-[var(--color-text-primary)]">종목별 보기</span>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setCategoryFilter('전체')}
-                className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  categoryFilter === '전체'
-                    ? 'bg-[var(--color-blue-primary)] text-white shadow-sm'
-                    : 'bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] border border-[var(--color-border-card)] hover:border-[var(--color-blue-primary)]/40'
-                }`}
-              >
-                전체
-              </button>
-              {MAIN_CATEGORIES.filter((c) => c !== '전체').map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setCategoryFilter(cat)}
-                  className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                    categoryFilter === cat
-                      ? 'bg-[var(--color-blue-primary)] text-white shadow-sm'
-                      : 'bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] border border-[var(--color-border-card)] hover:border-[var(--color-blue-primary)]/40'
-                  }`}
-                >
-                  {cat}
-                </button>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="px-3 py-2 rounded-lg text-sm font-medium bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] border border-[var(--color-border-card)] focus:ring-2 focus:ring-[var(--color-blue-primary)] focus:outline-none"
+            >
+              {MAIN_CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
               ))}
-            </div>
+            </select>
           </div>
         </div>
       </header>

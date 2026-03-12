@@ -356,6 +356,31 @@ export class AuthController {
     return this.authService.updateProfile(user.id, updateProfileDto, file);
   }
 
+  /** 프로필 이미지 업로드 전용 (POST — PUT + multipart 미지원 이슈 회피) */
+  @UseGuards(JwtAuthGuard)
+  @Post('me/profile-image')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('profileImage', {
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    fileFilter: (req, file, callback) => {
+      const mimeOk = file.mimetype && file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/);
+      const extOk = file.originalname && /\.(jpg|jpeg|png|gif|webp)$/i.test(file.originalname);
+      if (mimeOk || extOk) {
+        return callback(null, true);
+      }
+      return callback(new BadRequestException('이미지 파일만 업로드 가능합니다.'), false);
+    },
+  }))
+  async uploadProfileImage(
+    @CurrentUser() user: User,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('프로필 이미지 파일을 선택해주세요.');
+    }
+    return this.authService.updateProfileImage(user.id, file);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('verify-business-number')
   @HttpCode(HttpStatus.OK)

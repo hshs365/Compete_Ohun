@@ -48,6 +48,7 @@ import ProductRegisterPage from './components/ProductRegisterPage';
 import FollowersPage from './components/FollowersPage'; // FollowersPage 컴포넌트 import
 import MatchEntryPage from './components/MatchEntryPage';
 import GuidePage from './components/GuidePage';
+import ErrorPage from './components/ErrorPage';
 import TeamsPage from './components/TeamsPage'; // TeamsPage 컴포넌트 import
 import TeamDetailPage from './components/TeamDetailPage'; // TeamDetailPage 컴포넌트 import
 import CreateTeamPage from './components/CreateTeamPage'; // CreateTeamPage 컴포넌트 import
@@ -844,6 +845,7 @@ function App() {
             <Route path="/register" element={<MultiStepRegister />} />
             <Route path="/auth/complete-profile" element={<CompleteProfilePage />} />
             <Route path="/auth/oauth/callback" element={<OAuthCallbackPage />} />
+            <Route path="/error" element={<ErrorPage />} />
             <Route path="/*" element={<MainLayout />} />
           </Routes>
         </AuthProvider>

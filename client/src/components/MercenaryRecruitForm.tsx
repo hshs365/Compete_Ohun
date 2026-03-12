@@ -83,6 +83,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
     setGenderRestriction('');
     setSelectedEquipment([]);
     setMapKey((k) => k + 1);
+    setLocationFetching(false);
   }, [isOpen, getTodayString, isAllMode, selectedSport, getDefaultValues]);
 
   const [values, setValues] = useState<Record<string, string | string[] | boolean>>({});
@@ -98,6 +99,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
   const [genderRestriction, setGenderRestriction] = useState<'male' | 'female' | ''>('');
   const [selectedEquipment, setSelectedEquipment] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [locationFetching, setLocationFetching] = useState(false);
 
   const handleSearchAddress = useCallback(() => {
     const openPostcode = () => {
@@ -179,41 +181,79 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
 
   const handleMarkerDragEnd = useCallback(async (lat: number, lng: number) => {
     setCoordinates([lat, lng]);
+    setLocationFetching(true);
+
+    const applyAddress = (addr: string) => {
+      if (addr?.trim()) setLocation(addr.trim());
+      setLocationFetching(false);
+    };
+
     const NAVER_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID;
     const NAVER_CLIENT_SECRET = import.meta.env.VITE_NAVER_MAP_CLIENT_SECRET;
-    if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) return;
-    try {
-      const response = await fetch(
-        `https://naveropenapi.apigw.ntruss.com/map-geocode/v2/geocode?coords=${lng},${lat}&output=json`,
-        {
-          headers: {
-            'X-NCP-APIGW-API-KEY-ID': NAVER_CLIENT_ID,
-            'X-NCP-APIGW-API-KEY': NAVER_CLIENT_SECRET,
-          },
+    if (NAVER_CLIENT_ID && NAVER_CLIENT_SECRET) {
+      try {
+        const response = await fetch(
+          `https://naveropenapi.apigw.ntruss.com/map-geocode/v2/geocode?coords=${lng},${lat}&output=json`,
+          {
+            headers: {
+              'X-NCP-APIGW-API-KEY-ID': NAVER_CLIENT_ID,
+              'X-NCP-APIGW-API-KEY': NAVER_CLIENT_SECRET,
+            },
+          }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'OK' && data.results?.length > 0) {
+            const result = data.results[0];
+            const region = result.region;
+            const roadAddress = result.land?.name;
+            let fullAddress = '';
+            if (roadAddress && region) {
+              const a1 = region.area1?.name || '';
+              const a2 = region.area2?.name || '';
+              const a3 = region.area3?.name || '';
+              fullAddress = `${a1} ${a2} ${a3} ${roadAddress}`.trim();
+            } else if (region) {
+              const a1 = region.area1?.name || '';
+              const a2 = region.area2?.name || '';
+              const a3 = region.area3?.name || '';
+              const a4 = region.area4?.name || '';
+              fullAddress = `${a1} ${a2} ${a3} ${a4}`.trim();
+            }
+            if (fullAddress) {
+              applyAddress(fullAddress);
+              return;
+            }
+          }
         }
-      );
-      if (!response.ok) return;
-      const data = await response.json();
-      if (data.status !== 'OK' || !data.results?.length) return;
-      const result = data.results[0];
-      const region = result.region;
-      const roadAddress = result.land?.name;
-      let fullAddress = '';
-      if (roadAddress && region) {
-        const a1 = region.area1?.name || '';
-        const a2 = region.area2?.name || '';
-        const a3 = region.area3?.name || '';
-        fullAddress = `${a1} ${a2} ${a3} ${roadAddress}`.trim();
-      } else if (region) {
-        const a1 = region.area1?.name || '';
-        const a2 = region.area2?.name || '';
-        const a3 = region.area3?.name || '';
-        const a4 = region.area4?.name || '';
-        fullAddress = `${a1} ${a2} ${a3} ${a4}`.trim();
+      } catch {
+        /* fallback to JS API */
       }
-      if (fullAddress) setLocation(fullAddress);
-    } catch {
-      /* ignore */
+    }
+
+    // Fallback: 네이버 지도 JS API reverseGeocode (지도 로드 시 geocoder 서브모듈 사용)
+    const naver = typeof window !== 'undefined' ? (window as any).naver : null;
+    if (naver?.maps?.Service?.reverseGeocode) {
+      try {
+        naver.maps.Service.reverseGeocode(
+          { location: new naver.maps.LatLng(lat, lng) },
+          (status: number, response: any) => {
+            if (status === naver.maps.Service.Status.OK && response?.result?.items?.length > 0) {
+              const items = response.result.items as { address: string; isRoadAddress?: boolean }[];
+              const road = items.find((i) => i.isRoadAddress);
+              const addr = (road ?? items[0]).address;
+              applyAddress(addr ?? '');
+            } else {
+              setLocationFetching(false);
+            }
+          }
+        );
+        return;
+      } catch {
+        setLocationFetching(false);
+      }
+    } else {
+      setLocationFetching(false);
     }
   }, []);
 
@@ -485,7 +525,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="예: 토요일 오전 배드민턴 A조 구합니다"
+                    placeholder="예: 토요 14시 ○○체육관, 초급 2명 구해요"
                     className="w-full px-4 py-3 rounded-xl bg-[var(--color-bg-primary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] text-base focus:outline-none focus:ring-2 min-h-[48px]"
                     style={{ ['--tw-ring-color' as string]: pointColor }}
                   />
@@ -495,9 +535,9 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
                   <div className="flex gap-2 mb-2">
                     <input
                       type="text"
-                      value={location}
+                      value={locationFetching ? '주소 조회 중...' : location}
                       readOnly
-                      placeholder="주소 찾기로 위치를 선택하세요"
+                      placeholder="주소 찾기 또는 지도에서 마커를 드래그해 선택"
                       className="flex-1 px-4 py-3 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border-card)] text-[var(--color-text-primary)] text-base min-h-[48px] cursor-pointer"
                       onClick={handleSearchAddress}
                       style={{ ['--tw-ring-color' as string]: pointColor }}
@@ -513,7 +553,12 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
                       <span className="text-sm">주소 찾기</span>
                     </button>
                   </div>
-                  <p className="text-xs text-[var(--color-text-secondary)] mb-2">주소 찾기 또는 지도에서 마커를 드래그해 위치를 선택하세요.</p>
+                  <p className="text-xs text-[var(--color-text-secondary)] mb-2">
+                    주소 찾기 또는 지도에서 마커를 드래그해 위치를 선택하세요. 마커를 움직이면 해당 위치의 주소가 자동으로 입력됩니다.
+                  </p>
+                  {locationFetching && (
+                    <p className="text-xs text-[var(--color-blue-primary)] mb-2">주소 조회 중...</p>
+                  )}
                   <button type="button" onClick={() => setShowMap(!showMap)} className="text-xs py-2 -m-1 min-h-[44px] touch-manipulation" style={{ color: pointColor }}>
                     {showMap ? '지도 숨기기' : '지도 보기'}
                   </button>

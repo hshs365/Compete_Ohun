@@ -67,7 +67,7 @@ const MannerScoreGauge: React.FC<MannerScoreGaugeProps> = ({
           className="absolute inset-0 flex items-center justify-center"
           style={{ fontSize: size === 'sm' ? '1rem' : size === 'md' ? '1.375rem' : '1.75rem' }}
         >
-          <span className={`font-bold tabular-nums ${config.textColor || ''}`}>{Math.round(clamped)}</span>
+          <span className="font-bold tabular-nums text-[var(--color-text-primary)]">{Math.round(clamped)}</span>
         </div>
       </div>
       {showLabel && (

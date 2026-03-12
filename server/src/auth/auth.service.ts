@@ -862,6 +862,12 @@ export class AuthService {
     return this.usersService.updateUser(userId, updateData);
   }
 
+  /** 프로필 이미지만 업로드 (POST 전용 — PUT은 multipart 미지원 이슈로 별도 라우트 사용) */
+  async updateProfileImage(userId: number, file: Express.Multer.File): Promise<User> {
+    const profileImageUrl = await this.uploadProfileImage(userId, file);
+    return this.usersService.updateUser(userId, { profileImageUrl } as Partial<User>);
+  }
+
   async updateMercenaryProfile(
     userId: number,
     dto: {

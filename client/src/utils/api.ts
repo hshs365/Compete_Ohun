@@ -60,6 +60,8 @@ export function getSocketUrl(): string {
   return 'http://localhost:3000';
 }
 
+import { getFriendlyApiMessage, NETWORK_ERROR_MESSAGE } from './apiErrorMessages';
+
 export interface ApiResponse<T> {
   data?: T;
   error?: string;
@@ -89,21 +91,30 @@ export const api = {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers,
+      });
+    } catch (e) {
+      // 네트워크 오류, CORS, 서버 다운 등 — 사용자에게 기술 용어 없이 안내
+      const apiError = new Error(NETWORK_ERROR_MESSAGE);
+      (apiError as any).response = { status: 0, isNetworkError: true };
+      throw apiError;
+    }
 
     if (!response.ok) {
-      let error: any;
+      let bodyMessage: string | null = null;
       try {
-        error = await response.json();
+        const error = await response.json();
+        bodyMessage = error.message || error.error || null;
       } catch {
-        error = { message: `HTTP ${response.status}: ${response.statusText}` };
+        // 응답 본문이 JSON이 아닌 경우 무시
       }
-      const errorMessage = error.message || error.error || `요청에 실패했습니다. (${response.status})`;
-      const apiError = new Error(errorMessage);
-      (apiError as any).response = { data: error, status: response.status };
+      const friendlyMessage = getFriendlyApiMessage(response.status, bodyMessage);
+      const apiError = new Error(friendlyMessage);
+      (apiError as any).response = { data: { message: bodyMessage }, status: response.status };
       throw apiError;
     }
 

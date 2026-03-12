@@ -732,7 +732,7 @@ const MyInfoPage = () => {
     try {
       const formData = new FormData();
       formData.append('profileImage', file);
-      const response = await api.put<{ profileImageUrl?: string | null }>('/api/auth/me', formData);
+      const response = await api.post<{ profileImageUrl?: string | null }>('/api/auth/me/profile-image', formData);
       const imageUrl = response?.profileImageUrl ?? null;
       if (imageUrl) {
         setProfileData((prev) => (prev ? { ...prev, profileImage: imageUrl } : prev));
@@ -1200,59 +1200,61 @@ const MyInfoPage = () => {
           </div>
         </div>
 
-        {/* 본문: 프로필 정보 · 주요 업적 · 보유 뱃지 — 모바일 패딩·그리드 */}
+        {/* 본문: 프로필 정보 · 주요 업적 · 보유 뱃지 — 컴팩트 배치 (공백 최소화) */}
         <div className="p-4 sm:p-5 md:p-6 space-y-4">
           <div className="bg-[var(--color-bg-primary)] rounded-xl p-3 sm:p-4 border border-[var(--color-border-card)]">
-            <h3 className="text-base sm:text-lg font-bold text-[var(--color-text-primary)] mb-2 sm:mb-3 flex items-center gap-2">
+            <h3 className="text-base font-bold text-[var(--color-text-primary)] mb-3 flex items-center gap-2">
               <StarIcon className="w-5 h-5 text-yellow-500 shrink-0" />
               프로필 정보
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-              <div className="min-w-0 p-4 sm:p-5 rounded-xl bg-[var(--color-bg-secondary)]/50 flex flex-col items-center text-center justify-center min-h-[140px] sm:min-h-[160px]">
-                <p className="text-base font-semibold text-[var(--color-text-secondary)] mb-2 w-full">주 활동지역</p>
-                <p className="text-xl sm:text-2xl font-bold text-[var(--color-text-primary)] flex items-center justify-center gap-2">
-                  <MapPinIcon className="w-6 h-6 shrink-0 text-[var(--color-blue-primary)]" />
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3 py-2 border-b border-[var(--color-border-card)]">
+                <span className="text-sm font-medium text-[var(--color-text-secondary)] shrink-0">주 활동지역</span>
+                <p className="text-base font-semibold text-[var(--color-text-primary)] flex items-center gap-1.5 min-w-0 justify-end">
+                  <MapPinIcon className="w-5 h-5 shrink-0 text-[var(--color-blue-primary)]" />
                   <span className="truncate">{profileData.residenceSido || '-'}</span>
                 </p>
               </div>
-              <div className="min-w-0 p-4 sm:p-5 rounded-xl bg-[var(--color-bg-secondary)]/50 flex flex-col items-center text-center justify-center min-h-[140px] sm:min-h-[160px]">
-                <p className="text-base font-semibold text-[var(--color-text-secondary)] mb-2 w-full">매너점수</p>
-                <MannerScoreGauge
-                  score={profileData.mannerScore ?? myProfileSummary?.mannerScore ?? 80}
-                  size="md"
-                  showLabel
-                  className="shrink-0"
-                />
+              <div className="flex items-center justify-between gap-3 py-2 border-b border-[var(--color-border-card)]">
+                <span className="text-sm font-medium text-[var(--color-text-secondary)] shrink-0">매너점수</span>
+                <div className="flex items-center gap-2 min-w-0 justify-end">
+                  <MannerScoreGauge
+                    score={profileData.mannerScore ?? myProfileSummary?.mannerScore ?? 80}
+                    size="sm"
+                    showLabel
+                    className="shrink-0"
+                  />
+                </div>
               </div>
-              <div className="min-w-0 p-4 sm:p-5 rounded-xl bg-[var(--color-bg-secondary)]/50 flex flex-col items-center text-center justify-center min-h-[140px] sm:min-h-[160px]">
-                <p className="text-base font-semibold text-[var(--color-text-secondary)] mb-2 w-full">주 종목</p>
-                <div className="flex flex-wrap gap-2 sm:gap-2.5 mt-0.5 justify-center">
+              <div className="flex items-center justify-between gap-3 py-2 border-b border-[var(--color-border-card)]">
+                <span className="text-sm font-medium text-[var(--color-text-secondary)] shrink-0">주 종목</span>
+                <div className="flex flex-wrap gap-1.5 justify-end min-w-0">
                   {(profileData.interestedSports?.length ?? 0) > 0 ? (
                     profileData.interestedSports!.map((sport) => {
                       const chip = SPORT_CHIP_STYLES[sport] ?? SPORT_CHIP_STYLES['전체'];
                       return (
                         <span
                           key={sport}
-                          className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-base font-semibold border badge-text-contrast ${chip.bg} ${chip.border}`}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-semibold border badge-text-contrast ${chip.bg} ${chip.border}`}
                         >
                           {SPORT_ICONS[sport] ?? '●'} {sport}
                         </span>
                       );
                     })
                   ) : (
-                    <span className="text-lg font-semibold text-[var(--color-text-secondary)]">전체</span>
+                    <span className="text-sm font-semibold text-[var(--color-text-secondary)]">전체</span>
                   )}
                 </div>
               </div>
-            </div>
-            <div className="mt-4 pt-4 border-t border-[var(--color-border-card)] flex items-center justify-between flex-wrap gap-2">
-              <div>
-                <p className="text-sm font-medium text-[var(--color-text-secondary)]">팔로워 / 팔로잉</p>
-                <p className="text-base font-semibold text-[var(--color-text-primary)]">
-                  <FormatNumber value={myProfileSummary?.followersCount ?? followStats.followers} /> / <FormatNumber value={myProfileSummary?.followingCount ?? followStats.following} />
-                </p>
+              <div className="flex items-center justify-between gap-3 pt-2">
+                <span className="text-sm font-medium text-[var(--color-text-secondary)]">팔로워 / 팔로잉</span>
+                <div className="flex items-center gap-2">
+                  <p className="text-base font-semibold text-[var(--color-text-primary)]">
+                    <FormatNumber value={myProfileSummary?.followersCount ?? followStats.followers} /> / <FormatNumber value={myProfileSummary?.followingCount ?? followStats.following} />
+                  </p>
+                  <button onClick={() => navigate('/followers')} className="px-3 py-1.5 text-sm text-[var(--color-blue-primary)] hover:underline touch-manipulation">보기</button>
+                </div>
               </div>
-              <button onClick={() => navigate('/followers')} className="min-h-[36px] px-4 py-2 text-sm text-[var(--color-blue-primary)] hover:underline touch-manipulation">보기</button>
             </div>
           </div>
 
