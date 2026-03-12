@@ -111,11 +111,11 @@ const CreateTeamPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!teamName.trim()) {
-      await showError('플레이어 크루명을 입력해주세요.', '입력 필요');
+      await showError('크루명을 입력해주세요.', '입력 필요');
       return;
     }
     if (!region) {
-      await showError('플레이어 크루 소재지를 선택해주세요.', '입력 필요');
+      await showError('크루 소재지를 선택해주세요.', '입력 필요');
       return;
     }
     setIsSubmitting(true);
@@ -133,11 +133,11 @@ const CreateTeamPage = () => {
       }
 
       const team = await api.post<{ id: number }>('/api/teams', formData);
-      await showSuccess('플레이어 크루가 생성되었습니다.', '플레이어 크루 생성 완료');
+      await showSuccess('크루가 생성되었습니다.', '크루 생성 완료');
       navigate(team?.id ? `/teams/${team.id}` : '/teams');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : '플레이어 크루 생성에 실패했습니다.';
-      await showError(message, '플레이어 크루 생성 실패');
+      const message = err instanceof Error ? err.message : '크루 생성에 실패했습니다.';
+      await showError(message, '크루 생성 실패');
     } finally {
       setIsSubmitting(false);
     }
@@ -152,13 +152,13 @@ const CreateTeamPage = () => {
             className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] mb-3 transition-colors"
           >
             <ChevronLeftIcon className="w-4 h-4" />
-            플레이어 크루 목록으로
+            크루 목록으로
           </Link>
           <h1 className="text-xl md:text-2xl font-bold text-[var(--color-text-primary)] mb-1">
-            플레이어 크루 만들기
+            크루 만들기
           </h1>
           <p className="text-sm text-[var(--color-text-secondary)] mb-4">
-            플레이어 크루 정보를 입력하고 함께할 멤버를 초대하세요. 생성하시는 분이 플레이어 크루장이 됩니다.
+            친해진 플레이어들과 크루를 결성하세요! 크루 정보를 입력하고 함께할 멤버를 초대하면 됩니다. 생성하시는 분이 크루장이 됩니다.
           </p>
           {/* 단계 표시 */}
           <div className="flex gap-2">
@@ -187,12 +187,12 @@ const CreateTeamPage = () => {
                 기본 정보
               </h2>
               <p className="text-sm text-[var(--color-text-secondary)]">
-                플레이어 크루을 대표하는 이름과 로고, 소재지를 입력하세요.
+                크루를 대표하는 이름과 로고, 소재지를 입력하세요.
               </p>
 
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                  플레이어 크루 로고 <span className="text-[var(--color-text-secondary)] font-normal">(선택)</span>
+                  크루 로고 <span className="text-[var(--color-text-secondary)] font-normal">(선택)</span>
                 </label>
                 <div className="flex items-center gap-4">
                   <label className="w-24 h-24 rounded-2xl border-2 border-dashed border-[var(--color-border-card)] flex items-center justify-center overflow-hidden cursor-pointer hover:border-[var(--color-blue-primary)] transition-colors shrink-0">
@@ -212,13 +212,13 @@ const CreateTeamPage = () => {
 
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                  플레이어 크루명 <span className="text-red-400">(필수)</span>
+                  크루명 <span className="text-red-400">(필수)</span>
                 </label>
                 <input
                   type="text"
                   value={teamName}
                   onChange={(e) => setTeamName(e.target.value)}
-                  placeholder="플레이어 크루 이름을 입력하세요"
+                  placeholder="크루 이름을 입력하세요"
                   maxLength={50}
                   className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
                 />
@@ -226,7 +226,7 @@ const CreateTeamPage = () => {
 
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                  플레이어 크루 소재지 <span className="text-red-400">(필수)</span>
+                  크루 소재지 <span className="text-red-400">(필수)</span>
                 </label>
                 <select
                   value={region}
@@ -242,20 +242,20 @@ const CreateTeamPage = () => {
 
               <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-[var(--color-bg-secondary)] text-sm text-[var(--color-text-secondary)]">
                 <ShieldCheckIcon className="w-5 h-5 shrink-0" />
-                <span>생성하시는 분이 플레이어 크루장이 됩니다.</span>
+                <span>생성하시는 분이 크루장이 됩니다.</span>
               </div>
             </section>
           )}
 
-          {/* Step 2: 플레이어 크루 구성 */}
+          {/* Step 2: 크루 구성 */}
           {step === 2 && (
             <section className="space-y-6 animate-fade-in">
               <h2 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
                 <UserGroupIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
-                플레이어 크루 구성
+                크루 구성
               </h2>
               <p className="text-sm text-[var(--color-text-secondary)]">
-                감독, 코치, 연락처를 입력하면 플레이어 크루원들이 연락하기 편합니다.
+                감독, 코치, 연락처를 입력하면 크루원들이 연락하기 편합니다.
               </p>
 
               <div>
@@ -289,7 +289,7 @@ const CreateTeamPage = () => {
                   type="text"
                   value={contact}
                   onChange={(e) => setContact(e.target.value)}
-                  placeholder="플레이어 크루 대표 연락처 (선택)"
+                  placeholder="크루 대표 연락처 (선택)"
                   maxLength={50}
                   className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
                 />
@@ -297,20 +297,20 @@ const CreateTeamPage = () => {
             </section>
           )}
 
-          {/* Step 3: 플레이어 크루 소개 */}
+          {/* Step 3: 크루 소개 */}
           {step === 3 && (
             <section className="space-y-6 animate-fade-in">
               <h2 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
                 <DocumentTextIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
-                플레이어 크루 소개
+                크루 소개
               </h2>
               <p className="text-sm text-[var(--color-text-secondary)]">
-                플레이어 크루의 성격, 목표, 활동 방식을 간단히 소개해주세요.
+                크루의 성격, 목표, 활동 방식을 간단히 소개해주세요.
               </p>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="플레이어 크루 소개를 입력하세요 (선택)"
+                placeholder="크루 소개를 입력하세요 (선택)"
                 rows={5}
                 maxLength={500}
                 className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] resize-none"
@@ -319,15 +319,15 @@ const CreateTeamPage = () => {
             </section>
           )}
 
-          {/* Step 4: 플레이어 크루원 초대 */}
+          {/* Step 4: 크루원 초대 */}
           {step === 4 && (
             <section className="space-y-6 animate-fade-in">
               <h2 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
                 <UserPlusIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
-                플레이어 크루원 초대
+                크루원 초대
               </h2>
               <p className="text-sm text-[var(--color-text-secondary)]">
-                팔로우 중인 유저를 검색해 플레이어 크루 생성과 함께 초대할 수 있습니다.
+                팔로우 중인 유저를 검색해 크루 생성과 함께 초대할 수 있습니다.
               </p>
 
               <div className="relative">
@@ -419,7 +419,7 @@ const CreateTeamPage = () => {
                 disabled={isSubmitting}
                 className="flex-1 sm:flex-[2] py-4 rounded-xl font-semibold text-white bg-[var(--color-blue-primary)] hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed transition-opacity"
               >
-                {isSubmitting ? '생성 중...' : '플레이어 크루 만들기'}
+                {isSubmitting ? '생성 중...' : '크루 만들기'}
               </button>
             )}
           </div>

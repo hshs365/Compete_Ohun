@@ -70,7 +70,7 @@ const TeamsPage = () => {
           setTeams([]);
         }
       } catch (error) {
-        console.error('플레이어 크루 목록 로드 실패:', error);
+        console.error('크루 목록 로드 실패:', error);
         setTeams([]);
       } finally {
         setIsLoading(false);
@@ -82,13 +82,16 @@ const TeamsPage = () => {
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto w-full pb-12">
       <div className="mb-4 flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">플레이어 크루</h2>
+        <div>
+          <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">크루</h2>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-0.5">친해진 플레이어들과 크루를 결성하세요!</p>
+        </div>
         <Link
           to="/teams/create"
           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white bg-[var(--color-blue-primary)] hover:opacity-90 transition-opacity"
         >
           <PlusIcon className="w-4 h-4" />
-          플레이어 크루 생성
+          크루 생성
         </Link>
       </div>
 
@@ -102,7 +105,7 @@ const TeamsPage = () => {
               : 'text-[var(--color-text-secondary)] border-transparent hover:text-[var(--color-text-primary)]'
           }`}
         >
-          내 근처 플레이어 크루
+          내 근처 크루
           {userRegion && <span className="text-xs ml-1 opacity-80">({userRegion})</span>}
         </button>
         <button
@@ -114,7 +117,7 @@ const TeamsPage = () => {
               : 'text-[var(--color-text-secondary)] border-transparent hover:text-[var(--color-text-primary)]'
           }`}
         >
-          타 지역 플레이어 크루
+          타 지역 크루
         </button>
       </div>
 
@@ -124,14 +127,14 @@ const TeamsPage = () => {
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-[var(--color-text-secondary)]" />
             <input
               type="text"
-              placeholder="플레이어 크루명, 지역으로 검색..."
+              placeholder="크루명, 지역으로 검색..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full py-2.5 pl-10 pr-4 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-card)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
             />
           </div>
           <p className="text-xs text-[var(--color-text-secondary)] mt-2">
-            다른 지역의 플레이어 크루을 검색하여 찾을 수 있습니다.
+            다른 지역의 크루를 검색하여 찾을 수 있습니다.
           </p>
         </div>
       )}
@@ -193,17 +196,17 @@ const TeamsPage = () => {
       </div>
 
       {isLoading ? (
-        <LoadingSpinner fullScreen={false} message="플레이어 크루 목록을 불러오는 중..." />
+        <LoadingSpinner fullScreen={false} message="크루 목록을 불러오는 중..." />
       ) : teams.length === 0 ? (
         <div className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-8 text-center">
           <p className="text-[var(--color-text-secondary)] mb-6">
             {activeTab === 'nearby'
               ? userRegion
-                ? `${userRegion} 지역에 등록된 플레이어 크루가 없습니다.`
+                ? `${userRegion} 지역에 등록된 크루가 없습니다.`
                 : '지역 정보가 없습니다. 내 정보에서 거주 지역을 설정해주세요.'
               : searchQuery.trim()
-              ? '검색 조건에 맞는 플레이어 크루가 없습니다.'
-              : '타 지역 플레이어 크루을 검색해 보세요.'}
+              ? '검색 조건에 맞는 크루가 없습니다.'
+              : '타 지역 크루를 검색해 보세요.'}
           </p>
           {activeTab === 'nearby' && userRegion && (
             <>
@@ -212,11 +215,11 @@ const TeamsPage = () => {
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-base font-semibold text-white bg-[var(--color-blue-primary)] hover:opacity-90 transition-opacity"
               >
                 <PlusIcon className="w-5 h-5" />
-                첫 번째 플레이어 크루 만들기
+                첫 번째 크루 만들기
               </Link>
               {NEARBY_REGIONS[userRegion] && NEARBY_REGIONS[userRegion].length > 0 && (
                 <div className="mt-8 pt-6 border-t border-[var(--color-border-card)]">
-                  <p className="text-sm text-[var(--color-text-secondary)] mb-3">근처 지역 플레이어 크루도 살펴보기</p>
+                  <p className="text-sm text-[var(--color-text-secondary)] mb-3">근처 지역 크루도 살펴보기</p>
                   <div className="flex flex-wrap justify-center gap-2">
                     {NEARBY_REGIONS[userRegion].map((region) => (
                       <button
@@ -237,7 +240,7 @@ const TeamsPage = () => {
             </>
           )}
           {activeTab === 'other' && !searchQuery.trim() && (
-            <p className="text-sm text-[var(--color-text-secondary)]">위 검색창에 플레이어 크루명 또는 지역을 입력해 보세요.</p>
+            <p className="text-sm text-[var(--color-text-secondary)]">위 검색창에 크루명 또는 지역을 입력해 보세요.</p>
           )}
         </div>
       ) : (

@@ -340,10 +340,12 @@ export class AuthController {
   @UseInterceptors(FileInterceptor('profileImage', {
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
     fileFilter: (req, file, callback) => {
-      if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
-        return callback(new BadRequestException('이미지 파일만 업로드 가능합니다.'), false);
+      const mimeOk = file.mimetype && file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/);
+      const extOk = file.originalname && /\.(jpg|jpeg|png|gif|webp)$/i.test(file.originalname);
+      if (mimeOk || extOk) {
+        return callback(null, true);
       }
-      callback(null, true);
+      return callback(new BadRequestException('이미지 파일만 업로드 가능합니다.'), false);
     },
   }))
   async updateProfile(

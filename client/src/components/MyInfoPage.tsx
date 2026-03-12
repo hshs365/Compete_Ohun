@@ -726,27 +726,32 @@ const MyInfoPage = () => {
   /** 크롭 모달에서 저장 시: 크롭된 blob을 파일로 만들어 업로드 */
   const handleProfileCropConfirm = async (blob: Blob, fileName: string) => {
     if (!profileData) return;
-    const file = new File([blob], fileName, { type: blob.type });
+    // 모바일에서 blob.type이 비어 있을 수 있으므로 기본값 지정 (서버 fileFilter 통과)
+    const mimeType = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/jpeg';
+    const file = new File([blob], fileName, { type: mimeType });
     try {
       const formData = new FormData();
       formData.append('profileImage', file);
       const response = await api.put<{ profileImageUrl?: string | null }>('/api/auth/me', formData);
-      if (response) {
-        const imageUrl = response.profileImageUrl ?? null;
-        if (imageUrl) {
-          setProfileData({ ...profileData, profileImage: imageUrl });
-          if (profileData.id) localStorage.setItem(`profileImage_${profileData.id}`, imageUrl);
-          checkAuth();
-        } else {
+      const imageUrl = response?.profileImageUrl ?? null;
+      if (imageUrl) {
+        setProfileData((prev) => (prev ? { ...prev, profileImage: imageUrl } : prev));
+        if (profileData.id) localStorage.setItem(`profileImage_${profileData.id}`, imageUrl);
+        checkAuth();
+      } else {
+        // 서버가 URL을 안 주면 로컬 미리보기만 (재조회로 서버 값 동기화)
+        const dataUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
-          reader.onloadend = () => {
-            setProfileData({ ...profileData, profileImage: reader.result as string });
-            if (profileData.id) localStorage.setItem(`profileImage_${profileData.id}`, reader.result as string);
-          };
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
           reader.readAsDataURL(file);
-        }
-        await showSuccess('프로필 사진이 저장되었습니다.', '프로필 사진 업로드');
+        });
+        setProfileData((prev) => (prev ? { ...prev, profileImage: dataUrl } : prev));
+        if (profileData.id) localStorage.setItem(`profileImage_${profileData.id}`, dataUrl);
       }
+      await showSuccess('프로필 사진이 저장되었습니다.', '프로필 사진 업로드');
+      // 서버와 완전 동기화 (표시용 URL이 상대경로 등일 때 일관되게 표시)
+      fetchUserData();
     } catch (error) {
       console.error('프로필 사진 업로드 실패:', error);
       await showError('프로필 사진 저장에 실패했습니다. 네트워크를 확인하고 다시 시도해주세요.', '저장 실패');

@@ -97,11 +97,11 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!teamName.trim()) {
-      await showError('플레이어 크루명을 입력해주세요.', '입력 필요');
+      await showError('크루명을 입력해주세요.', '입력 필요');
       return;
     }
     if (!region) {
-      await showError('플레이어 크루 소재지를 선택해주세요.', '입력 필요');
+      await showError('크루 소재지를 선택해주세요.', '입력 필요');
       return;
     }
     setIsSubmitting(true);
@@ -120,7 +120,7 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
       }
 
       await api.post('/api/teams', formData);
-      await showSuccess('플레이어 크루가 생성되었습니다.', '플레이어 크루 생성 완료');
+      await showSuccess('크루가 생성되었습니다.', '크루 생성 완료');
       setTeamName('');
       setDescription('');
       setCoach('');
@@ -132,7 +132,7 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
       onSuccess?.();
       onClose();
     } catch (err: any) {
-      await showError(err?.message || '플레이어 크루 생성에 실패했습니다.', '플레이어 크루 생성 실패');
+      await showError(err?.message || '크루 생성에 실패했습니다.', '크루 생성 실패');
     } finally {
       setIsSubmitting(false);
     }
@@ -155,7 +155,7 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
       >
         <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-card)] bg-[var(--color-bg-primary)]">
           <h2 id="create-team-title" className="text-lg font-semibold text-[var(--color-text-primary)]">
-            플레이어 크루 생성
+            크루 생성
           </h2>
           <button
             type="button"
@@ -168,10 +168,10 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {/* 플레이어 크루 소재지(지역) — 맨 앞 단계 */}
+          {/* 크루 소재지(지역) — 맨 앞 단계 */}
           <div>
             <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              플레이어 크루 소재지 <span className="text-[var(--color-text-secondary)]">(필수)</span>
+              크루 소재지 <span className="text-[var(--color-text-secondary)]">(필수)</span>
             </label>
             <select
               value={region}
@@ -185,9 +185,9 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
             </select>
           </div>
 
-          {/* 플레이어 크루 로고 */}
+          {/* 크루 로고 */}
           <div>
-            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">플레이어 크루 로고</label>
+            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">크루 로고</label>
             <div className="flex items-center gap-4">
               <label className="w-20 h-20 rounded-2xl border-2 border-dashed border-[var(--color-border-card)] flex items-center justify-center overflow-hidden cursor-pointer hover:border-[var(--color-blue-primary)] transition-colors shrink-0">
                 {logoPreview ? (
@@ -206,13 +206,13 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
 
           <div>
             <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              플레이어 크루명 <span className="text-[var(--color-text-secondary)]">(필수)</span>
+              크루명 <span className="text-[var(--color-text-secondary)]">(필수)</span>
             </label>
             <input
               type="text"
               value={teamName}
               onChange={(e) => setTeamName(e.target.value)}
-              placeholder="플레이어 크루 이름을 입력하세요"
+              placeholder="크루 이름을 입력하세요"
               maxLength={50}
               className="w-full px-4 py-2.5 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-card)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
             />
@@ -235,14 +235,14 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
 
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-bg-secondary)] text-sm text-[var(--color-text-secondary)]">
             <UserGroupIcon className="w-5 h-5 shrink-0" />
-            <span>생성자가 플레이어 크루장이 됩니다.</span>
+            <span>생성자가 크루장이 됩니다.</span>
           </div>
 
           {/* 팔로워에서 찾아오기 */}
           <div>
             <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
               <UserPlusIcon className="w-4 h-4 inline mr-1" />
-              플레이어 크루원 초대 (팔로워에서 찾기)
+              크루원 초대 (팔로워에서 찾기)
             </label>
             <div className="relative mb-2">
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--color-text-secondary)]" />
@@ -325,18 +325,18 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
               type="text"
               value={contact}
               onChange={(e) => setContact(e.target.value)}
-              placeholder="플레이어 크루 대표 연락처 (선택)"
+              placeholder="크루 대표 연락처 (선택)"
               maxLength={50}
               className="w-full px-4 py-2.5 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-card)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">플레이어 크루 소개</label>
+            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">크루 소개</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="플레이어 크루 소개를 입력하세요 (선택)"
+              placeholder="크루 소개를 입력하세요 (선택)"
               rows={3}
               maxLength={500}
               className="w-full px-4 py-2.5 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-card)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] resize-none"
@@ -356,7 +356,7 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
               disabled={isSubmitting}
               className="flex-1 py-3 rounded-lg font-medium text-white bg-[var(--color-blue-primary)] hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed transition-opacity"
             >
-              {isSubmitting ? '생성 중...' : '플레이어 크루 생성'}
+              {isSubmitting ? '생성 중...' : '크루 생성'}
             </button>
           </div>
         </form>
