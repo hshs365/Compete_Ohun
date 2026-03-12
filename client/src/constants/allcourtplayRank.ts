@@ -30,9 +30,11 @@ export function getAllcourtplayRankStyle(rank: string): string {
   return ALLCOURTPLAY_RANK_STYLES.F;
 }
 
-/** 랭크 표시 텍스트 (none → 급수 없음, 배드민턴 A~E → A조~E조) */
+/** 랭크 표시 텍스트 (none → 급수 없음, 배드민턴 A~E → A조~E조). 한글 '이'는 E조로 통일 */
 export function getRankDisplayLabel(sport: string, rank: string): string {
   if (rank === 'none') return '급수 없음';
-  if (sport === '배드민턴' && /^[A-E]$/i.test(rank)) return `${rank.toUpperCase()}조`;
-  return rank;
+  const r = rank?.trim();
+  if (sport === '배드민턴' && (r === '이' || r === 'E')) return 'E조';
+  if (sport === '배드민턴' && /^[A-E]$/i.test(r ?? '')) return `${(r ?? '').toUpperCase()}조`;
+  return rank ?? '';
 }

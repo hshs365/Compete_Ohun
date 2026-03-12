@@ -82,7 +82,7 @@ const MyActivityPage = () => {
         setMyParticipations(Array.isArray(participations) ? participations : []);
         setMyCreations(Array.isArray(creations) ? creations : []);
       } catch (error) {
-        console.error('용병 기록 조회 실패:', error);
+        console.error('플레이어 기록 조회 실패:', error);
       } finally {
         setIsLoading(false);
       }
@@ -123,7 +123,7 @@ const MyActivityPage = () => {
     return myCreations.filter((g) => g.category === categoryFilter);
   }, [myCreations, categoryFilter]);
 
-  /** 용병 활동 전체 목록 (참여 + 생성 통합, 일정순 정렬) */
+  /** 플레이어 활동 전체 목록 (참여 + 생성 통합, 일정순 정렬) */
   const allActivities = useMemo(() => {
     const participations = filteredParticipations.map((g) => ({ ...g, _activityType: 'participated' as const }));
     const creations = filteredCreations.map((g) => ({ ...g, _activityType: 'created' as const }));
@@ -236,7 +236,7 @@ const MyActivityPage = () => {
   if (isLoading) {
     return (
       <div className="flex flex-1 w-full bg-[var(--color-bg-primary)] items-center justify-center min-h-[320px]">
-        <LoadingSpinner fullScreen={false} message="용병 기록을 불러오는 중..." />
+        <LoadingSpinner fullScreen={false} message="플레이어 기록을 불러오는 중..." />
       </div>
     );
   }
@@ -249,10 +249,10 @@ const MyActivityPage = () => {
           <div className="flex flex-wrap items-start justify-between gap-4 mb-2">
             <div>
               <h1 className="text-3xl md:text-4xl font-bold text-[var(--color-text-primary)]">
-                용병 활동 내역
+                플레이어 활동 내역
               </h1>
               <p className="text-[var(--color-text-secondary)] mt-2 max-w-2xl">
-                참여·생성한 용병 활동과 획득한 타이틀을 한눈에 확인하세요.
+                참여·생성한 플레이어 활동과 획득한 타이틀을 한눈에 확인하세요.
               </p>
             </div>
           </div>
@@ -337,8 +337,8 @@ const MyActivityPage = () => {
           <div className="flex flex-wrap items-center justify-between gap-4 p-6 border-b border-[var(--color-border-card)] bg-[var(--color-bg-primary)]/50">
             <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">
               {categoryFilter === '전체'
-                ? '용병 기록'
-                : `${categoryFilter} 용병 기록`}
+                ? '플레이어 기록'
+                : `${categoryFilter} 플레이어 기록`}
             </h2>
             <div className="flex flex-wrap items-center gap-2">
               {SPORT_STATS_SPORTS.includes(categoryFilter) && (
@@ -368,19 +368,19 @@ const MyActivityPage = () => {
             {!hasDataForCategory(categoryFilter) ? (
               <div className="py-16 text-center text-[var(--color-text-secondary)]">
                 <FunnelIcon className="w-14 h-14 mx-auto mb-4 opacity-40" />
-                <p className="font-medium text-[var(--color-text-primary)]">해당 종목의 용병 기록이 없습니다.</p>
-                <p className="text-sm mt-1">용병 매치에 참여해 보세요.</p>
+                <p className="font-medium text-[var(--color-text-primary)]">해당 종목의 플레이어 기록이 없습니다.</p>
+                <p className="text-sm mt-1">플레이어 매치에 참여해 보세요.</p>
               </div>
             ) : (
               <>
-                {/* 용병 활동 요약: 참여 N건 · 생성 N건 */}
+                {/* 플레이어 활동 요약: 참여 N건 · 생성 N건 */}
                 <div className="flex items-center gap-4 mb-6 px-1">
                   <span className="text-sm font-medium text-[var(--color-text-secondary)]">
                     참여 {filteredParticipations.length}건 · 생성 {filteredCreations.length}건
                   </span>
                 </div>
 
-                {/* 용병 활동 전체 목록 */}
+                {/* 플레이어 활동 전체 목록 */}
                 {allActivities.length > 0 ? (
                   <ul className="space-y-3">
                     {allActivities.map((g) => {
@@ -440,16 +440,16 @@ const MyActivityPage = () => {
                       <UserGroupIcon className="w-12 h-12 text-[var(--color-text-secondary)] opacity-60" />
                     </div>
                     <p className="text-lg font-semibold text-[var(--color-text-primary)]">
-                      용병 활동 내역이 없습니다.
+                      플레이어 활동 내역이 없습니다.
                     </p>
                     <p className="text-sm text-[var(--color-text-secondary)] mt-2">
-                      용병 매치를 찾아 참가해 보거나, 직접 모임을 만들어 보세요.
+                      플레이어 매치를 찾아 참가해 보거나, 직접 모임을 만들어 보세요.
                     </p>
                     <button
                       onClick={() => navigate('/')}
                       className="mt-8 px-8 py-4 rounded-xl text-lg font-bold bg-[var(--color-blue-primary)] text-white hover:opacity-90 transition-opacity shadow-lg"
                     >
-                      용병 매치 찾아보기
+                      플레이어 매치 찾아보기
                     </button>
                   </div>
                 )}

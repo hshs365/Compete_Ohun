@@ -69,7 +69,7 @@ interface GroupDetailData {
   meetingTime: string | null;
   meetingDateTime?: string | null;
   participantCount: number;
-  /** 매치장 제외 참가자 수 (용병 구하기 등) */
+  /** 매치장 제외 참가자 수 (플레이어 구하기 등) */
   participantCountExcludingCreator?: number;
   maxParticipants?: number | null;
   creator?: { id: number; nickname: string; mannerScore?: number; noShowCount?: number };
@@ -80,7 +80,7 @@ interface GroupDetailData {
   participants?: ParticipantItem[];
   /** 슈퍼 노출 종료 시각 (이후까지 리스트 최상단 고정) */
   boostedUntil?: string | null;
-  /** 노쇼 방지 예치금 (용병 참가 시, 경기 종료 후 환급) */
+  /** 노쇼 방지 예치금 (플레이어 참가 시, 경기 종료 후 환급) */
   depositAmount?: number | null;
 }
 
@@ -193,7 +193,7 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
     setIsJoining(true);
     try {
       const updated = await api.post<{ participantCount?: number }>(`/api/groups/${group.id}/join`, {});
-      await showSuccess('용병 참여 신청이 완료되었습니다!', '참여 완료');
+      await showSuccess('플레이어 참여 신청이 완료되었습니다!', '참여 완료');
       onParticipantChange?.(
         updated?.participantCount != null ? { id: group.id, participantCount: updated.participantCount } : undefined
       );
@@ -568,7 +568,7 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
               className="w-full py-3 px-4 rounded-xl font-semibold text-sm text-white flex items-center justify-center gap-2 transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: pointColor }}
             >
-              {isJoining ? '신청 중...' : '용병 참여 신청'}
+              {isJoining ? '신청 중...' : '플레이어 참여 신청'}
             </button>
             {!user && (
               <p className="text-center text-xs text-white/50">로그인 후 참여 신청이 가능합니다.</p>

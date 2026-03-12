@@ -554,7 +554,7 @@ const FloatingChatWidget: React.FC = () => {
                   />
                   <p className="text-[var(--color-text-secondary)] text-sm">아직 대화가 없습니다</p>
                   <p className="text-[var(--color-text-secondary)] text-xs mt-1 opacity-80">
-                    용병 상세에서 채팅으로 문의하기를 눌러 시작하세요
+                    플레이어 상세에서 채팅으로 문의하기를 눌러 시작하세요
                   </p>
                 </div>
               ) : (

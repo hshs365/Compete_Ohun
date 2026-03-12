@@ -4,7 +4,7 @@ export type SelectedGroup = {
   location: string;
   coordinates: [number, number];
   memberCount?: number;
-  /** 서버에서 반환한 매치장 제외 참가자 수 (용병 구하기 등) */
+  /** 서버에서 반환한 매치장 제외 참가자 수 (플레이어 구하기 등) */
   participantCountExcludingCreator?: number;
   maxParticipants?: number;
   category?: string;
@@ -39,6 +39,6 @@ export type SelectedGroup = {
   /** 슈퍼 노출: boostedUntil > now 이면 리스트 최상단 고정 */
   boostedUntil?: string | null;
   isBoosted?: boolean;
-  /** 노쇼 방지 예치금 (용병 참가 시, 경기 종료 후 환급) */
+  /** 노쇼 방지 예치금 (플레이어 참가 시, 경기 종료 후 환급) */
   depositAmount?: number | null;
 }

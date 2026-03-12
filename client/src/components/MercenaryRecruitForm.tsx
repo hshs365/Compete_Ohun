@@ -327,7 +327,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
       return;
     }
     if (!schema || schema.fields.length === 0) {
-      showError('이 종목은 아직 용병 구인 폼을 지원하지 않습니다.', '안내');
+      showError('이 종목은 아직 플레이어 구인 폼을 지원하지 않습니다.', '안내');
       return;
     }
     const required = schema.fields.filter((f) => f.required);
@@ -377,7 +377,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
         category: effectiveSport,
         meetingDateTime: meetingDateTime || undefined,
         meetingEndTime: meetingDate && meetingEndTime ? meetingEndTime : undefined,
-        // 용병 모집: 생성자 포함 총 인원 = 1(본인) + recruitCount(용병 수)
+        // 플레이어 모집: 생성자 포함 총 인원 = 1(본인) + recruitCount(플레이어 수)
         maxParticipants: 1 + Math.min(19, Math.max(1, parseInt(recruitCount, 10) || 1)),
         sportSpecificData: Object.keys(sportSpecificData).length > 0 ? sportSpecificData : undefined,
         genderRestriction: genderRestriction === 'male' || genderRestriction === 'female' ? genderRestriction : undefined,
@@ -388,7 +388,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
       await api.post('/api/groups', payload);
       onClose();
       onSuccess?.();
-      await showSuccess('용병 구인 글이 등록되었습니다.', '등록 완료');
+      await showSuccess('플레이어 구인 글이 등록되었습니다.', '등록 완료');
     } catch (err: unknown) {
       const errAny = err as { message?: string; response?: { data?: { message?: string | string[] } } };
       const msg =
@@ -415,7 +415,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
         <div className="shrink-0 flex items-center justify-between p-4 border-b border-[var(--color-border-card)] bg-[var(--color-bg-card)]">
           <h2 id="mercenary-recruit-title" className="text-lg font-bold text-[var(--color-text-primary)] flex items-center gap-2">
             <span aria-hidden>{SPORT_ICONS[effectiveSport] ?? '🏃'}</span>
-            {effectiveSport} 용병 구하기
+            {effectiveSport} 플레이어 구하기
           </h2>
           <button
             type="button"
@@ -570,7 +570,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
                     <option value="male">남자만</option>
                     <option value="female">여자만</option>
                   </select>
-                  <p className="text-xs text-[var(--color-text-secondary)] mt-1">모집할 용병의 성별을 선택하세요.</p>
+                  <p className="text-xs text-[var(--color-text-secondary)] mt-1">모집할 플레이어의 성별을 선택하세요.</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">모집 인원</label>
@@ -597,7 +597,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
                   {EQUIPMENT_OPTIONS[effectiveSport]?.length > 0 && (
                     <div className="mb-4">
                       <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">준비물</label>
-                      <p className="text-xs text-[var(--color-text-secondary)] mb-2">필수 준비물을 갖춘 용병만 참가할 수 있습니다.</p>
+                      <p className="text-xs text-[var(--color-text-secondary)] mb-2">필수 준비물을 갖춘 플레이어만 참가할 수 있습니다.</p>
                       <div className="flex flex-wrap gap-2">
                         {EQUIPMENT_OPTIONS[effectiveSport].map((o) => {
                           const active = selectedEquipment.includes(o.value);

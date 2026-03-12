@@ -45,7 +45,7 @@ const MySchedulePage = () => {
   const [events, setEvents] = useState<GroupEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewType, setViewType] = useState<'dayGridMonth' | 'timeGridWeek' | 'timeGridDay'>('timeGridWeek');
+  const [viewType, setViewType] = useState<'dayGridMonth' | 'timeGridWeek' | 'timeGridDay'>('timeGridDay');
   const [showReservations, setShowReservations] = useState(true);
   const [showMatches, setShowMatches] = useState(true);
   const [myFacilities, setMyFacilities] = useState<MyFacility[]>([]);
@@ -101,7 +101,7 @@ const MySchedulePage = () => {
 
         const allEvents: GroupEvent[] = [];
 
-        // 1. 매치 일정 조회 (생성한 매치 + 참가한 매치(용병 포함) — my-schedule API)
+        // 1. 매치 일정 조회 (생성한 매치 + 참가한 매치(플레이어 포함) — my-schedule API)
         const myGroups = await api.get<any[]>('/api/groups/my-schedule');
 
         const matchEvents: GroupEvent[] = (Array.isArray(myGroups) ? myGroups : [])
@@ -563,6 +563,8 @@ const MySchedulePage = () => {
                 locale={koLocale}
                 slotMinTime="06:00:00"
                 slotMaxTime="24:00:00"
+                slotDuration="01:00:00"
+                slotLabelFormat={{ hour: 'numeric', minute: '2-digit', hour12: true }}
                 allDaySlot={true}
                 nowIndicator={true}
                 datesSet={handleDatesSet}
@@ -615,7 +617,7 @@ const MySchedulePage = () => {
                 className="mt-4 w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-[var(--color-border-card)] text-[var(--color-text-secondary)] hover:border-[var(--color-blue-primary)] hover:text-[var(--color-blue-primary)] transition-colors"
               >
                 <ChartBarIcon className="w-5 h-5" />
-                <span>지난 매치 기록 보기</span>
+                <span>매치 기록 보기</span>
                 <ArrowRightIcon className="w-4 h-4" />
               </button>
             </>

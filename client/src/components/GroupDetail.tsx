@@ -111,7 +111,7 @@ interface GroupDetailData {
   isUserOnWaitlist?: boolean;
   /** 예약 대기 순서 (1부터) */
   waitlistPosition?: number | null;
-  /** 용병 구하기 매치 여부 */
+  /** 플레이어 구하기 매치 여부 */
   isMercenaryRecruit?: boolean;
 }
 
@@ -1857,7 +1857,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
                   </button>
                   {isMercenaryRecruit && (
                     <button type="button" onClick={() => setShowMercenaryReviewModal(true)} className="w-full py-2.5 px-3 rounded-lg text-sm font-semibold bg-emerald-500 text-white hover:bg-emerald-600 transition-colors flex items-center justify-center gap-1.5">
-                      <UserGroupIcon className="w-4 h-4" /> 용병 리뷰
+                      <UserGroupIcon className="w-4 h-4" /> 플레이어 리뷰
                     </button>
                   )}
                 </div>
@@ -1943,7 +1943,7 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
         />
       )}
 
-      {/* 용병 리뷰 모달 (용병 구하기 매치 호스트 전용) */}
+      {/* 플레이어 리뷰 모달 (플레이어 구하기 매치 호스트 전용) */}
       {group && showMercenaryReviewModal && (
         <MercenaryReviewModal
           groupId={group.id}

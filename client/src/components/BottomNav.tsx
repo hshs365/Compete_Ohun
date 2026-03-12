@@ -28,7 +28,7 @@ const BottomNav = () => {
   };
 
   const items = [
-    { name: '용병', path: '/', icon: HomeIcon, iconSolid: HomeIconSolid, onClick: handleHomeClick, isHome: true },
+    { name: '플레이어', path: '/', icon: HomeIcon, iconSolid: HomeIconSolid, onClick: handleHomeClick, isHome: true },
     { name: '내 일정', path: '/my-schedule', icon: CalendarIcon, iconSolid: CalendarIconSolid, protected: true },
     { name: '명예의 전당', path: '/hall-of-fame', icon: TrophyIcon, iconSolid: TrophyIconSolid },
     { name: '내정보', path: '/my-info', icon: UserIcon, iconSolid: UserIconSolid, protected: true },

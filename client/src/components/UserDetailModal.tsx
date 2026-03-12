@@ -164,7 +164,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
 
   const isFollowing = profileSummary?.isFollowing ?? user.isFollowing;
   const rankEntries = profileSummary?.effectiveRanks ? Object.entries(profileSummary.effectiveRanks) : [];
-  /** 용병 신청 명함에 등록한 종목들 (프로필·헤더 표시) */
+  /** 플레이어 신청 명함에 등록한 종목들 (프로필·헤더 표시) */
   const interestedSports = profileSummary?.interestedSports ?? user.participatedSports ?? [];
   const detail = getDetailFromProfile(profileSummary, user);
 
@@ -271,7 +271,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
                 </div>
                 {interestedSports.length > 0 && (
                   <div className="mt-4 pt-4 border-t border-[var(--color-border-card)]">
-                    <p className="text-xs text-[var(--color-text-secondary)] mb-2">용병 신청 명함에 등록한 종목</p>
+                    <p className="text-xs text-[var(--color-text-secondary)] mb-2">플레이어 신청 명함에 등록한 종목</p>
                     <div className="flex flex-wrap gap-1.5">
                       {interestedSports.map((sport) => {
                         const chip = SPORT_CHIP_STYLES[sport] ?? SPORT_CHIP_STYLES['전체'];

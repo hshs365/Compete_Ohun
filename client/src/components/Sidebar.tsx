@@ -27,11 +27,11 @@ const Sidebar = () => {
   };
 
   const mainMenuItems = [
-    { name: '용병', icon: HomeIcon, path: '/', isHome: true },
+    { name: '플레이어', icon: HomeIcon, path: '/', isHome: true },
     { name: '내 정보', icon: UserIcon, path: '/my-info' },
     { name: '내 일정', icon: CalendarIcon, path: '/my-schedule' },
     { name: '명예의전당', icon: TrophyIcon, path: '/hall-of-fame' },
-    { name: '용병 크루', icon: ShieldCheckIcon, path: '/teams' },
+    { name: '플레이어 크루', icon: ShieldCheckIcon, path: '/teams' },
     { name: '팔로워', icon: UserGroupIcon, path: '/followers' },
     { name: '가이드', icon: BookOpenIcon, path: '/guide' },
   ];

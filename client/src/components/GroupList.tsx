@@ -42,19 +42,19 @@ interface GroupListProps {
   onLoadingChange?: (loading: boolean) => void;
   /** 마커 클릭 시 해당 시설의 매치 목록 (API 대신 이 목록 표시, 빠른시간순) */
   groupsOverride?: SelectedGroup[];
-  /** 용병 모드: 인원 미달 매치만 표시 (용병 N명 구해요) */
+  /** 플레이어 모드: 인원 미달 매치만 표시 (플레이어 N명 구해요) */
   mercenaryOnly?: boolean;
   /** 참가 후 즉시 반영용: { groupId, participantCount } (낙관적 업데이트) */
   optimisticParticipantCount?: { groupId: number; participantCount: number } | null;
-  /** 용병 빈 상태: 선택된 종목 (있으면 MercenaryEmptyState 표시) */
+  /** 플레이어 빈 상태: 선택된 종목 (있으면 MercenaryEmptyState 표시) */
   emptyStateSport?: string | null;
-  /** 빈 상태에서 '용병 구하기 작성' 클릭 시 */
+  /** 빈 상태에서 '플레이어 구하기 작성' 클릭 시 */
   onEmptyWriteClick?: () => void;
   /** 비로그인 시 빈 상태의 작성 버튼 숨김 (기본 true) */
   showEmptyWriteButton?: boolean;
-  /** 용병 모드에서 전체 종목 조회 시, 지역 필터 적용된 목록의 종목별 개수 (지역별 정렬용) */
+  /** 플레이어 모드에서 전체 종목 조회 시, 지역 필터 적용된 목록의 종목별 개수 (지역별 정렬용) */
   onCategoryCountsChange?: (counts: Record<string, number>) => void;
-  /** 용병 모드: true면 내 활동시간에 해당하는 매치만 표시, false면 모두 표시 */
+  /** 플레이어 모드: true면 내 활동시간에 해당하는 매치만 표시, false면 모두 표시 */
   filterByActivityTime?: boolean;
   /** 내 활동 가능 시간표 (filterByActivityTime일 때 사용) */
   activityTimeSlots?: Array<{ dayOfWeek: number; timeSlots: Array<{ start: string; end: string }> }>;
@@ -69,11 +69,11 @@ interface GroupResponse {
   category: string;
   description: string | null;
   meetingTime: string | null;
-  meetingDateTime?: string | null; // API 실제 일시 (meetingTime 없을 때 용병 등 폴백)
+  meetingDateTime?: string | null; // API 실제 일시 (meetingTime 없을 때 플레이어 등 폴백)
   contact: string | null;
   equipment: string[];
   participantCount: number;
-  /** 매치장 제외 참가자 수 (용병 구하기 등에서 사용) */
+  /** 매치장 제외 참가자 수 (플레이어 구하기 등에서 사용) */
   participantCountExcludingCreator?: number;
   maxParticipants: number | null;
   createdAt: string;
@@ -396,7 +396,7 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
                    ? (group.maxParticipants - group.participantCount) <= Math.ceil(group.maxParticipants * 0.1)
                    : false;
                  
-                 // meetingTime 파싱 (다양한 형식 지원). meetingTime 없으면 meetingDateTime 폴백 (용병 구하기 등)
+                 // meetingTime 파싱 (다양한 형식 지원). meetingTime 없으면 meetingDateTime 폴백 (플레이어 구하기 등)
                  let parsedMeetingTime: Date | null = null;
                  const rawMeetingTime = group.meetingTime?.trim() || null;
                  const rawMeetingDateTime = group.meetingDateTime;
@@ -539,7 +539,7 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
                  );
                }
 
-               // ⭐ 용병 모드: 인원 미달 매치만 (용병 N명 구해요)
+               // ⭐ 플레이어 모드: 인원 미달 매치만 (플레이어 N명 구해요)
                if (mercenaryOnly) {
                  mappedGroups = mappedGroups.filter((group) => {
                    const max = group.maxParticipants ?? 0;
@@ -567,7 +567,7 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
                  return 0;
                });
 
-               // 용병 모드 + 전체 종목 조회 시: 지역 필터된 목록의 종목별 개수 전달 (지역별 정렬용)
+               // 플레이어 모드 + 전체 종목 조회 시: 지역 필터된 목록의 종목별 개수 전달 (지역별 정렬용)
                if (mercenaryOnly && onCategoryCountsChange && (selectedCategory === null || selectedCategory === '전체')) {
                  const counts: Record<string, number> = {};
                  for (const g of mappedGroups) {
@@ -580,7 +580,7 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
         setGroups(mappedGroups);
         onGroupsChange?.(mappedGroups);
       } catch (err) {
-        const listLabel = mercenaryOnly ? '용병 구하기 목록' : '매치 목록';
+        const listLabel = mercenaryOnly ? '플레이어 구하기 목록' : '매치 목록';
         console.error(`${listLabel} 조회 실패:`, err);
         const msg = err instanceof Error ? err.message : '';
         if (matchType === 'rank' || matchType === 'event') {
@@ -602,7 +602,7 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
   }, [selectedCategory, searchQuery, sportFilterKey, selectedRegion, selectedDaysKey, filterDate, hideClosed, onlyRanker, gender, includeCompleted, refreshTrigger, matchType, userCoords, hasGroupsOverride, mapBoundsKey]);
 
   if (isLoading) {
-    const loadingMessage = mercenaryOnly ? '용병 구하기 목록을 불러오는 중...' : '매치 목록을 불러오는 중...';
+    const loadingMessage = mercenaryOnly ? '플레이어 구하기 목록을 불러오는 중...' : '매치 목록을 불러오는 중...';
     return (
       <div className="p-4 relative min-h-[200px]">
         <LoadingSpinner message={loadingMessage} />

@@ -10,7 +10,7 @@ interface HostQRModalProps {
   onClose: () => void;
 }
 
-/** QR 페이로드: 용병 앱이 스캔 후 POST /api/groups/:g/qr-verify 호출용 */
+/** QR 페이로드: 플레이어 앱이 스캔 후 POST /api/groups/:g/qr-verify 호출용 */
 function buildQRPayload(groupId: number, token: string): string {
   return JSON.stringify({ g: groupId, t: token });
 }
@@ -117,7 +117,7 @@ const HostQRModal: React.FC<HostQRModalProps> = ({ groupId, isOpen, onClose }) =
                 <ExpandableQRCode
                   value={qrPayload}
                   size={200}
-                  caption="용병이 스캔하면 자동으로 인증됩니다"
+                  caption="플레이어이 스캔하면 자동으로 인증됩니다"
                   className="!p-0 !border-0 !bg-transparent"
                 />
               )}
@@ -133,14 +133,14 @@ const HostQRModal: React.FC<HostQRModalProps> = ({ groupId, isOpen, onClose }) =
                   className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/20 border border-green-500/40 text-green-400 font-semibold animate-in fade-in"
                 >
                   <span className="shrink-0">✓</span>
-                  <span>{nick} 용병님 인증 완료!</span>
+                  <span>{nick} 플레이어님 인증 완료!</span>
                 </div>
               ))}
             </div>
           )}
 
           <p className="mt-4 text-center text-sm text-gray-300">
-            용병이 스캔하면 자동으로 인증됩니다
+            플레이어이 스캔하면 자동으로 인증됩니다
           </p>
             </>
           )}

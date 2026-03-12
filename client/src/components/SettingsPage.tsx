@@ -149,8 +149,8 @@ const SettingsPage = () => {
               <div className="mt-3 pt-3 border-t border-[var(--color-border-card)] pl-8 md:pl-10 space-y-0">
                 <SettingItem
                   icon={UserPlusIcon}
-                  label="용병 알림 받기"
-                  description="내가 등록한 종목의 용병 구하는 매치가 생길 때 알림"
+                  label="플레이어 알림 받기"
+                  description="내가 등록한 종목의 플레이어 구하는 매치가 생길 때 알림"
                   isOn={mercenaryNotifications}
                   onToggle={() => setMercenaryNotifications(!mercenaryNotifications)}
                   disabled={!pushNotificationsAll}

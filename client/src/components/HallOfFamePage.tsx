@@ -152,7 +152,7 @@ const HallOfFamePage = () => {
             </h1>
           </div>
           <p className="badge-text-contrast max-w-2xl">
-            참가 횟수, 활동한 종목 수, 매너점수를 합산한 최고의 용병을 소개합니다.
+            참가 횟수, 활동한 종목 수, 매너점수를 합산한 최고의 플레이어을 소개합니다.
           </p>
         </div>
       </header>
@@ -504,7 +504,7 @@ const HallOfFamePage = () => {
               <UserCircleIcon className="w-7 h-7 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider">내 용병 지수</p>
+              <p className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider">내 플레이어 지수</p>
               <p className="text-lg font-bold text-[var(--color-text-primary)]">
                 {myRank.rank != null ? `${myRank.rank}위` : '순위 없음'}
                 <span className="text-[var(--color-text-secondary)] font-normal ml-2">({myRank.score.toLocaleString()} pts)</span>

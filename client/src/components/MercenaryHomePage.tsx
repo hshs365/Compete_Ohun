@@ -15,7 +15,7 @@ import { api } from '../utils/api';
 import { showInfo } from '../utils/swal';
 import { UserPlusIcon, UserCircleIcon, PlusIcon, CameraIcon } from '@heroicons/react/24/outline';
 
-/** 용병 메인 페이지: 용병 구하기 / 용병 신청 */
+/** 플레이어 메인 페이지: 플레이어 구하기 / 플레이어 신청 */
 const MercenaryHomePage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, isLoading: authLoading } = useAuth();
@@ -41,9 +41,9 @@ const MercenaryHomePage = () => {
     groupId: number;
     participantCount: number;
   } | null>(null);
-  /** 지역별(용병) 목록 종목별 개수 — 용병 신청 안 한 유저일 때 정렬용 */
+  /** 지역별(플레이어) 목록 종목별 개수 — 플레이어 신청 안 한 유저일 때 정렬용 */
   const [categoryCountsFromRegion, setCategoryCountsFromRegion] = useState<Record<string, number>>({});
-  /** 내 활동 통계(종목별 참여 횟수) — 용병 명함 등록 유저일 때 정렬용 */
+  /** 내 활동 통계(종목별 참여 횟수) — 플레이어 명함 등록 유저일 때 정렬용 */
   const [activityCategoryStats, setActivityCategoryStats] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -125,7 +125,7 @@ const MercenaryHomePage = () => {
       .catch(() => {});
   }, [searchParams, setSearchParams]);
 
-  // 용병 명함에 종목이 등록된 유저: 종목별 참여 횟수 로드 (자주 참여한 순 정렬용)
+  // 플레이어 명함에 종목이 등록된 유저: 종목별 참여 횟수 로드 (자주 참여한 순 정렬용)
   useEffect(() => {
     const sports = user?.interestedSports;
     if (!user || !sports?.length) {
@@ -138,7 +138,7 @@ const MercenaryHomePage = () => {
       .catch(() => setActivityCategoryStats({}));
   }, [user?.id, user?.interestedSports?.length]);
 
-  /** 종목 칩 표시 순서: 용병 명함 등록 시 참여 많은 순, 미등록 시 지역별 목록 많은 순 */
+  /** 종목 칩 표시 순서: 플레이어 명함 등록 시 참여 많은 순, 미등록 시 지역별 목록 많은 순 */
   const sortedCategories = useMemo(() => {
     const rest = (MAIN_CATEGORIES as readonly string[]).filter((c) => c !== '전체');
     const hasProfile = (user?.interestedSports?.length ?? 0) > 0;
@@ -163,7 +163,7 @@ const MercenaryHomePage = () => {
     <div className="flex flex-col min-h-full pb-20 md:pb-4">
       {/* 헤더 */}
       <header className="flex-shrink-0 sticky top-0 z-30 bg-[var(--color-bg-card)] border-b border-[var(--color-border-card)] safe-area-top">
-        <h1 className="sr-only">용병</h1>
+        <h1 className="sr-only">플레이어</h1>
         <div className="flex gap-1 p-2">
           <button
             type="button"
@@ -176,7 +176,7 @@ const MercenaryHomePage = () => {
             style={activeTab === 'find' ? { backgroundColor: pointColor } : undefined}
           >
             <UserPlusIcon className="w-5 h-5" />
-            용병 구하기
+            플레이어 구하기
           </button>
           <button
             type="button"
@@ -189,7 +189,7 @@ const MercenaryHomePage = () => {
             style={activeTab === 'apply' ? { backgroundColor: pointColor } : undefined}
           >
             <UserCircleIcon className="w-5 h-5" />
-            용병 신청
+            플레이어 신청
           </button>
         </div>
       </header>
@@ -248,7 +248,7 @@ const MercenaryHomePage = () => {
             onActivityTimeFilterChange={setFilterByActivityTime}
           />
 
-          {/* 용병 구하는 매치 목록 (하단 네비 높이만큼 padding으로 마지막 목록 잘림 방지) */}
+          {/* 플레이어 구하는 매치 목록 (하단 네비 높이만큼 padding으로 마지막 목록 잘림 방지) */}
           <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-20 md:pb-4">
             <GroupList
               selectedCategory={selectedCategory}
@@ -283,12 +283,12 @@ const MercenaryHomePage = () => {
           )}
         </>
       ) : (
-        /* 용병 신청 탭: 구직자 대시보드 (명함·활동상태·시간표·용병요청리스트) */
+        /* 플레이어 신청 탭: 구직자 대시보드 (명함·활동상태·시간표·플레이어요청리스트) */
         <MercenaryJobseekerDashboard
         />
       )}
 
-      {/* FAB: QR 스캔 (왼쪽) — 용병 구하기 탭, 모바일에서만 표시, 로그인 시에만 */}
+      {/* FAB: QR 스캔 (왼쪽) — 플레이어 구하기 탭, 모바일에서만 표시, 로그인 시에만 */}
       {activeTab === 'find' && user && (
         <button
           type="button"
@@ -299,17 +299,17 @@ const MercenaryHomePage = () => {
           <CameraIcon className="w-6 h-6 shrink-0" aria-hidden />
         </button>
       )}
-      {/* FAB: 용병 구하기 작성 — 용병 구하기 탭, 로그인 시에만 표시 */}
+      {/* FAB: 플레이어 구하기 작성 — 플레이어 구하기 탭, 로그인 시에만 표시 */}
       {activeTab === 'find' && user && (
         <button
           type="button"
           onClick={() => setRecruitFormOpen(true)}
           className="fixed bottom-28 right-6 md:bottom-8 md:right-8 z-[9010] flex items-center justify-center gap-2.5 h-12 px-5 rounded-2xl text-white font-semibold text-[15px] leading-[1] shadow-lg hover:opacity-95 active:scale-[0.98] transition-all md:safe-area-bottom"
           style={{ backgroundColor: pointColor }}
-          aria-label="용병 구하기 작성"
+          aria-label="플레이어 구하기 작성"
         >
           <PlusIcon className="w-5 h-5 shrink-0 stroke-[2.5]" aria-hidden />
-          <span className="leading-[1] -mt-px">용병 구하기</span>
+          <span className="leading-[1] -mt-px">플레이어 구하기</span>
         </button>
       )}
 

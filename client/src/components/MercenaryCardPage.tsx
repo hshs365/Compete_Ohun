@@ -98,7 +98,7 @@ const MercenaryCardPage: React.FC = () => {
           <button type="button" onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-lg hover:bg-[var(--color-bg-secondary)]" aria-label="뒤로">
             <ChevronLeftIcon className="w-6 h-6 text-[var(--color-text-primary)]" />
           </button>
-          <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">용병 명함</h1>
+          <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">플레이어 명함</h1>
         </header>
         <div className="flex-1 flex flex-col items-center justify-center p-8">
           <p className="text-[var(--color-text-secondary)] text-center">{error}</p>
@@ -136,7 +136,7 @@ const MercenaryCardPage: React.FC = () => {
         <button type="button" onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-lg hover:bg-[var(--color-bg-secondary)]" aria-label="뒤로">
           <ChevronLeftIcon className="w-6 h-6 text-[var(--color-text-primary)]" />
         </button>
-        <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">용병 명함</h1>
+        <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">플레이어 명함</h1>
       </header>
 
       <main className="flex-1 px-4 pt-6 max-w-lg mx-auto w-full">

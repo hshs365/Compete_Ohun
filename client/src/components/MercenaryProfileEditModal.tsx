@@ -218,7 +218,7 @@ const MercenaryProfileEditModal: React.FC<MercenaryProfileEditModalProps> = ({
         sportPositions: sportPositions.filter((sp) => sp.positions.length > 0),
         sportEquipment: sportEquipment.filter((sp) => sp.equipment.length > 0),
       });
-      await showSuccess('용병 프로필이 저장되었습니다.', '저장 완료');
+      await showSuccess('플레이어 프로필이 저장되었습니다.', '저장 완료');
       onSuccess?.();
       onClose();
     } catch (err: unknown) {
@@ -242,7 +242,7 @@ const MercenaryProfileEditModal: React.FC<MercenaryProfileEditModalProps> = ({
       >
         <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-[var(--color-border-card)] bg-[var(--color-bg-card)]">
           <h2 id="mercenary-profile-edit-title" className="text-lg font-bold text-[var(--color-text-primary)]">
-            용병 프로필 편집
+            플레이어 프로필 편집
           </h2>
           <button
             type="button"
@@ -316,7 +316,7 @@ const MercenaryProfileEditModal: React.FC<MercenaryProfileEditModalProps> = ({
                     종목별 보유 장비
                   </label>
                   <p className="text-xs text-[var(--color-text-secondary)] mb-2">
-                    용병 참가 시 필요할 수 있는 품목을 선택해 주세요.
+                    플레이어 참가 시 필요할 수 있는 품목을 선택해 주세요.
                   </p>
                   <div className="space-y-3">
                     {mainSports

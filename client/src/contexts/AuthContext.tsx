@@ -20,11 +20,11 @@ export interface User {
   mannerScore?: number;
   /** 노쇼 누적 횟수 */
   noShowCount?: number;
-  /** 용병 활동 상태. 'active'일 때만 구인자 검색에 노출 */
+  /** 플레이어 활동 상태. 'active'일 때만 구인자 검색에 노출 */
   mercenaryActivityStatus?: 'active' | 'paused';
-  /** 종목별 용병 알림 수신 활성화. 해당 종목 true일 때 용병 구하기 알림 수신 */
+  /** 종목별 플레이어 알림 수신 활성화. 해당 종목 true일 때 플레이어 구하기 알림 수신 */
   mercenaryActiveBySport?: Record<string, boolean>;
-  /** 용병 활동 가능 시간표 */
+  /** 플레이어 활동 가능 시간표 */
   mercenaryAvailability?: Array<{
     dayOfWeek: number;
     timeSlots: Array<{ start: string; end: string }>;
@@ -33,7 +33,7 @@ export interface User {
   interestedSports?: string[];
   /** 스포츠별 선호 포지션 */
   sportPositions?: { sport: string; positions: string[] }[];
-  /** 종목별 보유 장비 (용병 참가 시 필요 품목) */
+  /** 종목별 보유 장비 (플레이어 참가 시 필요 품목) */
   sportEquipment?: { sport: string; equipment: string[] }[];
   /** 종목별 올코트플레이 랭크 (급수) */
   ohunRanks?: Record<string, string>;

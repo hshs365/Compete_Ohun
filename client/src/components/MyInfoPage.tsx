@@ -146,7 +146,7 @@ const MyInfoPage = () => {
   const [pointHistory, setPointHistory] = useState<PointHistoryItem[]>([]);
   const [pointHistoryLoading, setPointHistoryLoading] = useState(false);
   const [isCharging, setIsCharging] = useState(false);
-  /** 내 정보 상단 탭: 프로필 / 계정정보 (용병 구하기·용병 신청 스타일) */
+  /** 내 정보 상단 탭: 프로필 / 계정정보 (플레이어 구하기·플레이어 신청 스타일) */
   const [myInfoTab, setMyInfoTab] = useState<'profile' | 'account'>('profile');
   const [showBusinessConversionModal, setShowBusinessConversionModal] = useState(false);
   const [businessConversionDocumentFile, setBusinessConversionDocumentFile] = useState<File | null>(null);
@@ -970,7 +970,7 @@ const MyInfoPage = () => {
     return getEarnedTitles(countByCategory);
   })();
 
-  // 용병 기록: 종목별 참여 횟수·생성 횟수·급수
+  // 플레이어 기록: 종목별 참여 횟수·생성 횟수·급수
   const activityByCategory = (() => {
     const participationsByCategory: Record<string, number> = {};
     const creationsByCategory: Record<string, number> = {};
@@ -1255,7 +1255,7 @@ const MyInfoPage = () => {
             <div className="flex items-center justify-between mb-2 sm:mb-3">
               <h3 className="text-base sm:text-lg font-bold text-[var(--color-text-primary)] flex items-center gap-2">
                 <ChartBarIcon className="w-5 h-5 text-[var(--color-blue-primary)] shrink-0" />
-                용병 기록
+                플레이어 기록
               </h3>
               <button
                 onClick={() => navigate('/my-activity')}
@@ -1298,7 +1298,7 @@ const MyInfoPage = () => {
                 })}
               </div>
             ) : (
-              <p className="text-sm text-[var(--color-text-secondary)] py-2">아직 용병 기록이 없어요. 매치에 참여하거나 모임을 만들면 여기에 표시돼요.</p>
+              <p className="text-sm text-[var(--color-text-secondary)] py-2">아직 플레이어 기록이 없어요. 매치에 참여하거나 모임을 만들면 여기에 표시돼요.</p>
             )}
           </div>
 
@@ -1578,7 +1578,7 @@ const MyInfoPage = () => {
             <h3 className="text-base font-semibold text-[var(--color-text-primary)] mb-3 sm:mb-4">연락처 · 기타</h3>
             <div className="divide-y divide-[var(--color-border-card)]">
           {/* 휴대전화 번호 */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 py-4">
+          <div className="flex flex-row items-center justify-between gap-3 py-4">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <PhoneIcon className="w-5 h-5 shrink-0 text-[var(--color-text-secondary)]" />
               {isEditingPhone ? (
@@ -1659,7 +1659,7 @@ const MyInfoPage = () => {
                   setPhoneCodeCountdown(0);
                   setIsEditingPhone(true);
                 }}
-                className="p-2.5 sm:p-2 shrink-0 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-blue-primary)] hover:bg-[var(--color-bg-secondary)] rounded-lg transition-colors active:scale-[0.98]"
+                className="p-2.5 shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-blue-primary)] hover:bg-[var(--color-bg-secondary)] rounded-lg transition-colors active:scale-[0.98]"
                 aria-label="휴대전화 번호 수정"
               >
                 <PencilIcon className="w-5 h-5" />

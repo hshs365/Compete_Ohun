@@ -67,7 +67,7 @@ const MercenaryApplyTab: React.FC<MercenaryApplyTabProps> = ({
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8">
         <UserCircleIcon className="w-16 h-16 text-[var(--color-text-secondary)] mb-4" />
-        <p className="text-[var(--color-text-secondary)] mb-4">로그인 후 용병 프로필을 확인할 수 있습니다.</p>
+        <p className="text-[var(--color-text-secondary)] mb-4">로그인 후 플레이어 프로필을 확인할 수 있습니다.</p>
         <button
           type="button"
           onClick={() => navigate('/login')}
@@ -81,13 +81,13 @@ const MercenaryApplyTab: React.FC<MercenaryApplyTabProps> = ({
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* 내 용병 명함 카드 */}
+      {/* 내 플레이어 명함 카드 */}
       <section className="flex-shrink-0 p-4">
         <div
           className={`rounded-xl border p-4 ${trustColors.bg} ${trustColors.border}`}
           style={{ borderColor: trustColors.point + '50' }}
         >
-          <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] mb-3">내 용병 명함</h3>
+          <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] mb-3">내 플레이어 명함</h3>
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <StarIcon className="w-5 h-5" style={{ color: trustColors.point }} />
@@ -114,7 +114,7 @@ const MercenaryApplyTab: React.FC<MercenaryApplyTabProps> = ({
         </div>
       </section>
 
-      {/* 용병 요청 리스트 */}
+      {/* 플레이어 요청 리스트 */}
       <section className="flex-shrink-0 px-4 pb-2">
         <DateFilterChips selectedDate={filterDate} onDateChange={setFilterDate} daysCount={14} />
       </section>

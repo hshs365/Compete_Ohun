@@ -124,7 +124,7 @@ const Step2MatchSchedule: React.FC<Step2MatchScheduleProps> = ({
             )}
           </div>
 
-          {/* 시간 설정 — 24h 타임라인 슬라이더 (용병 모달과 동일) */}
+          {/* 시간 설정 — 24h 타임라인 슬라이더 (플레이어 모달과 동일) */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-[var(--color-text-primary)] text-left">
               경기 시간

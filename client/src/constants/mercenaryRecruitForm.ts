@@ -1,4 +1,4 @@
-/** 용병 구인 폼: 종목별 필드 정의 */
+/** 플레이어 구인 폼: 종목별 필드 정의 */
 export type RecruitFieldType = 'select' | 'multiselect' | 'checkbox';
 
 export interface RecruitFieldDef {
@@ -14,7 +14,7 @@ export interface MercenaryRecruitFormSchema {
   fields: RecruitFieldDef[];
 }
 
-/** 종목별 용병 구인 폼 스키마 */
+/** 종목별 플레이어 구인 폼 스키마 */
 export const MERCENARY_RECRUIT_FORM: Record<string, MercenaryRecruitFormSchema> = {
   배드민턴: {
     fields: [

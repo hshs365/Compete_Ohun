@@ -83,7 +83,7 @@ const MercenaryReviewModal: React.FC<MercenaryReviewModalProps> = ({
         noEquipmentIds: Array.from(noEquipmentIds),
         goodMannerIds: Array.from(goodMannerIds),
       });
-      await showSuccess('용병 리뷰가 저장되었습니다.', '리뷰 완료');
+      await showSuccess('플레이어 리뷰가 저장되었습니다.', '리뷰 완료');
       onSubmitted?.();
       onClose();
     } catch (err) {
@@ -99,7 +99,7 @@ const MercenaryReviewModal: React.FC<MercenaryReviewModalProps> = ({
     <div className="fixed inset-0 z-[1001] flex items-center justify-center bg-black/50 p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="bg-[var(--color-bg-card)] rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col border border-[var(--color-border-card)]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-[var(--color-border-card)]">
-          <h2 className="text-lg font-bold text-[var(--color-text-primary)]">용병 리뷰</h2>
+          <h2 className="text-lg font-bold text-[var(--color-text-primary)]">플레이어 리뷰</h2>
           <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--color-bg-secondary)]">
             <XMarkIcon className="w-5 h-5 text-[var(--color-text-primary)]" />
           </button>
@@ -113,18 +113,18 @@ const MercenaryReviewModal: React.FC<MercenaryReviewModalProps> = ({
           ) : !eligibility?.canReview ? (
             <p className="text-[var(--color-text-secondary)] text-center py-8">{eligibility?.reason ?? '리뷰를 작성할 수 없습니다.'}</p>
           ) : eligibility.alreadySubmitted ? (
-            <p className="text-[var(--color-text-secondary)] text-center py-8">이미 용병 리뷰를 작성하셨습니다.</p>
+            <p className="text-[var(--color-text-secondary)] text-center py-8">이미 플레이어 리뷰를 작성하셨습니다.</p>
           ) : (
             <>
               <p className="text-sm text-[var(--color-text-secondary)]">
-                매치가 끝난 후 용병들에 대한 간편 리뷰를 남겨주세요. 노쇼·장비 미지참은 매너 점수에 반영됩니다.
+                매치가 끝난 후 플레이어들에 대한 간편 리뷰를 남겨주세요. 노쇼·장비 미지참은 매너 점수에 반영됩니다.
               </p>
 
               {eligibility.noShowList.length > 0 && (
                 <div>
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text-primary)] mb-2">
                     <ExclamationTriangleIcon className="w-5 h-5 text-amber-500" />
-                    노쇼한 용병이 있나요? (해당 매치 QR을 못 찍은 용병)
+                    노쇼한 플레이어이 있나요? (해당 매치 QR을 못 찍은 플레이어)
                   </h3>
                   <div className="flex flex-wrap gap-2">
                     {eligibility.noShowList.map((m) => (
@@ -148,7 +148,7 @@ const MercenaryReviewModal: React.FC<MercenaryReviewModalProps> = ({
                   <div>
                     <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text-primary)] mb-2">
                       <WrenchScrewdriverIcon className="w-5 h-5 text-red-500" />
-                      장비를 안 가져 온 용병이 있나요?
+                      장비를 안 가져 온 플레이어이 있나요?
                     </h3>
                     <div className="flex flex-wrap gap-2">
                       {eligibility.mercenaryList.map((m) => (
@@ -169,7 +169,7 @@ const MercenaryReviewModal: React.FC<MercenaryReviewModalProps> = ({
                   <div>
                     <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text-primary)] mb-2">
                       <HandThumbUpIcon className="w-5 h-5 text-green-500" />
-                      매너가 좋은 용병이 있나요?
+                      매너가 좋은 플레이어이 있나요?
                     </h3>
                     <div className="flex flex-wrap gap-2">
                       {eligibility.mercenaryList.map((m) => (
@@ -190,7 +190,7 @@ const MercenaryReviewModal: React.FC<MercenaryReviewModalProps> = ({
               )}
 
               {eligibility.mercenaryList.length === 0 && eligibility.noShowList.length === 0 && (
-                <p className="text-sm text-[var(--color-text-secondary)]">리뷰할 용병이 없습니다.</p>
+                <p className="text-sm text-[var(--color-text-secondary)]">리뷰할 플레이어이 없습니다.</p>
               )}
             </>
           )}

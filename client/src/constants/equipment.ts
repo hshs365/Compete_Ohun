@@ -1,4 +1,4 @@
-/** 종목별 장비 (용병 참가 시 필요 품목) — 프로필 편집·용병 구하기 양쪽에서 사용 */
+/** 종목별 장비 (플레이어 참가 시 필요 품목) — 프로필 편집·플레이어 구하기 양쪽에서 사용 */
 export const EQUIPMENT_OPTIONS: Record<string, { value: string; label: string }[]> = {
   축구: [
     { value: '축구화', label: '축구화' },

@@ -12,12 +12,12 @@ const SPORT_ILLUSTRATIONS: Record<string, string> = {
 };
 
 const EMPTY_MESSAGES: Record<string, string> = {
-  전체: '현재 주변에 용병 매치가 없어요. 직접 구해보시겠어요?',
-  축구: '현재 주변에 축구 용병이 없어요. 직접 구해보시겠어요?',
-  풋살: '현재 주변에 풋살 용병이 없어요. 직접 구해보시겠어요?',
-  농구: '현재 주변에 농구 용병이 없어요. 직접 구해보시겠어요?',
-  테니스: '현재 주변에 테니스 용병이 없어요. 직접 구해보시겠어요?',
-  배드민턴: '현재 주변에 배드민턴 용병이 없어요. 직접 구해보시겠어요?',
+  전체: '현재 주변에 플레이어 매치가 없어요. 직접 구해보시겠어요?',
+  축구: '현재 주변에 축구 플레이어이 없어요. 직접 구해보시겠어요?',
+  풋살: '현재 주변에 풋살 플레이어이 없어요. 직접 구해보시겠어요?',
+  농구: '현재 주변에 농구 플레이어이 없어요. 직접 구해보시겠어요?',
+  테니스: '현재 주변에 테니스 플레이어이 없어요. 직접 구해보시겠어요?',
+  배드민턴: '현재 주변에 배드민턴 플레이어이 없어요. 직접 구해보시겠어요?',
 };
 
 interface MercenaryEmptyStateProps {
@@ -52,7 +52,7 @@ const MercenaryEmptyState: React.FC<MercenaryEmptyStateProps> = ({ selectedSport
           className="px-6 py-3 rounded-xl font-semibold text-white transition-opacity hover:opacity-90"
           style={{ backgroundColor: pointColor }}
         >
-          용병 구하기 작성
+          플레이어 구하기 작성
         </button>
       )}
     </div>

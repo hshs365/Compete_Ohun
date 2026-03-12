@@ -15,7 +15,7 @@ interface DynamicFilterBarProps {
   /** 종목별 동적 필터 값 (key -> value 또는 string[]) */
   sportFilterValues: Record<string, string | string[]>;
   onSportFilterChange: (key: string, value: string | string[]) => void;
-  /** 성별 필터 (용병 구하기 등). 있으면 성별 드롭다운 표시 */
+  /** 성별 필터 (플레이어 구하기 등). 있으면 성별 드롭다운 표시 */
   selectedGender?: 'male' | 'female' | null;
   onGenderChange?: (g: 'male' | 'female' | null) => void;
   /** 활동시간만 보기 체크박스 (로그인 시) */
