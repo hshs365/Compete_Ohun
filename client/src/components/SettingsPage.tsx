@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ToggleSwitch from './ToggleSwitch';
 import { useTheme } from '../App';
 import AppLogo from './AppLogo';
@@ -19,7 +19,15 @@ import {
   ChartBarIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  ArrowDownTrayIcon,
+  DevicePhoneMobileIcon,
 } from '@heroicons/react/24/outline';
+
+/** PWA 설치 이벤트 타입 (beforeinstallprompt) */
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
 
 interface SettingItemProps {
   icon: React.ComponentType<{ className?: string }>;
@@ -51,7 +59,29 @@ const SettingItem: React.FC<SettingItemProps> = ({ icon: Icon, label, descriptio
 
 const SettingsPage = () => {
   const { theme, setTheme } = useTheme();
-  
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isPwaInstalled, setIsPwaInstalled] = useState(false);
+
+  useEffect(() => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || (window.navigator as any).standalone === true;
+    setIsPwaInstalled(!!isStandalone);
+
+    const onBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    };
+    window.addEventListener('beforeinstallprompt', onBeforeInstall);
+    return () => window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    await deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') setDeferredPrompt(null);
+  };
+
   // 알림 설정
   const [pushNotificationsAll, setPushNotificationsAll] = useState(true);
   const [pushSectionOpen, setPushSectionOpen] = useState(true); // 전체 푸시 알림 섹션 펼침
@@ -85,6 +115,38 @@ const SettingsPage = () => {
       <div className="flex items-center gap-3 mb-6">
         <AppLogo className="h-10 w-auto object-contain" />
         <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">앱 설정</h1>
+      </div>
+
+      {/* 앱 설치하기 (PWA) */}
+      <div className="bg-[var(--color-bg-card)] rounded-xl shadow-md p-4 md:p-6 border border-[var(--color-border-card)]">
+        <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-2 flex items-center gap-2">
+          <DevicePhoneMobileIcon className="w-5 h-5" />
+          앱 설치하기
+        </h2>
+        {isPwaInstalled ? (
+          <p className="text-sm text-[var(--color-text-secondary)]">
+            올코트플레이 앱이 이미 설치되어 있습니다. 홈 화면 또는 앱 서랍에서 실행하세요.
+          </p>
+        ) : (
+          <>
+            {deferredPrompt != null && (
+              <button
+                type="button"
+                onClick={handleInstallClick}
+                className="flex items-center justify-center gap-2 w-full py-3 px-4 rounded-lg bg-[var(--color-blue-primary)] text-white font-semibold mb-4"
+              >
+                <ArrowDownTrayIcon className="w-5 h-5" />
+                앱 설치하기
+              </button>
+            )}
+            <p className="text-sm text-[var(--color-text-secondary)] mb-2">설치 버튼이 안 보이면 브라우저 메뉴에서 설치할 수 있습니다:</p>
+            <ul className="text-sm text-[var(--color-text-secondary)] list-disc list-inside space-y-1">
+              <li><strong>Chrome(안드로이드/PC)</strong>: 주소창 오른쪽 ⋮ 메뉴 → &quot;앱 설치&quot; 또는 &quot;앱에 추가&quot;</li>
+              <li><strong>Safari(아이폰)</strong>: 하단 공유 버튼 → &quot;홈 화면에 추가&quot;</li>
+              <li><strong>삼성 인터넷</strong>: 메뉴 → &quot;홈 화면에 추가&quot; 또는 &quot;앱에 추가&quot;</li>
+            </ul>
+          </>
+        )}
       </div>
 
       {/* 화면 표시 설정 */}

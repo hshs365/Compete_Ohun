@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, QueryFailedError } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { User, UserStatus } from './entities/user.entity';
+import { UserSportParticipation } from './entities/user-sport-participation.entity';
 import { SocialAccount, SocialProvider } from '../social-accounts/entities/social-account.entity';
 import { AthleteService } from './athlete.service';
 import { Group } from '../groups/entities/group.entity';
@@ -22,6 +23,8 @@ export class UsersService {
     private groupRepository: Repository<Group>,
     @InjectRepository(GroupParticipant)
     private participantRepository: Repository<GroupParticipant>,
+    @InjectRepository(UserSportParticipation)
+    private sportParticipationRepository: Repository<UserSportParticipation>,
     private athleteService: AthleteService,
   ) {}
 
@@ -564,6 +567,53 @@ export class UsersService {
       else if (count >= EARNED_TITLES_LOVER) titles.push(`${category} 애호가`);
     }
     return titles;
+  }
+
+  /**
+   * 플레이어 구하기 게시 시 해당 종목 플레이어가 아니면 자동 등록: 플레이어 명함(참가 기록) 생성,
+   * 활동 상태 '활동중', 활동 시간대에 게시글 일시 추가.
+   */
+  async ensureMercenaryForSport(
+    userId: number,
+    sport: string,
+    slot: { dayOfWeek: number; start: string; end: string },
+  ): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) return;
+    const bySport = user.mercenaryActiveBySport ?? {};
+    if (bySport[sport] === true) return; // 이미 해당 종목 플레이어
+
+    // UserSportParticipation 없으면 생성 (플레이어 명함)
+    let participation = await this.sportParticipationRepository.findOne({
+      where: { userId, sport },
+    });
+    if (!participation) {
+      participation = this.sportParticipationRepository.create({
+        userId,
+        sport,
+      });
+      await this.sportParticipationRepository.save(participation);
+    }
+
+    // 활동 상태·종목 활성화·활동 시간대 반영
+    const availability = (user.mercenaryAvailability ?? []) as Array<{
+      dayOfWeek: number;
+      timeSlots: Array<{ start: string; end: string }>;
+    }>;
+    const existing = availability.find((a) => a.dayOfWeek === slot.dayOfWeek);
+    const newSlot = { start: slot.start.slice(0, 5), end: slot.end.slice(0, 5) };
+    if (existing) {
+      if (!existing.timeSlots.some((t) => t.start === newSlot.start && t.end === newSlot.end)) {
+        existing.timeSlots.push(newSlot);
+      }
+    } else {
+      availability.push({ dayOfWeek: slot.dayOfWeek, timeSlots: [newSlot] });
+    }
+    await this.userRepository.update(userId, {
+      mercenaryActivityStatus: 'active',
+      mercenaryActiveBySport: { ...bySport, [sport]: true },
+      mercenaryAvailability: availability,
+    });
   }
 }
 

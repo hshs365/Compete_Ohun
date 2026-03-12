@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { CurrencyDollarIcon } from '@heroicons/react/24/solid';
 import { getMannerGradeConfig } from '../utils/mannerGrade';
-import { SPORT_CHIP_STYLES } from '../constants/sports';
+import { SPORT_CHIP_STYLES, SPORT_POINT_COLORS } from '../constants/sports';
 import type { SelectedGroup } from '../types/selected-group';
 import { api } from '../utils/api';
 import { addressMatchesRegion, getDistanceKm, type KoreanCity } from '../utils/locationUtils';
@@ -539,11 +539,12 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
                  );
                }
 
-               // ⭐ 플레이어 모드: 인원 미달 매치만 (플레이어 N명 구해요)
+               // ⭐ 플레이어 모드: 인원 미달 매치만 (게시자 1명 포함해 current < max)
                if (mercenaryOnly) {
                  mappedGroups = mappedGroups.filter((group) => {
                    const max = group.maxParticipants ?? 0;
-                   const current = group.memberCount ?? 0;
+                   const others = group.participantCountExcludingCreator ?? Math.max(0, (group.memberCount ?? group.participantCount ?? 0) - 1);
+                   const current = 1 + others;
                    return max > 0 && current < max;
                  });
                }
@@ -634,9 +635,12 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
           displayedGroups.map((group, index) => (
             <button
               onClick={() => onGroupClick(group)}
-              className="list-item-fade-in w-full text-left block p-2 md:p-3 bg-[var(--color-bg-card)] rounded-lg md:rounded-xl border border-[var(--color-border-card)] transition-all duration-300 hover:scale-[1.02] hover:border-[var(--color-blue-primary)] cursor-pointer opacity-0"
+              className="list-item-fade-in w-full text-left block p-2 md:p-3 bg-[var(--color-bg-card)] rounded-lg md:rounded-xl border border-[var(--color-border-card)] border-l-4 transition-all duration-300 hover:scale-[1.02] hover:border-[var(--color-blue-primary)] cursor-pointer opacity-0"
               key={group.id}
-              style={{ animationDelay: `${index * 45}ms` }}
+              style={{
+                animationDelay: `${index * 45}ms`,
+                borderLeftColor: SPORT_POINT_COLORS[group.category ?? ''] ?? SPORT_POINT_COLORS['전체'],
+              }}
             >
               <div className="mb-1.5 gap-1.5">
                 {/* 제목과 배지 */}
@@ -677,7 +681,8 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
                       const opt = optimisticParticipantCount?.groupId === group.id ? optimisticParticipantCount.participantCount : null;
                       const raw = opt ?? group.memberCount ?? group.participantCount ?? 0;
                       const max = group.maxParticipants ?? 0;
-                      return mercenaryOnly ? Math.max(0, raw - 1) >= max : raw >= max;
+                      const others = mercenaryOnly ? (group.participantCountExcludingCreator ?? Math.max(0, raw - 1)) : raw;
+                      return mercenaryOnly ? (1 + others) >= max : raw >= max;
                     })()) && (
                       <span className="px-2 py-0.5 bg-gradient-to-r from-red-600 to-red-700 text-white text-xs font-bold rounded-full flex items-center gap-1 shadow-md animate-pulse">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -747,12 +752,16 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
                       : null;
                     const rawCount = optimistic ?? group.memberCount ?? group.participantCount ?? 0;
                     const rawMax = group.maxParticipants;
-                    const displayCount = mercenaryOnly
+                    // 플레이어 구하기: 게시자를 1명으로 포함해 표시 (1/4명)
+                    const othersCount = mercenaryOnly
                       ? (group.participantCountExcludingCreator != null
                           ? (optimistic ?? group.participantCountExcludingCreator)
                           : Math.max(0, rawCount - 1))
+                      : null;
+                    const displayCount = mercenaryOnly && othersCount != null
+                      ? 1 + othersCount
                       : rawCount;
-                    const displayMax = rawMax; // 모집 수는 입력값 그대로, 매치장 제외한 현재 수만 변경
+                    const displayMax = rawMax;
                     const pct = displayMax != null && displayMax > 0 ? Math.min(100, (displayCount / displayMax) * 100) : 0;
                     const showFull = rawMax != null && (mercenaryOnly ? displayCount >= displayMax : rawCount >= rawMax);
                     return (

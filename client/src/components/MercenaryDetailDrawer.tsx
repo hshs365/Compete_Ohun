@@ -292,9 +292,11 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
   );
   const memberCountRaw = detail?.participantCount ?? group.memberCount ?? 0;
   const maxCount = detail?.maxParticipants ?? group.maxParticipants;
-  // 매치장 제외 참가자 수 (서버 participantCountExcludingCreator 우선, 없으면 participantCount - 1)
-  const memberCount =
+  // 플레이어 구하기: 매치장 제외 참가자 수 (서버 participantCountExcludingCreator 우선)
+  const othersCount =
     detail?.participantCountExcludingCreator ?? Math.max(0, memberCountRaw - 1);
+  // 표시용: 게시자 1명 포함 (1/4명)
+  const memberCount = 1 + othersCount;
   const levelStr = formatSportLevel(group.category ?? '', detail?.sportSpecificData);
   const creatorManner = detail?.creator?.mannerScore ?? group.creator?.mannerScore ?? 80;
   const mannerConfig: MannerGradeConfig = getMannerGradeConfig(creatorManner);

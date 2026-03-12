@@ -148,7 +148,7 @@ export class GroupsService {
   }
 
   async create(createGroupDto: CreateGroupDto, creatorId: number): Promise<Group> {
-    const allowedCategories = ['축구', '풋살', '농구', '야구', '테니스', '배드민턴', '핸드볼', '배구', '탁구', '골프'];
+    const allowedCategories = ['축구', '풋살', '농구', '야구', '테니스', '배드민턴', '핸드볼', '배구', '탁구', '골프', '볼링'];
     if (!createGroupDto.category || !allowedCategories.includes(createGroupDto.category)) {
       throw new BadRequestException(`현재 지원하는 종목은 ${allowedCategories.join(', ')}입니다.`);
     }
@@ -342,6 +342,37 @@ export class GroupsService {
             positionY: (gs as any).creatorPositionY ?? null,
           }),
         );
+      }
+    }
+
+    // 플레이어 구하기: 게시자를 참가자 1명으로 등록 (참가자 수 1/4 표시용)
+    if (isMercenaryRecruit) {
+      const creatorAlreadyParticipant = await this.participantRepository.findOne({
+        where: { groupId: savedGroup.id, userId: creatorId },
+      });
+      if (!creatorAlreadyParticipant) {
+        await this.participantRepository.save(
+          this.participantRepository.create({
+            groupId: savedGroup.id,
+            userId: creatorId,
+            status: 'joined',
+          }),
+        );
+      }
+      // 비플레이어가 게시한 경우: 해당 종목 플레이어 자동 등록 + 활동 시간대·활동중 설정
+      const sport = savedGroup.category ?? '';
+      if (sport && meetingDateTime) {
+        const meeting = meetingDateTime instanceof Date ? meetingDateTime : new Date(meetingDateTime);
+        const dayOfWeek = meeting.getDay();
+        const start = `${String(meeting.getHours()).padStart(2, '0')}:${String(meeting.getMinutes()).padStart(2, '0')}`;
+        let end = '';
+        if (createGroupDto.meetingEndTime && typeof createGroupDto.meetingEndTime === 'string' && createGroupDto.meetingEndTime.trim().length >= 5) {
+          end = createGroupDto.meetingEndTime.trim().slice(0, 5);
+        } else {
+          const endM = meeting.getHours() * 60 + meeting.getMinutes() + 120;
+          end = `${String(Math.floor(endM / 60) % 24).padStart(2, '0')}:${String(endM % 60).padStart(2, '0')}`;
+        }
+        await this.usersService.ensureMercenaryForSport(creatorId, sport, { dayOfWeek, start, end });
       }
     }
 

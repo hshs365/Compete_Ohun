@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { XMarkIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, MagnifyingGlassIcon, ChevronLeftIcon, ChevronRightIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 import { SPORT_ICONS, SPORT_POINT_COLORS, SPORT_CHIP_STYLES, MAIN_CATEGORIES } from '../constants/sports';
 import { EQUIPMENT_OPTIONS } from '../constants/equipment';
 import { MERCENARY_RECRUIT_FORM, type RecruitFieldDef } from '../constants/mercenaryRecruitForm';
 import { api } from '../utils/api';
 import { showSuccess, showError } from '../utils/swal';
+import { useAuth } from '../contexts/AuthContext';
 import NaverMap from './NaverMap';
 import DarkDatePicker from './DarkDatePicker';
 import TimeRangeSlider from './TimeRangeSlider';
@@ -100,6 +101,8 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
   const [selectedEquipment, setSelectedEquipment] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [locationFetching, setLocationFetching] = useState(false);
+  const { user, checkAuth } = useAuth();
+  const isAlreadyPlayerForSport = Boolean(user?.mercenaryActiveBySport?.[effectiveSport]);
 
   const handleSearchAddress = useCallback(() => {
     const openPostcode = () => {
@@ -429,6 +432,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
       onClose();
       onSuccess?.();
       await showSuccess('플레이어 구인 글이 등록되었습니다.', '등록 완료');
+      await checkAuth?.(); // 자동 플레이어 등록 반영
     } catch (err: unknown) {
       const errAny = err as { message?: string; response?: { data?: { message?: string | string[] } } };
       const msg =
@@ -476,6 +480,15 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
             />
           ))}
         </div>
+
+        {!isAlreadyPlayerForSport && (
+          <div className="shrink-0 mx-4 mt-2 p-3 rounded-lg bg-[var(--color-blue-primary)]/10 border border-[var(--color-blue-primary)]/30 flex gap-2">
+            <InformationCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--color-blue-primary)]" aria-hidden />
+            <p className="text-sm text-[var(--color-text-primary)]">
+              플레이어 신청을 하지 않은 경우, 게시글 등록과 동시에 <strong>해당 종목의 플레이어로 자동 등록</strong>되며, <strong>플레이어 명함</strong>이 생성됩니다. 활동 시간대는 이 게시글의 일시에 맞춰 추가되고, 활동 상태는 <strong>활동중</strong>으로 설정됩니다.
+            </p>
+          </div>
+        )}
 
         <form
           onSubmit={handleSubmit}

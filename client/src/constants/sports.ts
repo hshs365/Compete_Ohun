@@ -1,7 +1,7 @@
 // 운동 종류 목록 (홈·모임 생성 등에서 사용)
 // API에서 동적으로 가져올 수 있도록 확장 가능
 
-export const SPORTS_LIST: readonly string[] = ['축구', '풋살', '농구', '야구', '테니스', '배드민턴', '핸드볼', '배구', '탁구', '골프'];
+export const SPORTS_LIST: readonly string[] = ['축구', '풋살', '농구', '야구', '테니스', '배드민턴', '핸드볼', '배구', '탁구', '골프', '볼링'];
 
 /** 종목별 아이콘 (이모지 — 지도 마커·종목 칩용) */
 export const SPORT_ICONS: Record<string, string> = {
@@ -15,13 +15,14 @@ export const SPORT_ICONS: Record<string, string> = {
   배구: '🏐',
   탁구: '🏓',
   골프: '⛳',
+  볼링: '🎳',
 };
 
 // 명예의 전당·홈 등에서 사용하는 카테고리 목록 (전체 포함)
 export const SPORTS_CATEGORIES: readonly string[] = ['전체', ...SPORTS_LIST];
 
 // 홈 화면 카테고리 필터용
-export const MAIN_CATEGORIES: readonly string[] = ['전체', '축구', '풋살', '농구', '야구', '테니스', '배드민턴', '핸드볼', '배구', '탁구', '골프'];
+export const MAIN_CATEGORIES: readonly string[] = ['전체', '축구', '풋살', '농구', '야구', '테니스', '배드민턴', '핸드볼', '배구', '탁구', '골프', '볼링'];
 
 /** 스탯(레이더 차트) 제공 종목. 매치 리뷰 스텟이 있는 종목만 */
 export const SPORT_STATS_SPORTS: readonly string[] = ['축구', '풋살', '농구', '테니스'];
@@ -39,6 +40,7 @@ export const SPORT_POINT_COLORS: Record<string, string> = {
   배구: '#0ea5e9',
   탁구: '#facc15',
   골프: '#22c55e',
+  볼링: '#6366f1',
 };
 
 /** 종목별 칩 스타일 (화이트모드: 검정 텍스트로 배경과 확실한 대비, 다크모드: 반투명+밝은 글자) */
@@ -54,6 +56,7 @@ export const SPORT_CHIP_STYLES: Record<string, { bg: string; border: string; tex
   배구: { bg: 'bg-sky-100 dark:bg-sky-600/30', border: 'border-sky-400 dark:border-sky-500/50', text: '!text-black dark:!text-sky-300' },
   탁구: { bg: 'bg-amber-100 dark:bg-amber-500/30', border: 'border-amber-400 dark:border-amber-500/50', text: '!text-black dark:!text-amber-300' },
   골프: { bg: 'bg-emerald-100 dark:bg-emerald-500/30', border: 'border-emerald-400 dark:border-emerald-500/50', text: '!text-black dark:!text-emerald-300' },
+  볼링: { bg: 'bg-indigo-100 dark:bg-indigo-500/30', border: 'border-indigo-400 dark:border-indigo-500/50', text: '!text-black dark:!text-indigo-300' },
 };
 
 /** 필터/폼 필드 타입 */
@@ -451,6 +454,27 @@ export const SPORT_CONFIG: Record<string, SportConfigSchema> = {
           { value: 'practice', label: '연습라운드' },
         ],
       },
+      {
+        key: 'skillLevel',
+        label: '실력',
+        type: 'select',
+        options: [
+          { value: 'beginner', label: '초급' },
+          { value: 'intermediate', label: '중급' },
+          { value: 'advanced', label: '고급' },
+        ],
+      },
+    ],
+    formFields: [
+      { key: 'skillLevel', label: '모집 실력', type: 'select', options: [
+        { value: 'beginner', label: '초급' },
+        { value: 'intermediate', label: '중급' },
+        { value: 'advanced', label: '고급' },
+      ]},
+    ],
+  },
+  볼링: {
+    filterFields: [
       {
         key: 'skillLevel',
         label: '실력',

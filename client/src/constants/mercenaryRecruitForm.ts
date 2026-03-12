@@ -318,6 +318,22 @@ export const MERCENARY_RECRUIT_FORM: Record<string, MercenaryRecruitFormSchema> 
       },
     ],
   },
+  볼링: {
+    fields: [
+      {
+        key: 'skillLevel',
+        label: '희망 실력',
+        type: 'select',
+        options: [
+          { value: '', label: '상관없음' },
+          { value: 'beginner', label: '초급' },
+          { value: 'intermediate', label: '중급' },
+          { value: 'advanced', label: '고급' },
+        ],
+        required: false,
+      },
+    ],
+  },
   테니스: {
     fields: [
       {
