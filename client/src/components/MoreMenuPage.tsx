@@ -16,7 +16,7 @@ const MoreMenuPage = () => {
   const { user } = useAuth();
 
   const mainItems = [
-    { name: '용병 클럽', path: '/teams', icon: ShieldCheckIcon, protected: true },
+    { name: '용병 크루', path: '/teams', icon: ShieldCheckIcon, protected: true },
     { name: '팔로워', path: '/followers', icon: UserGroupIcon, protected: true },
     { name: '가이드', path: '/guide', icon: BookOpenIcon },
   ];

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -27,6 +27,8 @@ export interface TeamMembership {
   coach?: string;
   assistantCoach?: string;
   contact?: string;
+  /** 크루를 생성한 사용자 ID. 크루장은 1인당 1개로 제한. */
+  captainUserId?: number;
 }
 
 @Injectable()
@@ -109,7 +111,7 @@ export class TeamsService {
       region: '경기도',
       participants: [],
     },
-    { id: 8, teamName: '대전 풋살클럽', sport: '풋살', position: 'MF', region: '대전광역시', participants: [] },
+    { id: 8, teamName: '대전 풋살 크루', sport: '풋살', position: 'MF', region: '대전광역시', participants: [] },
     { id: 9, teamName: '서울 스트리트', sport: '풋살', position: 'FW', region: '서울특별시', participants: [] },
     { id: 10, teamName: '궁동 농구팀', sport: '농구', position: 'SG', region: '대전광역시', participants: [] },
     { id: 11, teamName: '강남 슬램덩크', sport: '농구', position: 'PF', region: '서울특별시', participants: [] },
@@ -124,6 +126,12 @@ export class TeamsService {
     captainUserId: number,
     logo?: Express.Multer.File,
   ): Promise<TeamMembership> {
+    // 크루장은 1인당 1개로 제한 (내가 생성해 크루장이 되는 모임은 하나만 가능)
+    const alreadyCaptainOf = this.mockTeams.find((t) => t.captainUserId === captainUserId);
+    if (alreadyCaptainOf) {
+      throw new BadRequestException('이미 크루장으로 등록된 용병 크루가 있습니다. 크루장은 1개로 제한됩니다.');
+    }
+
     let logoUrl: string | undefined;
     if (logo) {
       logoUrl = await this.uploadTeamLogo(logo);
@@ -164,6 +172,7 @@ export class TeamsService {
       contact: dto.contact,
       logoUrl,
       participants,
+      captainUserId,
     };
     this.mockTeams.push(team);
     return team;
