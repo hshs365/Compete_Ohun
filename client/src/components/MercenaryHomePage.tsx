@@ -175,8 +175,8 @@ const MercenaryHomePage = () => {
             }`}
             style={activeTab === 'find' ? { backgroundColor: pointColor } : undefined}
           >
-            <UserPlusIcon className="w-5 h-5" />
-            플레이어 구하기
+            <UserPlusIcon className="w-5 h-5" aria-hidden />
+            <span translate="no">플레이어 구하기</span>
           </button>
           <button
             type="button"
@@ -188,8 +188,8 @@ const MercenaryHomePage = () => {
             }`}
             style={activeTab === 'apply' ? { backgroundColor: pointColor } : undefined}
           >
-            <UserCircleIcon className="w-5 h-5" />
-            플레이어 신청
+            <UserCircleIcon className="w-5 h-5" aria-hidden />
+            <span translate="no">플레이어 신청</span>
           </button>
         </div>
       </header>
@@ -309,7 +309,7 @@ const MercenaryHomePage = () => {
           aria-label="플레이어 구하기 작성"
         >
           <PlusIcon className="w-5 h-5 shrink-0 stroke-[2.5]" aria-hidden />
-          <span className="leading-[1] -mt-px">플레이어 구하기</span>
+          <span className="leading-[1] -mt-px" translate="no">플레이어 구하기</span>
         </button>
       )}
 

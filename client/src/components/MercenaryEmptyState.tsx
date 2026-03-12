@@ -51,6 +51,7 @@ const MercenaryEmptyState: React.FC<MercenaryEmptyStateProps> = ({ selectedSport
           onClick={onWriteClick}
           className="px-6 py-3 rounded-xl font-semibold text-white transition-opacity hover:opacity-90"
           style={{ backgroundColor: pointColor }}
+          translate="no"
         >
           플레이어 구하기 작성
         </button>

@@ -455,7 +455,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
         <div className="shrink-0 flex items-center justify-between p-4 border-b border-[var(--color-border-card)] bg-[var(--color-bg-card)]">
           <h2 id="mercenary-recruit-title" className="text-lg font-bold text-[var(--color-text-primary)] flex items-center gap-2">
             <span aria-hidden>{SPORT_ICONS[effectiveSport] ?? '🏃'}</span>
-            {effectiveSport} 플레이어 구하기
+            <span translate="no">{effectiveSport} 플레이어 구하기</span>
           </h2>
           <button
             type="button"
