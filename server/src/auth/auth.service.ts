@@ -864,8 +864,13 @@ export class AuthService {
 
   /** 프로필 이미지만 업로드 (POST 전용 — PUT은 multipart 미지원 이슈로 별도 라우트 사용) */
   async updateProfileImage(userId: number, file: Express.Multer.File): Promise<User> {
+    this.logger.log(
+      `[profile-image] updateProfileImage 시작 userId=${userId} hasFile=${!!file} hasBuffer=${!!file?.buffer}`,
+    );
     const profileImageUrl = await this.uploadProfileImage(userId, file);
-    return this.usersService.updateUser(userId, { profileImageUrl } as Partial<User>);
+    const user = await this.usersService.updateUser(userId, { profileImageUrl } as Partial<User>);
+    this.logger.log(`[profile-image] DB 저장 완료 userId=${userId} profileImageUrl=${profileImageUrl}`);
+    return user;
   }
 
   async updateMercenaryProfile(
@@ -931,7 +936,7 @@ export class AuthService {
     }
 
     const urlPath = `/uploads/profile/${filename}`;
-    this.logger.log(`Profile image saved: userId=${userId} path=${urlPath}`);
+    this.logger.log(`[profile-image] 파일 저장 완료 userId=${userId} path=${urlPath} size=${file.buffer.length}`);
     return urlPath;
   }
 

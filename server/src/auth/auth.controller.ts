@@ -58,6 +58,8 @@ function getEffectiveAllcourtplayRanks(user: User): Record<string, string> {
 
 @Controller('api/auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private authService: AuthService,
     private oauthService: OAuthService,
@@ -375,11 +377,16 @@ export class AuthController {
     @CurrentUser() user: User,
     @UploadedFile() file?: Express.Multer.File,
   ): Promise<{ profileImageUrl: string }> {
+    this.logger.log(
+      `[profile-image] 요청 도착 userId=${user.id} file존재=${!!file} buffer존재=${!!(file as any)?.buffer}`,
+    );
     if (!file) {
       throw new BadRequestException('프로필 이미지 파일을 선택해주세요.');
     }
     const updated = await this.authService.updateProfileImage(user.id, file);
-    return { profileImageUrl: updated.profileImageUrl ?? '' };
+    const url = updated.profileImageUrl ?? '';
+    this.logger.log(`[profile-image] 응답 반환 userId=${user.id} profileImageUrl=${url || '(빈값)'}`);
+    return { profileImageUrl: url };
   }
 
   @UseGuards(JwtAuthGuard)
