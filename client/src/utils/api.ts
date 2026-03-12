@@ -1,6 +1,8 @@
 // API 베이스 URL 결정: 환경변수 > 런타임 체크 > 기본값 (다른 모듈에서 재사용 가능하도록 export)
+// ⚠️ 배포 시: 이미지(/uploads)는 백엔드에서만 서빙되므로, 프론트와 백이 다른 호스트면
+//    반드시 VITE_API_BASE_URL을 백엔드 주소로 빌드에 설정해야 이미지가 로드됩니다.
 export const getApiBaseUrl = (): string => {
-  // 1. 환경변수가 명시적으로 설정되어 있으면 사용
+  // 1. 환경변수가 명시적으로 설정되어 있으면 사용 (배포 시 필수 권장)
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
   }
@@ -10,6 +12,7 @@ export const getApiBaseUrl = (): string => {
   const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.');
 
   // 3. localhost가 아니면 프로덕션으로 간주 (상대 경로 사용 → same-origin)
+  //    이때 프론트 호스트에서 /uploads를 백엔드로 프록시하지 않으면 이미지 404 발생
   if (!isLocalhost) {
     return '';
   }

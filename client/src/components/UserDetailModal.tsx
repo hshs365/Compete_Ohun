@@ -194,7 +194,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
             {/* 헤더 (2번 캡쳐 스타일: 그라데이션 + 아바타 + 이름 + 종목 뱃지) */}
             <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6 text-white relative">
               <div className="flex items-center gap-4">
-                <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border-4 border-white/30 text-3xl font-bold">
+                <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center border-4 border-white/30 text-3xl font-bold">
                   {(profileSummary?.profileImageUrl ?? user.profileImageUrl) ? (
                     <img
                       src={profileSummary?.profileImageUrl ?? user.profileImageUrl}
@@ -278,7 +278,7 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
                         return (
                           <span
                             key={sport}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border ${chip.bg} ${chip.border} ${chip.text}`}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border ${chip.bg} ${chip.border} !text-gray-900 dark:!text-gray-100`}
                           >
                             {SPORT_ICONS[sport] ?? '●'} {sport}
                           </span>

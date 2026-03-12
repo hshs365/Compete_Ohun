@@ -15,13 +15,13 @@ import {
   UserCircleIcon,
 } from '@heroicons/react/24/outline';
 import { useNavigate } from 'react-router-dom';
-import { io, Socket } from 'socket.io-client';
-import { api, getSocketUrl } from '../utils/api';
+import { api } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import {
   useChat,
   type ConversationListItem,
 } from '../contexts/ChatContext';
+import { useChatSocket } from '../contexts/ChatSocketContext';
 import { getMannerGradeConfig } from '../utils/mannerGrade';
 import { showError, showConfirm } from '../utils/swal';
 
@@ -106,7 +106,7 @@ const FloatingChatWidget: React.FC = () => {
   const [swipeY, setSwipeY] = useState(0);
   const [isSwipeClosing, setIsSwipeClosing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const socketRef = useRef<Socket | null>(null);
+  const { socket, isConnected, joinConversation } = useChatSocket();
   const touchStartY = useRef(0);
   const touchCurrentY = useRef(0);
   const [pinnedIds, setPinnedIdsState] = useState<number[]>(() => getPinnedIds());
@@ -245,37 +245,15 @@ const FloatingChatWidget: React.FC = () => {
     });
   }, [activeConversationId, user, fetchMessages, fetchConversations, setConversations]);
 
-  // 폴링: 모바일 등 WebSocket 불안정 시 메시지·읽음 상태 실시간 갱신 보완
+  // 공용 소켓: 대화방 룸 참가 + 실시간 이벤트 구독 (카카오톡처럼 푸시 우선)
   useEffect(() => {
-    if (!isOpen || !activeConversationId || !user) return;
-    const poll = () => {
-      fetchMessages(activeConversationId).then(() => {});
-    };
-    const id = setInterval(poll, 8000);
-    return () => clearInterval(id);
-  }, [isOpen, activeConversationId, user, fetchMessages]);
-
-  // 소켓: 위젯이 열려있을 때 항상 연결 (구인자가 목록만 봐도 inbox-update 수신)
-  useEffect(() => {
-    if (!isOpen || !user) return;
-    const socket = io(getSocketUrl(), {
-      path: '/socket.io',
-      transports: ['websocket', 'polling'],
-      auth: {
-        token:
-          sessionStorage.getItem('access_token') ||
-          localStorage.getItem('access_token'),
-      },
-    });
-    socketRef.current = socket;
-    socket.emit('join-user', { userId: user.id });
+    if (!socket || !user) return;
     if (activeConversationId) {
-      socket.emit('join-conversation', { conversationId: activeConversationId });
+      joinConversation(activeConversationId);
     }
-    socket.on('inbox-update', () => fetchConversations());
-    socket.on('new-message', (msg: MessageItem) => {
-      // 내가 보낸 메시지는 API 응답에서 이미 추가했으므로 중복 방지
-      if (msg.senderId === user?.id) return;
+    const onInboxUpdate = () => fetchConversations();
+    const onNewMessage = (msg: MessageItem) => {
+      if (msg.senderId === user.id) return;
       const convId = msg.conversationId ?? activeConversationId;
       if (convId === activeConversationId) {
         setMessages((prev) => {
@@ -283,20 +261,30 @@ const FloatingChatWidget: React.FC = () => {
           return [...prev, msg];
         });
       }
-    });
-    socket.on('read-receipt', (payload: { conversationId: number; readAt: string }) => {
+    };
+    const onReadReceipt = (payload: { conversationId: number; readAt: string }) => {
       if (payload.conversationId === activeConversationId) {
         setOtherLastReadAt(payload.readAt);
       }
-    });
-    return () => {
-      socket.off('inbox-update');
-      socket.off('new-message');
-      socket.off('read-receipt');
-      socket.disconnect();
-      socketRef.current = null;
     };
-  }, [isOpen, user, activeConversationId, fetchConversations]);
+    socket.on('inbox-update', onInboxUpdate);
+    socket.on('new-message', onNewMessage);
+    socket.on('read-receipt', onReadReceipt);
+    return () => {
+      socket.off('inbox-update', onInboxUpdate);
+      socket.off('new-message', onNewMessage);
+      socket.off('read-receipt', onReadReceipt);
+    };
+  }, [socket, user, activeConversationId, joinConversation, fetchConversations]);
+
+  // 폴링: WebSocket 끊김 시 또는 보조 동기화용 (연결됐을 때는 주기 길게)
+  useEffect(() => {
+    if (!isOpen || !activeConversationId || !user) return;
+    const poll = () => fetchMessages(activeConversationId).catch(() => {});
+    const intervalMs = isConnected ? 25000 : 8000;
+    const id = setInterval(poll, intervalMs);
+    return () => clearInterval(id);
+  }, [isOpen, activeConversationId, user, isConnected, fetchMessages]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);

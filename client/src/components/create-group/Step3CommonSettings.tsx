@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MapPinIcon, CalendarIcon, UsersIcon, MagnifyingGlassIcon, TagIcon, BuildingOfficeIcon, CurrencyDollarIcon, UserGroupIcon, PlusCircleIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import NaverMap from '../NaverMap';
+import DarkDatePicker from '../DarkDatePicker';
 import { api } from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { getMinParticipantsForSport } from '../../constants/sports';
@@ -998,18 +999,11 @@ const Step3CommonSettings: React.FC<Step3CommonSettingsProps> = ({
                   <>
                     <p className="text-xs font-medium text-[var(--color-text-primary)] mb-2">예약할 날짜 선택</p>
                     <div className="relative max-w-[200px]">
-                      <input
-                        type="date"
+                      <DarkDatePicker
                         value={reservationDate}
-                        onChange={(e) => setReservationDate(e.target.value)}
-                        min={(() => {
-                          const d = new Date();
-                          const y = d.getFullYear();
-                          const m = String(d.getMonth() + 1).padStart(2, '0');
-                          const day = String(d.getDate()).padStart(2, '0');
-                          return `${y}-${m}-${day}`;
-                        })()}
-                        className="w-full pl-3 pr-2 py-2 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-sm date-input-dark"
+                        onChange={setReservationDate}
+                        minDate={new Date()}
+                        placeholder="연도-월-일"
                       />
                     </div>
                     {reservationDate && (
@@ -1082,19 +1076,11 @@ const Step3CommonSettings: React.FC<Step3CommonSettingsProps> = ({
           {timeStepHourOnly ? (
             <div className="flex gap-2 flex-wrap items-center">
               <div className="flex-1 min-w-[140px] relative">
-                <input
-                  type="date"
-                  required
+                <DarkDatePicker
                   value={meetingDate}
-                  onChange={(e) => onDateTimeChange(e.target.value || '', meetingTime)}
-                  min={(() => {
-                    const d = new Date();
-                    const y = d.getFullYear();
-                    const m = String(d.getMonth() + 1).padStart(2, '0');
-                    const day = String(d.getDate()).padStart(2, '0');
-                    return `${y}-${m}-${day}`;
-                  })()}
-                  className="w-full pl-4 pr-3 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
+                  onChange={(date) => onDateTimeChange(date, meetingTime)}
+                  minDate={new Date()}
+                  placeholder="연도-월-일"
                 />
               </div>
               <select

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { XMarkIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
-import { io } from 'socket.io-client';
-import { api, getSocketUrl } from '../utils/api';
+import { api } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useChatSocket } from '../contexts/ChatSocketContext';
 import { showError } from '../utils/swal';
 
 interface MatchChatModalProps {
@@ -36,6 +36,7 @@ const MatchChatModal: React.FC<MatchChatModalProps> = ({
   onClose,
 }) => {
   const { user } = useAuth();
+  const { socket, isConnected, joinConversation } = useChatSocket();
   const [conversation, setConversation] = useState<ConversationData | null>(null);
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [input, setInput] = useState('');
@@ -93,36 +94,44 @@ const MatchChatModal: React.FC<MatchChatModalProps> = ({
   useEffect(() => {
     if (!conversation?.id || !user) return;
     fetchMessages(conversation.id);
-    // 내가 읽음 처리 (상대방의 메시지를 읽었음을 서버에 전달)
     api.patch(`/api/chat/conversations/${conversation.id}/read`).catch(() => {});
-    pollRef.current = setInterval(() => fetchMessages(conversation.id), 4000);
+    // 폴링: 소켓 끊김 시 8초, 연결 시 25초 (실시간은 소켓 푸시로 처리)
+    const intervalMs = isConnected ? 25000 : 8000;
+    pollRef.current = setInterval(() => fetchMessages(conversation.id), intervalMs);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [conversation?.id, user]);
+  }, [conversation?.id, user, isConnected]);
 
-  // 소켓: 상대방이 읽었을 때 read-receipt 실시간 수신 (otherLastReadAt 즉시 반영)
+  // 공용 소켓: 대화방 룸 참가 + read-receipt 실시간 수신
   useEffect(() => {
-    if (!conversation?.id || !user) return;
-    const token = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-    if (!token) return;
-    const socket = io(getSocketUrl(), {
-      path: '/socket.io',
-      transports: ['websocket', 'polling'],
-      auth: { token },
-    });
-    socket.emit('join-user', { userId: user.id });
-    socket.emit('join-conversation', { conversationId: conversation.id });
-    socket.on('read-receipt', (payload: { conversationId: number; readAt: string }) => {
+    if (!socket || !conversation?.id) return;
+    joinConversation(conversation.id);
+    const onReadReceipt = (payload: { conversationId: number; readAt: string }) => {
       if (payload.conversationId === conversation.id) {
         setOtherLastReadAt(payload.readAt);
       }
-    });
-    return () => {
-      socket.off('read-receipt');
-      socket.disconnect();
     };
-  }, [conversation?.id, user]);
+    socket.on('read-receipt', onReadReceipt);
+    return () => {
+      socket.off('read-receipt', onReadReceipt);
+    };
+  }, [socket, conversation?.id, joinConversation]);
+
+  // 새 메시지 실시간 반영 (상대가 보낸 메시지)
+  useEffect(() => {
+    if (!socket || !conversation?.id || !user) return;
+    const onNewMessage = (msg: MessageItem & { conversationId?: number }) => {
+      if ((msg.conversationId ?? 0) !== conversation.id) return;
+      if (msg.senderId === user.id) return;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+    };
+    socket.on('new-message', onNewMessage);
+    return () => socket.off('new-message', onNewMessage);
+  }, [socket, conversation?.id, user]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);

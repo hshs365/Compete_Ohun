@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import TimeRangeSlider from '../TimeRangeSlider';
+import DarkDatePicker from '../DarkDatePicker';
 
 /** HH:mm 또는 HH:mm:ss → HH:mm 정규화 */
 function normalizeHHmm(t: string): string {
@@ -106,17 +107,14 @@ const Step2MatchSchedule: React.FC<Step2MatchScheduleProps> = ({
               일자 설정
             </label>
             <div className="relative">
-              <input
-                type="date"
-                required
+              <DarkDatePicker
                 value={meetingDate}
-                onChange={(e) => {
-                  const date = e.target.value || '';
+                onChange={(date) => {
                   onDateTimeChange(date, meetingTime);
                   if (onMeetingEndDateChange) onMeetingEndDateChange(date);
                 }}
-                min={todayMin}
-                className="w-full pl-4 pr-3 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
+                minDate={new Date(todayMin)}
+                placeholder="연도-월-일"
               />
             </div>
             {fixedDurationHours == null && (
@@ -170,12 +168,11 @@ const Step2MatchSchedule: React.FC<Step2MatchScheduleProps> = ({
             날짜
           </label>
           <div className="relative">
-            <input
-              type="date"
+            <DarkDatePicker
               value={meetingDate}
-              onChange={(e) => onDateTimeChange(e.target.value || '', meetingTime)}
-              min={todayMin}
-              className="w-full pl-4 pr-3 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
+              onChange={(date) => onDateTimeChange(date, meetingTime)}
+              minDate={new Date(todayMin)}
+              placeholder="연도-월-일"
             />
           </div>
         </div>
@@ -200,12 +197,11 @@ const Step2MatchSchedule: React.FC<Step2MatchScheduleProps> = ({
             <label className="block text-sm font-medium text-[var(--color-text-primary)] text-left">
               종료 일자 (야간 매치 시 익일 선택)
             </label>
-            <input
-              type="date"
+            <DarkDatePicker
               value={meetingEndDate || meetingDate}
-              onChange={(e) => onMeetingEndDateChange(e.target.value || meetingDate)}
-              min={meetingDate || todayMin}
-              className="w-full pl-4 pr-3 py-3 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
+              onChange={(date) => onMeetingEndDateChange(date || meetingDate)}
+              minDate={new Date(meetingDate || todayMin)}
+              placeholder="연도-월-일"
             />
           </div>
         )}

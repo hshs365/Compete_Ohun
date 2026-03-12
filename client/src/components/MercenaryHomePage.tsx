@@ -248,8 +248,8 @@ const MercenaryHomePage = () => {
             onActivityTimeFilterChange={setFilterByActivityTime}
           />
 
-          {/* 용병 구하는 매치 목록 */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-4">
+          {/* 용병 구하는 매치 목록 (하단 네비 높이만큼 padding으로 마지막 목록 잘림 방지) */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-20 md:pb-4">
             <GroupList
               selectedCategory={selectedCategory}
               searchQuery={searchQuery}
@@ -263,7 +263,7 @@ const MercenaryHomePage = () => {
               matchType="general"
               userCoords={userCoords}
               mercenaryOnly={true}
-              emptyStateSport={selectedCategory}
+              emptyStateSport={selectedCategory ?? '전체'}
               onEmptyWriteClick={() => setRecruitFormOpen(true)}
               showEmptyWriteButton={!!user}
               optimisticParticipantCount={optimisticParticipantCount}

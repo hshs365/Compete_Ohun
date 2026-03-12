@@ -263,11 +263,10 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ notifications: pr
 
   return (
     <>
-      {/* 백드롭: blur + 딤, 클릭 시 닫기 */}
+      {/* 백드롭: 딤만 (블러 없음), 클릭 시 닫기 */}
       <div
         role="presentation"
         className={`fixed inset-0 z-[9998] bg-black/25 transition-opacity duration-300 md:bg-transparent ${isDrawerOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        style={{ backdropFilter: isDrawerOpen ? 'blur(10px)' : 'none', WebkitBackdropFilter: isDrawerOpen ? 'blur(10px)' : 'none' }}
         onClick={closeDrawer}
         aria-hidden
       />

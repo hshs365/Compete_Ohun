@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { XMarkIcon, CalendarDaysIcon, ClockIcon, UsersIcon, PhoneIcon, ChatBubbleLeftIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
 import TimeRangeSlider from './TimeRangeSlider';
+import DarkDatePicker from './DarkDatePicker';
 import { api } from '../utils/api';
 import { showError, showSuccess } from '../utils/swal';
 import { formatPhoneNumber, PHONE_PLACEHOLDER } from '../utils/phoneFormat';
@@ -206,13 +207,11 @@ const ReservationModal: React.FC<ReservationModalProps> = ({
               예약 날짜 <span className="text-[var(--color-text-secondary)]">(필수)</span>
             </label>
             <div className="relative">
-              <input
-                type="date"
-                required
-                min={todayStr}
+              <DarkDatePicker
                 value={formData.reservationDate}
-                onChange={(e) => setFormData({ ...formData, reservationDate: e.target.value })}
-                className="w-full pl-4 pr-3 py-2.5 border border-[var(--color-border-card)] rounded-lg bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
+                onChange={(date) => setFormData({ ...formData, reservationDate: date })}
+                minDate={new Date(todayStr)}
+                placeholder="연도-월-일"
               />
             </div>
           </div>

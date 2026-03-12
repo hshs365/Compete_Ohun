@@ -100,7 +100,7 @@ const ParticipantDetail: React.FC<ParticipantDetailProps> = ({ participant, onCl
 
   return (
     <div 
-      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/30 backdrop-blur-sm"
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/30"
       onClick={handleOverlayClick}
     >
       <div 
@@ -120,7 +120,7 @@ const ParticipantDetail: React.FC<ParticipantDetailProps> = ({ participant, onCl
           </button>
           
           <div className="flex items-center gap-4">
-            <div className={`w-20 h-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-3xl font-bold border-4 border-white/30 ${
+            <div className={`w-20 h-20 rounded-full bg-white/20 flex items-center justify-center text-3xl font-bold border-4 border-white/30 ${
               isRanker ? 'ring-4 ring-yellow-300/50' : ''
             }`}>
               {participant.user.profileImage ? (

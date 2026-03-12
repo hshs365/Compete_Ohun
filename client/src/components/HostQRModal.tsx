@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
+import ExpandableQRCode from './ExpandableQRCode';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { api, getSocketUrl } from '../utils/api';
 import { io, Socket } from 'socket.io-client';
@@ -114,7 +114,12 @@ const HostQRModal: React.FC<HostQRModalProps> = ({ groupId, isOpen, onClose }) =
               {loading || !token ? (
                 <span className="text-sm text-gray-700">로딩 중...</span>
               ) : (
-                <QRCodeSVG value={qrPayload} size={200} level="M" />
+                <ExpandableQRCode
+                  value={qrPayload}
+                  size={200}
+                  caption="용병이 스캔하면 자동으로 인증됩니다"
+                  className="!p-0 !border-0 !bg-transparent"
+                />
               )}
             </div>
           </div>

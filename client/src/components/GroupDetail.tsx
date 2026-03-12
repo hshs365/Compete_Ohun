@@ -11,7 +11,7 @@ import MatchReviewModal from './MatchReviewModal';
 import MercenaryReviewModal from './MercenaryReviewModal';
 import HostQRModal from './HostQRModal';
 import EditGroupModal from './EditGroupModal';
-import { QRCodeSVG } from 'qrcode.react';
+import ExpandableQRCode from './ExpandableQRCode';
 import { showError, showSuccess, showInfo, showConfirm } from '../utils/swal';
 import { extractCityFromAddress, getUserCityForJoin } from '../utils/locationUtils';
 import { MANNER_SCORE_THRESHOLD } from '../constants/penalty';
@@ -1208,18 +1208,18 @@ const GroupDetail: React.FC<GroupDetailProps> = ({ group, onClose, onParticipant
             )}
           </div>
 
-          {/* PC 전용: QR로 모바일에서 바로 보기 */}
+          {/* PC 전용: QR로 모바일에서 바로 보기 (터치 시 확대) */}
           {typeof window !== 'undefined' && (
             <div className="hidden md:flex flex-col items-center py-4 px-3 rounded-xl border border-[var(--color-border-card)] bg-[var(--color-bg-secondary)]">
               <DevicePhoneMobileIcon className="w-5 h-5 text-[var(--color-text-secondary)] mb-2" />
-              <QRCodeSVG
+              <ExpandableQRCode
                 value={`${window.location.origin}/matches?group=${group.id}`}
                 size={120}
-                level="M"
-                className="rounded-lg"
+                caption="카메라로 QR 찍고 핸드폰에서 보기"
+                className="!rounded-lg"
               />
               <p className="text-xs text-[var(--color-text-secondary)] text-center mt-2 max-w-[140px]">
-                카메라로 QR 찍고 핸드폰에서 보기
+                터치하면 크게 보기
               </p>
             </div>
           )}

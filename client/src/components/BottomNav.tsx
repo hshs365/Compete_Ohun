@@ -37,7 +37,7 @@ const BottomNav = () => {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-[9000] flex items-center justify-around h-16 bg-[var(--color-bg-card)] border-t border-[var(--color-border-card)] safe-area-bottom"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-[9000] flex items-center justify-around h-16 bg-transparent backdrop-blur-sm border-t border-[var(--color-border-card)]/40 safe-area-bottom"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0)' }}
     >
       {items.map((item) => {

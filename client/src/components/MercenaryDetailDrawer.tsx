@@ -307,7 +307,7 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
     <>
       {/* 배경 오버레이 (블러 + 반투명) */}
       <div
-        className="fixed inset-0 z-[9998] bg-black/40 backdrop-blur-sm"
+        className="fixed inset-0 z-[9998] bg-black/40"
         onClick={onClose}
         aria-hidden
       />
@@ -316,8 +316,6 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
         className="fixed right-0 top-0 bottom-0 z-[9999] w-full max-w-md flex flex-col shadow-2xl animate-drawer-slide-in"
         style={{
           background: 'linear-gradient(135deg, rgba(30,30,40,0.92) 0%, rgba(20,20,28,0.95) 100%)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
           borderLeft: '1px solid rgba(139, 92, 246, 0.25)',
           boxShadow: '-8px 0 32px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.05)',
         }}
@@ -515,7 +513,7 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
 
         {/* 하단 고정 버튼 (모임 생성자: 삭제, 비생성자: 문의/참여) */}
         {isCreator ? (
-          <div className="flex-shrink-0 p-4 pt-2 border-t border-white/10 bg-black/20 backdrop-blur-md space-y-2">
+          <div className="flex-shrink-0 p-4 pt-2 border-t border-white/10 bg-black/20 space-y-2">
             {!isCurrentlyBoosted && (
               <button
                 type="button"
@@ -553,7 +551,7 @@ const MercenaryDetailDrawer: React.FC<MercenaryDetailDrawerProps> = ({
             </button>
           </div>
         ) : (
-          <div className="flex-shrink-0 p-4 pt-2 border-t border-white/10 bg-black/20 backdrop-blur-md space-y-2">
+          <div className="flex-shrink-0 p-4 pt-2 border-t border-white/10 bg-black/20 space-y-2">
             <button
               type="button"
               onClick={handleChatInquiry}

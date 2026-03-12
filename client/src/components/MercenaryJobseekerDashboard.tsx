@@ -6,13 +6,14 @@ import {
   XCircleIcon,
 } from '@heroicons/react/24/solid';
 import { PencilSquareIcon as PencilIcon } from '@heroicons/react/24/outline';
-import { QRCodeSVG } from 'qrcode.react';
+import ExpandableQRCode from './ExpandableQRCode';
 import { SPORT_ICONS, SPORT_CHIP_STYLES, SPORT_POINT_COLORS } from '../constants/sports';
 import { getRankDisplayLabel } from '../constants/allcourtplayRank';
 import { getMannerTrustColors } from '../utils/mannerTrustColors';
 import { getMannerGradeConfig } from '../utils/mannerGrade';
 import { useAuth } from '../contexts/AuthContext';
-import { api, getImageUrl } from '../utils/api';
+import { api } from '../utils/api';
+import ProfileAvatar from './ProfileAvatar';
 import MercenaryProfileEditModal from './MercenaryProfileEditModal';
 import AvailabilityScheduleManager from './AvailabilityScheduleManager';
 import { showSuccess, showError } from '../utils/swal';
@@ -180,11 +181,12 @@ const MercenaryJobseekerDashboard: React.FC = () => {
           </div>
           <div className="flex gap-4 mb-4">
             <div className="w-20 h-20 shrink-0 rounded-full overflow-hidden bg-[var(--color-bg-secondary)] border-2 flex items-center justify-center" style={{ borderColor: trustColors.point + '60' }}>
-              {profileImageUrl ? (
-                <img src={getImageUrl(profileImageUrl)} alt={user?.nickname ?? '프로필'} className="w-full h-full object-cover" />
-              ) : (
-                <UserCircleIcon className="w-12 h-12 text-[var(--color-text-secondary)]" />
-              )}
+              <ProfileAvatar
+                profileImageUrl={profileImageUrl}
+                alt={user?.nickname ?? '프로필'}
+                className="w-full h-full object-cover"
+                iconClassName="w-12 h-12 text-[var(--color-text-secondary)]"
+              />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -262,11 +264,11 @@ const MercenaryJobseekerDashboard: React.FC = () => {
               <p className="text-xs text-[var(--color-text-secondary)] mb-1">QR로 명함 공유</p>
               <p className="text-sm text-[var(--color-text-primary)]">스캔하면 내 용병 명함이 열려요</p>
             </div>
-            <div className="shrink-0 p-2 bg-white dark:bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border-card)]">
-              <QRCodeSVG
+            <div className="shrink-0">
+              <ExpandableQRCode
                 value={typeof window !== 'undefined' ? `${window.location.origin}/mercenary-card/${user?.id ?? ''}` : ''}
                 size={80}
-                level="M"
+                caption="스캔하면 내 용병 명함이 열려요"
               />
             </div>
           </div>

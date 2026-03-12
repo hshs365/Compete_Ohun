@@ -15,6 +15,7 @@ import MultiStepCreateGroup from './components/MultiStepCreateGroup';
 import NotificationPanel from './components/NotificationPanel';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ChatProvider } from './contexts/ChatContext';
+import { ChatSocketProvider } from './contexts/ChatSocketContext';
 import FloatingChatWidget from './components/FloatingChatWidget';
 import FloatingChatButton from './components/FloatingChatButton';
 import { api } from './utils/api';
@@ -675,6 +676,7 @@ const MainLayout = () => {
     <PublicRoute>
       <NotificationProvider>
       <ChatProvider>
+      <ChatSocketProvider>
       <div className="flex h-screen bg-[var(--color-bg-primary)] overflow-hidden">
         <Sidebar />
         <div ref={mainScrollRef} className="flex-1 flex flex-col min-w-0 overflow-y-auto relative pb-20 md:pb-4">
@@ -793,6 +795,7 @@ const MainLayout = () => {
         {/* 모바일 하단 네비게이션 */}
         <BottomNav />
       </div>
+      </ChatSocketProvider>
       </ChatProvider>
       </NotificationProvider>
     </PublicRoute>

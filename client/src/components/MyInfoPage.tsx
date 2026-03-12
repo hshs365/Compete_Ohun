@@ -28,6 +28,9 @@ import { showError, showSuccess, showWarning, showInfo, showConfirm } from '../u
 import ToggleSwitch from './ToggleSwitch';
 import { useAuth } from '../contexts/AuthContext';
 import { api, getImageUrl } from '../utils/api';
+import ProfileAvatar from './ProfileAvatar';
+import ProfileImageCropModal from './ProfileImageCropModal';
+import MannerScoreGauge from './MannerScoreGauge';
 import { useNavigate } from 'react-router-dom';
 import LoadingSpinner from './LoadingSpinner';
 import SportsStatisticsModal from './SportsStatisticsModal';
@@ -164,6 +167,9 @@ const MyInfoPage = () => {
   });
   const businessConversionFileInputRef = useRef<HTMLInputElement>(null);
   const lastFetchTimeRef = useRef<number>(0);
+  /** 프로필 사진 크롭: 선택된 파일 (크롭 모달 열 때 사용) */
+  const [pendingProfileImageFile, setPendingProfileImageFile] = useState<File | null>(null);
+  const [showProfileCropModal, setShowProfileCropModal] = useState(false);
 
   const closeChangeBusinessNumberModal = () => {
     setShowChangeBusinessNumberModal(false);
@@ -698,37 +704,39 @@ const MyInfoPage = () => {
       .catch(() => setMyProfileSummary(null));
   }, [profileData?.id]);
 
+  /** 프로필 사진 파일 선택 시 크롭 모달을 연다. 크롭 후 저장 시에만 업로드한다. */
   const handleProfileImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !profileData) return;
+    e.target.value = '';
 
-    // 파일 크기 제한 (5MB)
     if (file.size > 5 * 1024 * 1024) {
       await showWarning('파일 크기는 5MB 이하여야 합니다.', '파일 크기 제한');
       return;
     }
-
-    // 파일 타입 확인
     if (!file.type.startsWith('image/')) {
       await showWarning('이미지 파일만 업로드 가능합니다.', '파일 형식 오류');
       return;
     }
 
+    setPendingProfileImageFile(file);
+    setShowProfileCropModal(true);
+  };
+
+  /** 크롭 모달에서 저장 시: 크롭된 blob을 파일로 만들어 업로드 */
+  const handleProfileCropConfirm = async (blob: Blob, fileName: string) => {
+    if (!profileData) return;
+    const file = new File([blob], fileName, { type: blob.type });
     try {
-      // FormData 생성
       const formData = new FormData();
       formData.append('profileImage', file);
-
-      // 서버에 업로드 (Content-Type은 지정하지 않음 - 브라우저가 boundary 포함해 자동 설정)
       const response = await api.put<{ profileImageUrl?: string | null }>('/api/auth/me', formData);
-
-      // 성공 시 프로필 데이터 업데이트: 서버가 반환한 URL 우선, 없으면 로컬 미리보기
       if (response) {
         const imageUrl = response.profileImageUrl ?? null;
         if (imageUrl) {
           setProfileData({ ...profileData, profileImage: imageUrl });
           if (profileData.id) localStorage.setItem(`profileImage_${profileData.id}`, imageUrl);
-          checkAuth(); // AuthContext user 갱신으로 앱 전체에서 실시간 반영
+          checkAuth();
         } else {
           const reader = new FileReader();
           reader.onloadend = () => {
@@ -742,6 +750,9 @@ const MyInfoPage = () => {
     } catch (error) {
       console.error('프로필 사진 업로드 실패:', error);
       await showError('프로필 사진 저장에 실패했습니다. 네트워크를 확인하고 다시 시도해주세요.', '저장 실패');
+    } finally {
+      setPendingProfileImageFile(null);
+      setShowProfileCropModal(false);
     }
   };
 
@@ -1117,11 +1128,12 @@ const MyInfoPage = () => {
           <div className="flex items-center gap-3 sm:gap-4">
             <div className="relative shrink-0">
               <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] md:w-20 md:h-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 sm:border-4 border-white/30 text-2xl sm:text-3xl font-bold overflow-hidden">
-                {profileData.profileImage ? (
-                  <img src={getImageUrl(profileData.profileImage)} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <UserCircleIcon className="w-12 h-12 sm:w-16 sm:h-16 text-white/90" />
-                )}
+                <ProfileAvatar
+                  profileImageUrl={profileData.profileImage}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  iconClassName="w-12 h-12 sm:w-16 sm:h-16 text-white/90"
+                />
               </div>
               <label className="absolute bottom-0 right-0 bg-white/90 text-gray-800 rounded-full p-1.5 sm:p-2 cursor-pointer hover:bg-white shadow-md touch-manipulation min-w-[36px] min-h-[36px] flex items-center justify-center">
                 <CameraIcon className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -1191,44 +1203,39 @@ const MyInfoPage = () => {
               프로필 정보
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-              <div className="min-w-0 p-3 sm:p-4 rounded-xl bg-[var(--color-bg-secondary)]/50">
-                <p className="text-sm font-medium text-[var(--color-text-secondary)] mb-1">주 활동지역</p>
-                <p className="text-lg sm:text-xl font-bold text-[var(--color-text-primary)] flex items-center gap-2">
-                  <MapPinIcon className="w-5 h-5 shrink-0 text-[var(--color-blue-primary)]" />
+              <div className="min-w-0 p-4 sm:p-5 rounded-xl bg-[var(--color-bg-secondary)]/50 flex flex-col items-center text-center justify-center min-h-[140px] sm:min-h-[160px]">
+                <p className="text-base font-semibold text-[var(--color-text-secondary)] mb-2 w-full">주 활동지역</p>
+                <p className="text-xl sm:text-2xl font-bold text-[var(--color-text-primary)] flex items-center justify-center gap-2">
+                  <MapPinIcon className="w-6 h-6 shrink-0 text-[var(--color-blue-primary)]" />
                   <span className="truncate">{profileData.residenceSido || '-'}</span>
                 </p>
               </div>
-              <div className="min-w-0 p-3 sm:p-4 rounded-xl bg-[var(--color-bg-secondary)]/50">
-                <p className="text-sm font-medium text-[var(--color-text-secondary)] mb-1">매너점수</p>
-                <p className="text-lg sm:text-xl font-bold text-[var(--color-text-primary)] flex items-center gap-2 flex-wrap">
-                  {(() => {
-                    const mannerScore = profileData.mannerScore ?? myProfileSummary?.mannerScore ?? 80;
-                    const mannerConfig = getMannerGradeConfig(mannerScore);
-                    return (
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-base font-semibold badge-text-contrast ${mannerConfig.bg} ${mannerConfig.border}`}>
-                        {mannerConfig.icon} <span>{mannerScore}</span>점
-                      </span>
-                    );
-                  })()}
-                </p>
+              <div className="min-w-0 p-4 sm:p-5 rounded-xl bg-[var(--color-bg-secondary)]/50 flex flex-col items-center text-center justify-center min-h-[140px] sm:min-h-[160px]">
+                <p className="text-base font-semibold text-[var(--color-text-secondary)] mb-2 w-full">매너점수</p>
+                <MannerScoreGauge
+                  score={profileData.mannerScore ?? myProfileSummary?.mannerScore ?? 80}
+                  size="md"
+                  showLabel
+                  className="shrink-0"
+                />
               </div>
-              <div className="min-w-0 p-3 sm:p-4 rounded-xl bg-[var(--color-bg-secondary)]/50">
-                <p className="text-sm font-medium text-[var(--color-text-secondary)] mb-1">주 종목</p>
-                <div className="flex flex-wrap gap-2 mt-0.5">
+              <div className="min-w-0 p-4 sm:p-5 rounded-xl bg-[var(--color-bg-secondary)]/50 flex flex-col items-center text-center justify-center min-h-[140px] sm:min-h-[160px]">
+                <p className="text-base font-semibold text-[var(--color-text-secondary)] mb-2 w-full">주 종목</p>
+                <div className="flex flex-wrap gap-2 sm:gap-2.5 mt-0.5 justify-center">
                   {(profileData.interestedSports?.length ?? 0) > 0 ? (
                     profileData.interestedSports!.map((sport) => {
                       const chip = SPORT_CHIP_STYLES[sport] ?? SPORT_CHIP_STYLES['전체'];
                       return (
                         <span
                           key={sport}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border badge-text-contrast ${chip.bg} ${chip.border}`}
+                          className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-base font-semibold border badge-text-contrast ${chip.bg} ${chip.border}`}
                         >
                           {SPORT_ICONS[sport] ?? '●'} {sport}
                         </span>
                       );
                     })
                   ) : (
-                    <span className="text-base font-semibold text-[var(--color-text-secondary)]">전체</span>
+                    <span className="text-lg font-semibold text-[var(--color-text-secondary)]">전체</span>
                   )}
                 </div>
               </div>
@@ -1245,12 +1252,21 @@ const MyInfoPage = () => {
           </div>
 
           <div className="bg-[var(--color-bg-primary)] rounded-xl p-3 sm:p-4 border border-[var(--color-border-card)]">
-            <h3 className="text-base sm:text-lg font-bold text-[var(--color-text-primary)] mb-2 sm:mb-3 flex items-center gap-2">
-              <ChartBarIcon className="w-5 h-5 text-[var(--color-blue-primary)] shrink-0" />
-              용병 기록
-            </h3>
+            <div className="flex items-center justify-between mb-2 sm:mb-3">
+              <h3 className="text-base sm:text-lg font-bold text-[var(--color-text-primary)] flex items-center gap-2">
+                <ChartBarIcon className="w-5 h-5 text-[var(--color-blue-primary)] shrink-0" />
+                용병 기록
+              </h3>
+              <button
+                onClick={() => navigate('/my-activity')}
+                className="min-h-[36px] px-4 py-2 text-sm text-[var(--color-blue-primary)] hover:underline touch-manipulation flex items-center gap-1"
+              >
+                경기 내역 보기
+                <ChevronRightIcon className="w-4 h-4" />
+              </button>
+            </div>
             {activityByCategory.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 {activityByCategory.map(({ category, participations, creations }) => {
                   const chip = SPORT_CHIP_STYLES[category] ?? SPORT_CHIP_STYLES['전체'];
                   const rank = profileData.effectiveRanks?.[category];
@@ -1259,18 +1275,18 @@ const MyInfoPage = () => {
                   return (
                     <div
                       key={category}
-                      className={`p-3 rounded-lg border ${chip.bg} ${chip.border}`}
+                      className={`p-4 sm:p-5 rounded-xl border ${chip.bg} ${chip.border} flex flex-col items-center text-center min-h-[100px]`}
                     >
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-lg">{SPORT_ICONS[category] ?? '●'}</span>
-                        <span className="text-sm font-semibold badge-text-contrast">{category}</span>
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <span className="text-xl">{SPORT_ICONS[category] ?? '●'}</span>
+                        <span className="text-base font-bold badge-text-contrast">{category}</span>
                       </div>
-                      <p className="text-xs badge-text-contrast text-[var(--color-text-secondary)]">
+                      <p className="text-sm font-medium badge-text-contrast text-[var(--color-text-secondary)]">
                         참여 {participations}건 · 생성 {creations}건
                       </p>
-                      <p className="text-xs mt-1">
+                      <p className="text-sm mt-2 font-medium">
                         {hasRank ? (
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded font-medium badge-text-contrast bg-gradient-to-r ${getAllcourtplayRankStyle(rank)}`}>
+                          <span className={`inline-flex items-center px-3 py-1 rounded-lg font-semibold badge-text-contrast bg-gradient-to-r ${getAllcourtplayRankStyle(rank)}`}>
                             {rankLabel}
                           </span>
                         ) : (
@@ -1286,60 +1302,67 @@ const MyInfoPage = () => {
             )}
           </div>
 
-          <div className="bg-[var(--color-bg-primary)] rounded-xl p-3 sm:p-4 border border-[var(--color-border-card)]">
-            <h3 className="text-base sm:text-lg font-bold text-[var(--color-text-primary)] mb-2 sm:mb-3 flex items-center gap-2">
-              <TrophySolidIcon className="w-5 h-5 text-yellow-500 shrink-0" />
-              주요 업적
-            </h3>
-            {(() => {
-              const stats = { joined: activityStats.joinedGroups, created: activityStats.createdGroups };
-              const achieved = ACHIEVEMENTS.filter((a) => a.check(stats));
-              const challengeable = ACHIEVEMENTS.filter((a) => !a.check(stats));
-              const AchievementCard = ({ a, done }: { a: (typeof ACHIEVEMENTS)[number]; done: boolean }) => (
-                <div key={a.id} className={`p-3 rounded-lg border bg-[var(--color-bg-card)] border-[var(--color-border-card)] ${done ? 'ring-1 ring-amber-500/40' : 'opacity-80'}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-2xl shrink-0">{a.icon}</span>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-[var(--color-text-primary)]">{a.title}</p>
-                        <p className="text-xs text-[var(--color-text-secondary)]">{a.description}</p>
+          {/* 주요 업적 — 성취 감성 강조: 그라데이션·그림자 카드 */}
+          <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-amber-50/90 to-orange-50/80 dark:from-amber-950/30 dark:to-orange-950/20 border border-amber-200/60 dark:border-amber-500/30 shadow-lg shadow-amber-500/10">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent pointer-events-none" aria-hidden />
+            <div className="relative p-4 sm:p-5">
+              <h3 className="text-base sm:text-lg font-bold text-[var(--color-text-primary)] mb-2 sm:mb-3 flex items-center gap-2">
+                <TrophySolidIcon className="w-5 h-5 text-amber-500 shrink-0" />
+                주요 업적
+              </h3>
+              {(() => {
+                const stats = { joined: activityStats.joinedGroups, created: activityStats.createdGroups };
+                const achieved = ACHIEVEMENTS.filter((a) => a.check(stats));
+                const challengeable = ACHIEVEMENTS.filter((a) => !a.check(stats));
+                const AchievementCard = ({ a, done }: { a: (typeof ACHIEVEMENTS)[number]; done: boolean }) => (
+                  <div key={a.id} className={`p-3 rounded-xl border bg-white/70 dark:bg-black/20 backdrop-blur-sm ${done ? 'border-amber-300/80 shadow-md shadow-amber-500/15 ring-1 ring-amber-500/30' : 'border-[var(--color-border-card)] opacity-85'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-2xl shrink-0">{a.icon}</span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-[var(--color-text-primary)]">{a.title}</p>
+                          <p className="text-xs text-[var(--color-text-secondary)]">{a.description}</p>
+                        </div>
                       </div>
+                      <span className="text-xs font-bold text-amber-600 dark:text-amber-400 shrink-0">+{a.points}P</span>
                     </div>
-                    <span className="text-xs font-bold text-amber-500 shrink-0">+{a.points}P</span>
                   </div>
-                </div>
-              );
-              return (
-                <div className="space-y-4">
-                  {achieved.length > 0 && (
-                    <div>
-                      <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-2">달성한 업적</p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
-                        {achieved.map((a) => (
-                          <AchievementCard key={a.id} a={a} done />
-                        ))}
+                );
+                return (
+                  <div className="space-y-4">
+                    {achieved.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-[var(--color-text-primary)] mb-2">달성한 업적</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+                          {achieved.map((a) => (
+                            <AchievementCard key={a.id} a={a} done />
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {challengeable.length > 0 && (
-                    <div>
-                      <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-2">도전 가능한 업적</p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
-                        {challengeable.map((a) => (
-                          <AchievementCard key={a.id} a={a} done={false} />
-                        ))}
+                    )}
+                    {challengeable.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-2">도전 가능한 업적</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+                          {challengeable.map((a) => (
+                            <AchievementCard key={a.id} a={a} done={false} />
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {achieved.length === 0 && challengeable.length === 0 && (
-                    <p className="text-sm text-[var(--color-text-secondary)] py-2">업적 데이터를 불러오는 중...</p>
-                  )}
-                </div>
-              );
-            })()}
+                    )}
+                    {achieved.length === 0 && challengeable.length === 0 && (
+                      <p className="text-sm text-[var(--color-text-secondary)] py-2">업적 데이터를 불러오는 중...</p>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
           </div>
 
-          <div className="bg-[var(--color-bg-primary)] rounded-xl p-3 sm:p-4 border border-[var(--color-border-card)]">
+          {/* 보유 뱃지 — 시각적 강조 */}
+          <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-indigo-50/90 to-purple-50/80 dark:from-indigo-950/30 dark:to-purple-950/20 border border-indigo-200/60 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent pointer-events-none" aria-hidden />
+            <div className="relative p-4 sm:p-5">
             <h3 className="text-base sm:text-lg font-bold text-[var(--color-text-primary)] mb-2 sm:mb-3">보유 뱃지</h3>
             <div className="flex flex-wrap gap-1.5 sm:gap-2">
               {profileData.effectiveRanks && Object.entries(profileData.effectiveRanks).map(([sport, rank]) => (
@@ -1359,6 +1382,7 @@ const MyInfoPage = () => {
                 <span className="text-sm text-[var(--color-text-secondary)]">보유 뱃지가 없습니다.</span>
               )}
             </div>
+            </div>
           </div>
         </div>
       </section>
@@ -1367,10 +1391,11 @@ const MyInfoPage = () => {
 
       {myInfoTab === 'account' && (
       <>
-      {/* 계정 정보 — 모바일 패딩·터치 영역 */}
+      {/* 계정 정보 — 위계: 그룹별 구분, 읽기 전용 vs 액션 버튼 명확화 */}
       <section className="bg-[var(--color-bg-card)] rounded-xl sm:rounded-2xl border border-[var(--color-border-card)] p-4 sm:p-5 md:p-6 shadow-sm">
-        <h2 className="text-base sm:text-lg font-semibold text-[var(--color-text-primary)] mb-3 sm:mb-4">계정 정보</h2>
-        <div className="space-y-3 sm:space-y-4">
+        <h2 className="text-base sm:text-lg font-bold text-[var(--color-text-primary)] mb-1">계정 정보</h2>
+        <p className="text-sm text-[var(--color-text-secondary)] mb-4 sm:mb-5">이메일·실명 등 읽기 전용 항목과 변경 가능한 항목이 구분되어 있습니다.</p>
+        <div className="space-y-6 sm:space-y-8">
           {/* 보유 포인트 + 충전하기 */}
           <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 py-3 border-b border-[var(--color-border-card)]">
             <button
@@ -1415,62 +1440,66 @@ const MyInfoPage = () => {
             </button>
           </div>
 
-          {/* 가입일 */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 border-b border-[var(--color-border-card)]">
-            <div className="flex items-center space-x-3 min-w-0">
-              <CalendarIcon className="w-5 h-5 text-[var(--color-text-secondary)] shrink-0" />
-              <div>
-                <div className="text-sm text-[var(--color-text-secondary)]">가입일</div>
-                <div className="text-[var(--color-text-primary)] font-medium">
-                  {joinDate ? new Date(joinDate).toLocaleDateString('ko-KR') : '-'}
+          {/* 그룹: 읽기 전용 정보 — 시각적 위계: 라벨·채움으로 구분 */}
+          <div className="space-y-1">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)] pb-2 border-b border-[var(--color-border-card)]">읽기 전용</h3>
+            <div className="divide-y divide-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)]/50 p-2 sm:p-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 px-2 sm:px-3">
+                <div className="flex items-center space-x-3 min-w-0">
+                  <CalendarIcon className="w-5 h-5 text-[var(--color-text-secondary)] shrink-0" />
+                  <div>
+                    <div className="text-xs text-[var(--color-text-secondary)]">가입일</div>
+                    <div className="text-[var(--color-text-primary)] font-medium">
+                      {joinDate ? new Date(joinDate).toLocaleDateString('ko-KR') : '-'}
+                    </div>
+                  </div>
                 </div>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 px-2 sm:px-3">
+                <div className="flex items-center space-x-3 min-w-0">
+                  <EnvelopeIcon className="w-5 h-5 text-[var(--color-text-secondary)] shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-xs text-[var(--color-text-secondary)]">이메일</div>
+                    <div className="text-[var(--color-text-primary)] font-medium truncate">
+                      {profileData.email || '이메일 없음'}
+                    </div>
+                  </div>
+                </div>
+                <span className="text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] px-2.5 py-1 rounded-md shrink-0 border border-[var(--color-border-card)]">수정 불가</span>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 px-2 sm:px-3">
+                <div className="flex items-center space-x-3">
+                  <IdentificationIcon className="w-5 h-5 text-[var(--color-text-secondary)] shrink-0" />
+                  <div>
+                    <div className="text-xs text-[var(--color-text-secondary)]">실명</div>
+                    <div className="text-[var(--color-text-primary)] font-medium">
+                      {profileData.realName || '등록된 실명 없음'}
+                    </div>
+                  </div>
+                </div>
+                <span className="text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] px-2.5 py-1 rounded-md shrink-0 border border-[var(--color-border-card)]">수정 불가</span>
               </div>
             </div>
           </div>
 
-          {/* 이메일 (수정 불가) */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 border-b border-[var(--color-border-card)]">
-            <div className="flex items-center space-x-3 min-w-0">
-              <EnvelopeIcon className="w-5 h-5 text-[var(--color-text-secondary)] shrink-0" />
-              <div className="min-w-0">
-                <div className="text-sm text-[var(--color-text-secondary)]">이메일</div>
-                <div className="text-[var(--color-text-primary)] font-medium truncate">
-                  {profileData.email || '이메일 없음'}
+          {/* 그룹: 변경 가능 — 액션 버튼 강조 */}
+          <div className="space-y-1">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)] pb-2 border-b border-[var(--color-border-card)]">변경 가능</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 px-2 sm:px-3 rounded-xl bg-[var(--color-bg-primary)]/50 border border-[var(--color-border-card)]">
+              <div className="flex items-center space-x-3 min-w-0">
+                <LockClosedIcon className="w-5 h-5 text-[var(--color-text-secondary)] shrink-0" />
+                <div>
+                  <div className="text-xs text-[var(--color-text-secondary)]">비밀번호</div>
+                  <div className="text-[var(--color-text-primary)]">••••••••</div>
                 </div>
               </div>
+              <button
+                onClick={handlePasswordChange}
+                className="min-h-[44px] px-5 py-2.5 bg-[var(--color-blue-primary)] text-white rounded-xl hover:opacity-90 transition-opacity text-sm font-semibold active:scale-[0.98] shrink-0 shadow-sm"
+              >
+                변경
+              </button>
             </div>
-            <span className="text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] px-2 py-1 rounded shrink-0">수정 불가</span>
-          </div>
-
-          {/* 실명 (수정 불가) */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 border-b border-[var(--color-border-card)]">
-            <div className="flex items-center space-x-3">
-              <IdentificationIcon className="w-5 h-5 text-[var(--color-text-secondary)]" />
-              <div>
-                <div className="text-sm text-[var(--color-text-secondary)]">실명</div>
-                <div className="text-[var(--color-text-primary)] font-medium">
-                  {profileData.realName || '등록된 실명 없음'}
-                </div>
-              </div>
-            </div>
-            <span className="text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg-secondary)] px-2 py-1 rounded">수정 불가</span>
-          </div>
-
-          {/* 비밀번호 변경 */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 border-b border-[var(--color-border-card)]">
-            <div className="flex items-center space-x-3 min-w-0">
-              <LockClosedIcon className="w-5 h-5 text-[var(--color-text-secondary)] shrink-0" />
-              <div>
-                <div className="text-sm text-[var(--color-text-secondary)]">비밀번호</div>
-                <div className="text-[var(--color-text-primary)]">••••••••</div>
-              </div>
-            </div>
-            <button
-              onClick={handlePasswordChange}
-              className="min-h-[44px] px-4 py-2.5 bg-[var(--color-blue-primary)] text-white rounded-xl hover:opacity-90 transition-opacity text-sm font-medium active:scale-[0.98] shrink-0"
-            >
-              변경
-            </button>
           </div>
 
           {/* 연결된 소셜 계정 */}
@@ -1773,23 +1802,29 @@ const MyInfoPage = () => {
           </div>
         </div>
 
-        {/* 로그아웃 · 회원 탈퇴 — 모바일 세로 배치·터치 영역 */}
-        <div className="flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center pt-4 sm:pt-6 mt-4 sm:mt-6 border-t border-[var(--color-border-card)]">
-          <button
-            onClick={handleLogout}
-            className="w-full sm:w-auto min-h-[48px] flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-primary)] transition-colors text-sm font-medium border border-[var(--color-border-card)] active:scale-[0.98]"
-          >
-            <ArrowRightOnRectangleIcon className="w-5 h-5" />
-            <span>로그아웃</span>
-          </button>
-          <button
-            onClick={handleWithdraw}
-            className="w-full sm:w-auto min-h-[48px] flex items-center justify-center gap-2 text-[var(--color-text-secondary)] hover:text-red-500 transition-colors text-sm font-medium active:scale-[0.98]"
-          >
-            <TrashIcon className="w-5 h-5" />
-            <span>회원 탈퇴</span>
-          </button>
-        </div>
+        {/* 푸터: 로그아웃 · 회원 탈퇴 — 시각적 분리로 오탈클릭 방지 */}
+        <footer className="pt-8 sm:pt-10 mt-8 sm:mt-10 border-t border-[var(--color-border-card)] space-y-6">
+          <div className="flex flex-col sm:flex-row sm:justify-end">
+            <button
+              onClick={handleLogout}
+              className="w-full sm:w-auto min-h-[48px] flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-primary)] transition-colors text-sm font-semibold border border-[var(--color-border-card)] active:scale-[0.98] max-w-xs sm:max-w-none"
+            >
+              <ArrowRightOnRectangleIcon className="w-5 h-5" />
+              <span>로그아웃</span>
+            </button>
+          </div>
+          <div className="rounded-xl border border-red-200 dark:border-red-500/40 bg-red-50/50 dark:bg-red-950/20 p-4 sm:p-5">
+            <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-3">위험 영역</p>
+            <p className="text-sm text-[var(--color-text-secondary)] mb-4">탈퇴 시 복구할 수 없습니다. 신중히 선택해 주세요.</p>
+            <button
+              onClick={handleWithdraw}
+              className="w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-700 dark:hover:text-red-300 transition-colors font-medium border border-red-200 dark:border-red-500/40 active:scale-[0.98]"
+            >
+              <TrashIcon className="w-4 h-4" />
+              <span>회원 탈퇴</span>
+            </button>
+          </div>
+        </footer>
       </section>
       </>
       )}
@@ -2307,6 +2342,14 @@ const MyInfoPage = () => {
           onClose={() => setShowStatisticsModal(false)}
         />
       )}
+
+      {/* 프로필 사진 크롭 모달 */}
+      <ProfileImageCropModal
+        isOpen={showProfileCropModal}
+        onClose={() => { setShowProfileCropModal(false); setPendingProfileImageFile(null); }}
+        imageFile={pendingProfileImageFile}
+        onConfirm={handleProfileCropConfirm}
+      />
 
       {/* 포인트 내역 모달 */}
       {showPointHistoryModal && (

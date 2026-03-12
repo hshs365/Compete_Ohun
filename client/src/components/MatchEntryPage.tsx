@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { api } from '../utils/api';
 import { ChevronLeftIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import TacticalBoardCanvas, { type BoardParticipant } from './TacticalBoardCanvas';
-import { QRCodeSVG } from 'qrcode.react';
+import ExpandableQRCode from './ExpandableQRCode';
 import { showError, showSuccess } from '../utils/swal';
 
 interface Participant {
@@ -208,11 +208,16 @@ const MatchEntryPage: React.FC = () => {
         <span className="text-sm font-bold text-white truncate flex-1 text-center mx-2">
           {group.category} · {matchLabel}
         </span>
-        {/* PC 전용: QR로 모바일에서 바로 보기 */}
+        {/* PC 전용: QR로 모바일에서 바로 보기 (터치 시 확대) */}
         {typeof window !== 'undefined' && groupId && (
           <div className="hidden md:flex items-center gap-2 mr-2 py-1 px-2 rounded-lg bg-white/10">
-            <QRCodeSVG value={`${window.location.origin}/match-entry/${groupId}`} size={36} level="M" />
-            <span className="text-[10px] text-white/90 whitespace-nowrap">모바일에서 보기</span>
+            <ExpandableQRCode
+              value={`${window.location.origin}/match-entry/${groupId}`}
+              size={36}
+              caption="모바일에서 보기"
+              className="!p-1 !border-0 !bg-transparent hover:!opacity-90"
+            />
+            <span className="text-[10px] text-white/90 whitespace-nowrap">터치 시 확대</span>
           </div>
         )}
         <button

@@ -1068,9 +1068,20 @@ export class GroupsService {
       });
 
       // 최대 참여자 수 체크
-      if (group.maxParticipants && group.participantCount >= group.maxParticipants) {
+      // 용병 구하기: maxParticipants = 모집 용병 수(호스트 제외), participantCountExcludingCreator로 비교
+      // 일반 매치: maxParticipants = 총 정원(호스트 포함), participantCount로 비교
+      const participantCountExcludingCreator =
+        (group as any).participantCountExcludingCreator ??
+        Math.max(0, (group.participants?.filter((p) => p.userId !== group.creatorId).length ?? 0));
+      const effectiveCount = group.isMercenaryRecruit
+        ? participantCountExcludingCreator
+        : group.participantCount;
+      if (group.maxParticipants != null && effectiveCount >= group.maxParticipants) {
         console.error('❌ 모임 인원 가득참:', {
+          isMercenaryRecruit: group.isMercenaryRecruit,
           participantCount: group.participantCount,
+          participantCountExcludingCreator,
+          effectiveCount,
           maxParticipants: group.maxParticipants,
         });
         throw new ConflictException('모임 인원이 가득 찼습니다.');

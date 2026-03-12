@@ -193,9 +193,9 @@ const TimeRangeSlider: React.FC<TimeRangeSliderProps> = ({
           onTouchStart={(e) => handleTouchStart(e, 'bar')}
         />
 
-        {/* 시작 핸들 (모바일 터치 타겟 44px) */}
+        {/* 시작 핸들 (모바일에서 작게 해 바 터치 용이) */}
         <div
-          className="absolute top-1/2 left-0 -translate-y-1/2 -translate-x-1/2 w-11 h-11 sm:w-6 sm:h-6 rounded-full border-2 cursor-grab active:cursor-grabbing shadow-md z-10 touch-manipulation"
+          className="absolute top-1/2 left-0 -translate-y-1/2 -translate-x-1/2 w-6 h-6 sm:w-5 sm:h-5 rounded-full border-2 cursor-grab active:cursor-grabbing shadow-md z-10 touch-manipulation"
           style={{
             left: `${startPct}%`,
             backgroundColor: pointColor,
@@ -205,9 +205,9 @@ const TimeRangeSlider: React.FC<TimeRangeSliderProps> = ({
           onTouchStart={(e) => handleTouchStart(e, 'start')}
         />
 
-        {/* 종료 핸들 (모바일 터치 타겟 44px) */}
+        {/* 종료 핸들 */}
         <div
-          className="absolute top-1/2 left-0 -translate-y-1/2 -translate-x-1/2 w-11 h-11 sm:w-6 sm:h-6 rounded-full border-2 cursor-grab active:cursor-grabbing shadow-md z-10 touch-manipulation"
+          className="absolute top-1/2 left-0 -translate-y-1/2 -translate-x-1/2 w-6 h-6 sm:w-5 sm:h-5 rounded-full border-2 cursor-grab active:cursor-grabbing shadow-md z-10 touch-manipulation"
           style={{
             left: `${endPct}%`,
             backgroundColor: pointColor,

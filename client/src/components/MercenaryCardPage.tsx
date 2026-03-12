@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeftIcon, UserPlusIcon, UserMinusIcon, UserCircleIcon } from '@heroicons/react/24/outline';
-import { api, getImageUrl } from '../utils/api';
+import { ChevronLeftIcon, UserPlusIcon, UserMinusIcon } from '@heroicons/react/24/outline';
+import { api } from '../utils/api';
+import ProfileAvatar from './ProfileAvatar';
 import { useAuth } from '../contexts/AuthContext';
 import { SPORT_ICONS, SPORT_CHIP_STYLES, SPORT_POINT_COLORS } from '../constants/sports';
 import { getRankDisplayLabel } from '../constants/allcourtplayRank';
@@ -142,11 +143,12 @@ const MercenaryCardPage: React.FC = () => {
         <div className="rounded-2xl border-2 border-l-4 p-5 bg-[var(--color-bg-card)] border-[var(--color-border-card)] shadow-sm" style={{ borderLeftColor: POINT_COLOR }}>
           <div className="flex gap-4 mb-4">
             <div className="w-20 h-20 shrink-0 rounded-full overflow-hidden bg-[var(--color-bg-secondary)] border-2 flex items-center justify-center" style={{ borderColor: POINT_COLOR + '60' }}>
-              {card.profileImageUrl ? (
-                <img src={getImageUrl(card.profileImageUrl)} alt={card.nickname} className="w-full h-full object-cover" />
-              ) : (
-                <UserCircleIcon className="w-14 h-14 text-[var(--color-text-secondary)]" />
-              )}
+              <ProfileAvatar
+                profileImageUrl={card.profileImageUrl}
+                alt={card.nickname}
+                className="w-full h-full object-cover"
+                iconClassName="w-14 h-14 text-[var(--color-text-secondary)]"
+              />
             </div>
             <div className="flex-1 min-w-0">
               <h2 className="text-xl font-bold text-[var(--color-text-primary)] truncate">

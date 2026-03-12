@@ -198,11 +198,11 @@ const AvailabilityScheduleManager: React.FC<AvailabilityScheduleManagerProps> = 
           <p className="text-xs text-[var(--color-text-secondary)] mb-3">
             요일을 선택하고 시간대를 정한 뒤 추가하세요.
           </p>
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-3">
             {WEEKDAY_FIRST_ORDER.map((dayOfWeek) => (
               <label
                 key={dayOfWeek}
-                className={`inline-flex items-center justify-center min-w-[44px] min-h-[44px] px-3 py-2 rounded-xl border cursor-pointer text-sm font-medium transition-colors touch-manipulation select-none ${
+                className={`inline-flex items-center justify-center min-h-[40px] sm:min-h-[44px] rounded-lg sm:rounded-xl border cursor-pointer text-xs sm:text-sm font-medium transition-colors touch-manipulation select-none ${
                   selectedDays.includes(dayOfWeek)
                     ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/15 text-[var(--color-accent)]'
                     : 'border-[var(--color-border-card)] text-[var(--color-text-secondary)] hover:border-[var(--color-border)] active:opacity-80'

@@ -16,7 +16,6 @@
     "app:build": "npm run build:web && npm run cap:sync"
   },
   "dependencies": {
-    "serve": "^14.2.4",
     "@capacitor/android": "^8.2.0",
     "@capacitor/cli": "^8.2.0",
     "@capacitor/core": "^8.2.0",
@@ -34,8 +33,10 @@
     "react-datepicker": "^9.1.0",
     "react-dom": "^19.0.0",
     "react-draggable": "^4.4.6",
+    "react-image-crop": "^11.0.10",
     "react-router-dom": "^7.0.0",
     "recharts": "^3.7.0",
+    "serve": "^14.2.4",
     "socket.io-client": "^4.8.3",
     "sweetalert2": "^11.26.17"
   },

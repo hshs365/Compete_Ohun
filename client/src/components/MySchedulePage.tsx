@@ -335,8 +335,8 @@ const MySchedulePage = () => {
   return (
     <div className="flex flex-col h-full bg-[var(--color-bg-primary)] overflow-hidden">
       <div className="flex flex-1 min-h-0">
-        {/* 사이드바 */}
-        <aside className="w-[240px] md:w-[280px] shrink-0 flex flex-col border-r border-[var(--color-border-card)] bg-[var(--color-bg-card)]">
+        {/* 사이드바: 모바일에서는 숨기고 우측 패널만 전체 표시 */}
+        <aside className="hidden md:flex w-[280px] shrink-0 flex-col border-r border-[var(--color-border-card)] bg-[var(--color-bg-card)]">
           <div className="p-4 border-b border-[var(--color-border-card)]">
             <div className="flex items-center gap-2 mb-4">
               <CalendarDaysIcon className="w-6 h-6 text-[var(--color-blue-primary)]" />

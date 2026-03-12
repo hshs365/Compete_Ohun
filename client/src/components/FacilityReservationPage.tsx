@@ -17,6 +17,7 @@ import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../utils/api';
 import CreateFacilityModal from './CreateFacilityModal';
+import DarkDatePicker from './DarkDatePicker';
 import { showWarning, showSuccess, showError } from '../utils/swal';
 
 const getImageUrl = (url: string | null | undefined): string => {
@@ -370,12 +371,12 @@ const FacilityReservationPage = () => {
                     <CalendarDaysIcon className="w-4 h-4 text-[var(--color-text-secondary)]" />
                     날짜·시간
                   </span>
-                  <input
-                    type="date"
+                    <DarkDatePicker
                     value={filterDate}
-                    onChange={(e) => setFilterDate(e.target.value)}
-                    min={getDefaultFilterDate()}
-                    className="py-2.5 px-3 min-w-[140px] border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] date-input-dark"
+                    onChange={setFilterDate}
+                    minDate={new Date(getDefaultFilterDate())}
+                    placeholder="연도-월-일"
+                    className="min-w-[140px]"
                   />
                   <select
                     value={filterTime}
