@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException, ConflictException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, ConflictException, Inject, forwardRef, Logger } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -891,36 +891,48 @@ export class AuthService {
     return this.usersService.updateUser(userId, updateData);
   }
 
+  private readonly logger = new Logger(AuthService.name);
+
   private async uploadProfileImage(userId: number, file: Express.Multer.File): Promise<string> {
     const fs = require('fs').promises;
     const path = require('path');
     const crypto = require('crypto');
-    
-    // 업로드 디렉토리 설정
-    // 환경변수 UPLOAD_DIR이 있으면 사용 (NFS 공유 스토리지 등)
-    // 없으면 로컬 디렉토리 사용 (개발 환경)
+
+    // Multer memoryStorage() 사용 시 file.buffer 필수. 없으면 요청이 제대로 파싱되지 않은 것
+    if (!file?.buffer) {
+      this.logger.warn('Profile image upload: file or file.buffer is missing. Check Multer and request body size.');
+      throw new BadRequestException(
+        '파일 데이터를 받지 못했습니다. (서버 설정 확인: multipart body 크기 제한, Multer memoryStorage)'
+      );
+    }
+
+    // 업로드 디렉토리 — main.ts 정적 서빙 경로와 동일하게 (UPLOAD_DIR 우선)
     const baseUploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
     const uploadDir = path.join(baseUploadDir, 'profile');
-    
-    // 디렉토리가 없으면 생성
+
     try {
       await fs.access(uploadDir);
     } catch {
       await fs.mkdir(uploadDir, { recursive: true });
     }
-    
-    // 파일 확장자 추출
+
     const ext = path.extname(file.originalname) || '.jpg';
-    // UUID 대신 crypto.randomBytes 사용 (uuid 패키지 없이)
     const randomBytes = crypto.randomBytes(8).toString('hex');
     const filename = `${userId}_${Date.now()}_${randomBytes}${ext}`;
     const filepath = path.join(uploadDir, filename);
-    
-    // 파일 저장
-    await fs.writeFile(filepath, file.buffer);
-    
-    // URL 반환 (정적 파일 서빙 경로)
-    return `/uploads/profile/${filename}`;
+
+    try {
+      await fs.writeFile(filepath, file.buffer);
+    } catch (err: any) {
+      this.logger.error(`Profile image write failed: ${filepath}`, err?.message || err);
+      throw new BadRequestException(
+        `파일 저장에 실패했습니다. (경로: ${uploadDir}, 오류: ${err?.code || err?.message || '알 수 없음'})`
+      );
+    }
+
+    const urlPath = `/uploads/profile/${filename}`;
+    this.logger.log(`Profile image saved: userId=${userId} path=${urlPath}`);
+    return urlPath;
   }
 
   private generateToken(user: User): string {
