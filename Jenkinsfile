@@ -109,7 +109,12 @@ pipeline {
                 echo "[INFO] Deploying client..."
                 cd "\$CLIENT_DIR"
                 npm install --no-audit --no-fund
-                "\$PM2_BIN" describe frontend >/dev/null 2>&1 || "\$PM2_BIN" start npm --name frontend --cwd "\$CLIENT_DIR" -- run dev -- --host 0.0.0.0 --port 5173
+                echo "[INFO] Clearing Vite cache..."
+                rm -rf node_modules/.vite
+                echo "[INFO] Building client (production dist)..."
+                npm run build
+                echo "[INFO] Starting/restarting frontend (serving dist on 5173)..."
+                "\$PM2_BIN" describe frontend >/dev/null 2>&1 || "\$PM2_BIN" start npm --name frontend --cwd "\$CLIENT_DIR" -- run start
                 "\$PM2_BIN" restart frontend --update-env
               fi
               echo "[INFO] Deployment completed successfully"
