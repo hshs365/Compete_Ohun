@@ -10,6 +10,7 @@ import { PhoneVerificationService } from './services/phone-verification.service'
 import { BusinessNumberVerificationService } from './services/business-number-verification.service';
 import { BusinessRegistrationOcrService } from './services/business-registration-ocr.service';
 import { UsersModule } from '../users/users.module';
+import { GroupsModule } from '../groups/groups.module';
 import { BlacklistModule } from '../blacklist/blacklist.module';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { PhoneVerification } from './entities/phone-verification.entity';
@@ -17,6 +18,7 @@ import { PhoneVerification } from './entities/phone-verification.entity';
 @Module({
   imports: [
     forwardRef(() => UsersModule),
+    forwardRef(() => GroupsModule),
     BlacklistModule,
     PassportModule,
     TypeOrmModule.forFeature([PhoneVerification]),

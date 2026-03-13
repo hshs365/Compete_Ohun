@@ -16,7 +16,6 @@ import {
   MoonIcon,
   UserGroupIcon,
   UserPlusIcon,
-  ChartBarIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   ArrowDownTrayIcon,
@@ -87,7 +86,6 @@ const SettingsPage = () => {
   const [pushSectionOpen, setPushSectionOpen] = useState(true); // 전체 푸시 알림 섹션 펼침
   const [mercenaryNotifications, setMercenaryNotifications] = useState(true);
   const [teamInviteNotifications, setTeamInviteNotifications] = useState(true);
-  const [rankScoreNotifications, setRankScoreNotifications] = useState(true);
   const [chatNotifications, setChatNotifications] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(false);
   const [chatEnabled, setChatEnabled] = useState(true);
@@ -223,14 +221,6 @@ const SettingsPage = () => {
                   description="팀에 초대될 때 알림"
                   isOn={teamInviteNotifications}
                   onToggle={() => setTeamInviteNotifications(!teamInviteNotifications)}
-                  disabled={!pushNotificationsAll}
-                />
-                <SettingItem
-                  icon={ChartBarIcon}
-                  label="랭크 점수 변동 알림"
-                  description="랭크 점수 변경 시 알림"
-                  isOn={rankScoreNotifications}
-                  onToggle={() => setRankScoreNotifications(!rankScoreNotifications)}
                   disabled={!pushNotificationsAll}
                 />
                 <SettingItem

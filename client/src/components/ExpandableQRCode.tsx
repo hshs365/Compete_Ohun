@@ -9,6 +9,8 @@ interface ExpandableQRCodeProps {
   /** 확대 시 표시할 캡션 */
   caption?: string;
   className?: string;
+  /** 지정 시 버튼에 QR 대신 이 텍스트 표시 (클릭 시 QR 모달 표시) */
+  buttonLabel?: string;
 }
 
 /** 모바일에서 터치 시 화면에 크게 보이도록 하는 QR 코드 래퍼 */
@@ -18,6 +20,7 @@ const ExpandableQRCode: React.FC<ExpandableQRCodeProps> = ({
   level = 'M',
   caption,
   className = '',
+  buttonLabel,
 }) => {
   const [expanded, setExpanded] = useState(false);
   const displaySize = Math.min(320, typeof window !== 'undefined' ? Math.min(window.innerWidth, window.innerHeight) * 0.7 : 280);
@@ -27,10 +30,10 @@ const ExpandableQRCode: React.FC<ExpandableQRCodeProps> = ({
       <button
         type="button"
         onClick={() => setExpanded(true)}
-        className={`touch-manipulation cursor-pointer p-2 bg-white dark:bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border-card)] hover:opacity-90 active:opacity-95 transition-opacity ${className}`}
-        aria-label="QR 코드 크게 보기"
+        className={`touch-manipulation cursor-pointer flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-[var(--color-border-card)] bg-[var(--color-bg-primary)] hover:opacity-90 active:opacity-95 transition-opacity text-sm font-medium text-[var(--color-text-primary)] ${className}`}
+        aria-label={buttonLabel ?? 'QR 코드 크게 보기'}
       >
-        <QRCodeSVG value={value} size={size} level={level} />
+        {buttonLabel ? buttonLabel : <QRCodeSVG value={value} size={size} level={level} />}
       </button>
 
       {expanded && (

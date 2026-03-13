@@ -485,7 +485,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
           <div className="shrink-0 mx-4 mt-2 p-3 rounded-lg bg-[var(--color-blue-primary)]/10 border border-[var(--color-blue-primary)]/30 flex gap-2">
             <InformationCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-[var(--color-blue-primary)]" aria-hidden />
             <p className="text-sm text-[var(--color-text-primary)]">
-              플레이어 신청을 하지 않은 경우, 게시글 등록과 동시에 <strong>해당 종목의 플레이어로 자동 등록</strong>되며, <strong>플레이어 명함</strong>이 생성됩니다. 활동 시간대는 이 게시글의 일시에 맞춰 추가되고, 활동 상태는 <strong>활동중</strong>으로 설정됩니다.
+              플레이어 등록을 하지 않은 경우, 게시글 등록과 동시에 <strong>해당 종목의 플레이어로 자동 등록</strong>되며, <strong>플레이어 명함</strong>이 생성됩니다. 활동 시간대는 이 게시글의 일시에 맞춰 추가되고, 활동 상태는 <strong>활동중</strong>으로 설정됩니다.
             </p>
           </div>
         )}

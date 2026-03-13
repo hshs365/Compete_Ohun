@@ -2812,5 +2812,37 @@ export class GroupsService {
 
     return { success: true, message: '용병 리뷰가 저장되었습니다.' };
   }
+
+  /**
+   * 회원 탈퇴 시: 생성 매치 비활성화, 참가자 명단에서 제거
+   * - 생성한 매치: isActive=false → 목록/내 일정에서 사라짐
+   * - 참가한 매치: 참가자 레코드 삭제, participantCount 업데이트 → 해당 사용자 내 일정에서 사라짐
+   */
+  async handleUserWithdraw(userId: number): Promise<void> {
+    // 1. 생성한 매치 비활성화 (목록·내 일정에서 모두 사라짐)
+    await this.groupRepository.update({ creatorId: userId }, { isActive: false });
+
+    // 2. 참가자로 등록된 매치에서 제거
+    const myParticipations = await this.participantRepository.find({
+      where: { userId },
+      relations: ['group'],
+    });
+    for (const p of myParticipations) {
+      const group = p.group;
+      if (!group) continue;
+      if (group.creatorId === userId) continue; // 생성자 매치는 이미 비활성화됨
+
+      // 포지션 지정 매치: 포지션 레코드 삭제
+      await this.participantPositionRepository.delete({
+        groupId: group.id,
+        userId,
+      });
+      await this.participantRepository.delete({ id: p.id });
+
+      // participantCount 업데이트
+      const actual = await this.participantRepository.count({ where: { groupId: group.id } });
+      await this.groupRepository.update(group.id, { participantCount: Math.max(1, actual) });
+    }
+  }
 }
 

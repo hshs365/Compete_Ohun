@@ -3,7 +3,8 @@ import { XMarkIcon, UserGroupIcon, MagnifyingGlassIcon, UserPlusIcon, UserCircle
 import { api } from '../utils/api';
 import { showSuccess, showError } from '../utils/swal';
 import { TEAM_PAGE_SPORTS } from '../constants/sports';
-import { KOREAN_CITIES, getRegionDisplayName } from '../utils/locationUtils';
+import { KOREAN_CITIES, getRegionDisplayName, getUserCityForJoin } from '../utils/locationUtils';
+import { useAuth } from '../contexts/AuthContext';
 
 interface FollowerUser {
   id: number;
@@ -25,6 +26,7 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
   onSuccess,
   initialSport = '',
 }) => {
+  const { user } = useAuth();
   const [teamName, setTeamName] = useState('');
   const [sport, setSport] = useState(initialSport || TEAM_PAGE_SPORTS[0]);
   const [region, setRegion] = useState('');
@@ -41,6 +43,37 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const regionOptions = KOREAN_CITIES.filter((c) => c !== '전체');
+
+  // 크루 소재지 디폴트: 유저 주 활동지역(시)
+  useEffect(() => {
+    if (!isOpen) return;
+    const applyDefaultRegion = (city: string) => {
+      if (city && regionOptions.includes(city)) {
+        setRegion((prev) => (prev === '' ? city : prev));
+      }
+    };
+    const city = getUserCityForJoin(user?.id, {
+      residenceSido: user?.residenceSido,
+      residenceAddress: user?.residenceAddress,
+    });
+    if (city) {
+      applyDefaultRegion(city);
+      return;
+    }
+    const loadUserRegion = async () => {
+      try {
+        const data = await api.get<{ residenceSido?: string | null; residenceAddress?: string | null }>('/api/auth/me');
+        const c = getUserCityForJoin(undefined, {
+          residenceSido: data?.residenceSido,
+          residenceAddress: data?.residenceAddress,
+        });
+        if (c) applyDefaultRegion(c);
+      } catch {
+        // ignore
+      }
+    };
+    loadUserRegion();
+  }, [isOpen, user?.id, user?.residenceSido, user?.residenceAddress]);
 
   // 팔로잉 + 검색 결과 로드
   useEffect(() => {

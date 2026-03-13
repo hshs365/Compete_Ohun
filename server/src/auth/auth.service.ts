@@ -21,6 +21,7 @@ import { ChangeBusinessNumberDto } from './dto/change-business-number.dto';
 import type { RegisterBusinessWithDocumentDto } from './dto/register-business-with-document.dto';
 import type { RegisterBusinessConfirmDto } from './dto/register-business-confirm.dto';
 import { BlacklistService } from '../blacklist/blacklist.service';
+import { GroupsService } from '../groups/groups.service';
 
 export interface JwtPayload {
   sub: number; // userId
@@ -52,6 +53,8 @@ export class AuthService {
 
   constructor(
     private usersService: UsersService,
+    @Inject(forwardRef(() => GroupsService))
+    private groupsService: GroupsService,
     private jwtService: JwtService,
     private phoneVerificationService: PhoneVerificationService,
     private businessNumberVerificationService: BusinessNumberVerificationService,
@@ -1039,8 +1042,11 @@ export class AuthService {
 
   /**
    * 회원 탈퇴
+   * - 생성한 매치 비활성화 (목록·내 일정에서 사라짐)
+   * - 참가자 명단에서 제거, participantCount 업데이트
    */
   async withdraw(userId: number): Promise<void> {
+    await this.groupsService.handleUserWithdraw(userId);
     await this.usersService.withdrawUser(userId);
   }
 

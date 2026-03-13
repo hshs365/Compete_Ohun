@@ -12,7 +12,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { api } from '../utils/api';
 import { showSuccess, showError } from '../utils/swal';
-import { KOREAN_CITIES, getRegionDisplayName } from '../utils/locationUtils';
+import { KOREAN_CITIES, getRegionDisplayName, getUserCityForJoin } from '../utils/locationUtils';
+import { useAuth } from '../contexts/AuthContext';
 
 interface FollowerUser {
   id: number;
@@ -25,6 +26,7 @@ const TOTAL_STEPS = 4;
 
 const CreateTeamPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [step, setStep] = useState(1);
   const [teamName, setTeamName] = useState('');
@@ -42,6 +44,36 @@ const CreateTeamPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const regionOptions = KOREAN_CITIES.filter((c) => c !== '전체');
+
+  // 크루 소재지 디폴트: 유저 주 활동지역(시) — AuthContext user 우선, 없으면 API 조회
+  useEffect(() => {
+    const applyDefaultRegion = (sido: string | null) => {
+      if (sido && regionOptions.includes(sido)) {
+        setRegion((prev) => (prev === '' ? sido : prev));
+      }
+    };
+    const city = getUserCityForJoin(user?.id, {
+      residenceSido: user?.residenceSido,
+      residenceAddress: user?.residenceAddress,
+    });
+    if (city) {
+      applyDefaultRegion(city);
+      return;
+    }
+    const loadUserRegion = async () => {
+      try {
+        const data = await api.get<{ residenceSido?: string | null; residenceAddress?: string | null }>('/api/auth/me');
+        const c = getUserCityForJoin(undefined, {
+          residenceSido: data?.residenceSido,
+          residenceAddress: data?.residenceAddress,
+        });
+        if (c) applyDefaultRegion(c);
+      } catch {
+        // ignore
+      }
+    };
+    loadUserRegion();
+  }, [user?.id, user?.residenceSido, user?.residenceAddress]);
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -178,7 +210,7 @@ const CreateTeamPage = () => {
       </header>
 
       <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
-        <div className="flex-1 overflow-y-auto max-w-3xl w-full mx-auto px-4 md:px-6 py-6 pb-28">
+        <div className="flex-1 overflow-y-auto max-w-3xl w-full mx-auto px-4 md:px-6 py-6 pb-28 safe-area-pb">
           {/* Step 1: 기본 정보 */}
           {step === 1 && (
             <section className="space-y-6 animate-fade-in">
@@ -220,7 +252,7 @@ const CreateTeamPage = () => {
                   onChange={(e) => setTeamName(e.target.value)}
                   placeholder="크루 이름을 입력하세요"
                   maxLength={50}
-                  className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                  className="w-full px-4 py-3 min-h-[48px] border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] text-base"
                 />
               </div>
 
@@ -231,7 +263,7 @@ const CreateTeamPage = () => {
                 <select
                   value={region}
                   onChange={(e) => setRegion(e.target.value)}
-                  className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                  className="w-full px-4 py-3 min-h-[48px] border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)] text-base touch-manipulation"
                 >
                   <option value="">지역 선택</option>
                   {regionOptions.map((c) => (
@@ -351,7 +383,7 @@ const CreateTeamPage = () => {
                   invitees.map((u) => (
                     <label
                       key={u.id}
-                      className="flex items-center gap-3 p-3 cursor-pointer hover:bg-[var(--color-bg-secondary)] transition-colors"
+                      className="flex items-center gap-3 p-4 min-h-[56px] cursor-pointer hover:bg-[var(--color-bg-secondary)] active:bg-[var(--color-bg-secondary)] transition-colors touch-manipulation"
                     >
                       <input
                         type="checkbox"
@@ -390,7 +422,7 @@ const CreateTeamPage = () => {
               <button
                 type="button"
                 onClick={handlePrev}
-                className="flex-1 py-4 rounded-xl font-semibold text-center text-[var(--color-text-primary)] bg-[var(--color-bg-secondary)] hover:bg-[var(--color-bg-primary)] border border-[var(--color-border-card)] transition-colors flex items-center justify-center gap-1"
+                className="flex-1 min-h-[52px] py-4 rounded-xl font-semibold text-center text-[var(--color-text-primary)] bg-[var(--color-bg-secondary)] hover:bg-[var(--color-bg-primary)] border border-[var(--color-border-card)] active:opacity-90 transition-colors flex items-center justify-center gap-1 touch-manipulation"
               >
                 <ChevronLeftIcon className="w-5 h-5" />
                 이전
@@ -398,7 +430,7 @@ const CreateTeamPage = () => {
             ) : (
               <Link
                 to="/teams"
-                className="flex-1 py-4 rounded-xl font-semibold text-center text-[var(--color-text-primary)] bg-[var(--color-bg-secondary)] hover:bg-[var(--color-bg-card)] border border-[var(--color-border-card)] transition-colors flex items-center justify-center"
+                className="flex-1 min-h-[52px] py-4 rounded-xl font-semibold text-center text-[var(--color-text-primary)] bg-[var(--color-bg-secondary)] hover:bg-[var(--color-bg-card)] border border-[var(--color-border-card)] active:opacity-90 transition-colors flex items-center justify-center touch-manipulation"
               >
                 취소
               </Link>
@@ -408,7 +440,7 @@ const CreateTeamPage = () => {
                 type="button"
                 onClick={handleNext}
                 disabled={!canProceed()}
-                className="flex-1 sm:flex-[2] py-4 rounded-xl font-semibold text-white bg-[var(--color-blue-primary)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity flex items-center justify-center gap-1"
+                className="flex-1 sm:flex-[2] min-h-[52px] py-4 rounded-xl font-semibold text-white bg-[var(--color-blue-primary)] hover:opacity-90 active:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity flex items-center justify-center gap-1 touch-manipulation"
               >
                 다음
                 <ChevronRightIcon className="w-5 h-5" />
@@ -417,7 +449,7 @@ const CreateTeamPage = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 sm:flex-[2] py-4 rounded-xl font-semibold text-white bg-[var(--color-blue-primary)] hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed transition-opacity"
+                className="flex-1 sm:flex-[2] min-h-[52px] py-4 rounded-xl font-semibold text-white bg-[var(--color-blue-primary)] hover:opacity-90 active:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed transition-opacity touch-manipulation"
               >
                 {isSubmitting ? '생성 중...' : '크루 만들기'}
               </button>

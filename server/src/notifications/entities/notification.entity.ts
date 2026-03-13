@@ -21,6 +21,7 @@ export enum NotificationType {
   MERCENARY_RECRUIT = 'mercenary_recruit', // 용병 구하기 → 해당 종목 용병 알림 수신 유저에게 알림
   CREATOR_NEW_MATCH = 'creator_new_match', // 매치장이 새 매치 생성 → 매치장을 팔로우한 사람에게 알림
   NEW_FOLLOWER = 'new_follower', // 새 팔로워
+  TEAM_INVITE = 'team_invite', // 크루 초대
   FACILITY_RESERVATION = 'facility_reservation', // 시설 예약
   SYSTEM = 'system', // 시스템 알림
 }

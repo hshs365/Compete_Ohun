@@ -189,7 +189,7 @@ const MercenaryHomePage = () => {
             style={activeTab === 'apply' ? { backgroundColor: pointColor } : undefined}
           >
             <UserCircleIcon className="w-5 h-5" aria-hidden />
-            <span translate="no">플레이어 신청</span>
+            <span translate="no">플레이어 등록</span>
           </button>
         </div>
       </header>

@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Param, Query, Body, UseGuards, NotFoundException, ValidationPipe, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Body, UseGuards, NotFoundException, ValidationPipe, UseInterceptors, UploadedFile, BadRequestException, ParseIntPipe } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
 import { TeamsService } from './teams.service';
 import { CreateTeamDto } from './dto/create-team.dto';
+import { InviteTeamDto } from './dto/invite-team.dto';
 
 @Controller('api/teams')
 export class TeamsController {
@@ -12,8 +13,8 @@ export class TeamsController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  getMyTeams() {
-    return this.teamsService.getMyTeams();
+  getMyTeams(@CurrentUser() user: User) {
+    return this.teamsService.getMyTeams(user.id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -48,8 +49,19 @@ export class TeamsController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post(':id/invite')
+  async inviteUsers(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(ValidationPipe) dto: InviteTeamDto,
+    @CurrentUser() user: User,
+  ) {
+    const nickname = user.nickname ?? user.email?.split('@')[0] ?? '크루장';
+    return this.teamsService.inviteUsers(id, user.id, dto.userIds, nickname);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
-  getTeamDetail(@Param('id') id: string) {
+  getTeamDetail(@Param('id') id: string, @CurrentUser() user: User) {
     const teamId = Number(id);
     if (Number.isNaN(teamId)) {
       throw new NotFoundException('팀 정보를 찾을 수 없습니다.');
@@ -60,6 +72,6 @@ export class TeamsController {
       throw new NotFoundException('팀 정보를 찾을 수 없습니다.');
     }
 
-    return team;
+    return this.teamsService.withUserRole(team, user.id);
   }
 }

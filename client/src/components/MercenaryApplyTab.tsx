@@ -81,13 +81,13 @@ const MercenaryApplyTab: React.FC<MercenaryApplyTabProps> = ({
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* 내 플레이어 명함 카드 */}
+      {/* 내 명함 카드 */}
       <section className="flex-shrink-0 p-4">
         <div
           className={`rounded-xl border p-4 ${trustColors.bg} ${trustColors.border}`}
           style={{ borderColor: trustColors.point + '50' }}
         >
-          <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] mb-3">내 플레이어 명함</h3>
+          <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] mb-3">내 명함</h3>
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <StarIcon className="w-5 h-5" style={{ color: trustColors.point }} />

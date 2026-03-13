@@ -160,7 +160,9 @@ const HallOfFamePage = () => {
       <div className="flex-1 min-h-0 max-w-7xl mx-auto w-full px-4 md:px-6 py-6 relative z-10 flex flex-col md:flex-row">
         <aside
           className={`flex-shrink-0 border-r border-[var(--color-border-card)] pr-6 transition-all duration-200 ${
-            sidebarOpen ? 'w-56 min-w-[14rem] md:w-64 md:min-w-[16rem]' : 'w-0 overflow-hidden pr-0 opacity-0'
+            sidebarOpen
+              ? 'w-56 min-w-[14rem] md:w-64 md:min-w-[16rem]'
+              : 'hidden md:block md:w-0 md:overflow-hidden md:pr-0 md:opacity-0'
           }`}
         >
           <div className="sticky top-4 space-y-6">
@@ -217,7 +219,7 @@ const HallOfFamePage = () => {
           </div>
         </aside>
 
-        <main className="flex-1 min-w-0 min-h-0 overflow-y-auto pb-24 pt-2 md:pt-0 md:pl-6">
+        <main className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden pb-24 pt-2 md:pt-0 md:pl-6">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <button
               type="button"
