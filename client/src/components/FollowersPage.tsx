@@ -20,6 +20,7 @@ interface User {
   commonSports?: string[];
   residenceSido?: string;
   residenceSigungu?: string;
+  teamNames?: string[];
 }
 
 const FollowersPage = () => {
@@ -342,11 +343,13 @@ const FollowersPage = () => {
                     {listUser.nickname}
                     {listUser.tag && <span className="text-[var(--color-text-secondary)] ml-1">{listUser.tag}</span>}
                   </div>
-                  {listUser.commonSports && listUser.commonSports.length > 0 && (
+                  {(listUser.commonSports?.length > 0 || listUser.teamNames?.length || (listUser.mutualCount != null && listUser.mutualCount > 0)) && (
                     <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
-                      {listUser.commonSports.join(', ')}
-                      {listUser.totalScore != null ? ` · ${listUser.totalScore.toLocaleString()} RP` : ''}
-                      {listUser.mutualCount != null && listUser.mutualCount > 0 ? ` · 친구 ${listUser.mutualCount}명` : ''}
+                      {[
+                        listUser.commonSports?.length ? listUser.commonSports.join(', ') : '',
+                        listUser.teamNames?.length ? `크루: ${listUser.teamNames.join(', ')}` : '',
+                        listUser.mutualCount != null && listUser.mutualCount > 0 ? `친구 ${listUser.mutualCount}명` : '',
+                      ].filter(Boolean).join(' · ')}
                     </p>
                   )}
                 </div>
@@ -420,8 +423,7 @@ const FollowersPage = () => {
                           {recUser.tag && <span className="text-[var(--color-text-secondary)] ml-0.5">{recUser.tag}</span>}
                         </div>
                         <p className="text-xs text-[var(--color-text-secondary)] truncate">
-                          {recUser.commonSports?.length ? recUser.commonSports.join(', ') : ''}
-                          {recUser.totalScore != null ? ` · ${recUser.totalScore.toLocaleString()} RP` : ''}
+                          {[recUser.commonSports?.length ? recUser.commonSports.join(', ') : '', recUser.teamNames?.length ? `크루: ${recUser.teamNames.join(', ')}` : ''].filter(Boolean).join(' · ')}
                         </p>
                       </div>
                     </div>

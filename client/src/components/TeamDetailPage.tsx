@@ -200,12 +200,18 @@ const TeamDetailPage = () => {
             )}
             {team.assistantCoach && (
               <p className="text-[var(--color-text-secondary)]">
-                <span className="font-medium text-[var(--color-text-primary)]">코치</span>: {team.assistantCoach}
+                <span className="font-medium text-[var(--color-text-primary)]">코치</span>:{' '}
+                {team.assistantCoach.split('\n').filter(Boolean).map((line, i) => (
+                  <span key={i}>{i > 0 && ', '}{line}</span>
+                ))}
               </p>
             )}
             {team.contact && (
               <p className="text-[var(--color-text-secondary)]">
-                <span className="font-medium text-[var(--color-text-primary)]">연락처</span>: {team.contact}
+                <span className="font-medium text-[var(--color-text-primary)]">연락처</span>:{' '}
+                {team.contact.split('\n').filter(Boolean).map((line, i) => (
+                  <span key={i}>{i > 0 && ', '}{line}</span>
+                ))}
               </p>
             )}
           </div>

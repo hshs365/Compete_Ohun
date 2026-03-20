@@ -25,6 +25,7 @@ import { RecommendedUsersService } from './recommended-users.service';
 import { AthleteService } from './athlete.service';
 import { UserReviewStatsService } from './user-review-stats.service';
 import { AchievementsService } from './achievements.service';
+import { TeamsModule } from '../teams/teams.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { AchievementsService } from './achievements.service';
     forwardRef(() => AuthModule),
     forwardRef(() => GroupsModule),
     NotificationsModule,
+    TeamsModule,
   ],
   controllers: [UsersController],
   providers: [UsersService, UserScoreService, FollowService, PointsService, RecommendedUsersService, AthleteService, UserReviewStatsService, AchievementsService],

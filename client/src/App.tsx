@@ -781,7 +781,7 @@ const MainLayout = () => {
           <button
             type="button"
             onClick={scrollToTop}
-            className="fixed bottom-6 right-6 z-[9998] w-12 h-12 rounded-full bg-[var(--color-blue-primary)] text-white shadow-lg hover:bg-[var(--color-blue-primary)]/90 hover:scale-105 active:scale-95 transition-all flex items-center justify-center font-bold text-sm"
+            className="fixed bottom-6 right-6 z-[9998] w-12 h-12 rounded-full bg-[var(--color-accent-fab)] text-white shadow-lg hover:opacity-90 hover:scale-105 active:scale-95 transition-all flex items-center justify-center font-bold text-sm"
             aria-label="맨 위로"
           >
             TOP

@@ -14,8 +14,8 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ isOn, handleToggle, label }
         type="button"
         role="switch"
         aria-checked={isOn}
-        className={`relative inline-flex items-center h-7 w-12 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--color-bg-card)] focus:ring-[var(--color-blue-primary)] shrink-0 ${
-          isOn ? 'bg-[var(--color-blue-primary)]' : 'bg-[var(--color-bg-secondary)]'
+        className={`relative inline-flex items-center h-7 w-12 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--color-bg-card)] focus:ring-[var(--color-accent-fab)] shrink-0 ${
+          isOn ? 'bg-[var(--color-accent-fab)]' : 'bg-[var(--color-bg-secondary)]'
         }`}
         style={{
           boxShadow: isOn

@@ -130,7 +130,7 @@ const HostQRModal: React.FC<HostQRModalProps> = ({ groupId, isOpen, onClose }) =
               {verifiedNicknames.map((nick, i) => (
                 <div
                   key={`${nick}-${i}`}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/20 border border-green-500/40 text-green-400 font-semibold animate-in fade-in"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/20 border border-green-500/40 text-green-400 font-semibold"
                 >
                   <span className="shrink-0">✓</span>
                   <span>{nick} 플레이어님 인증 완료!</span>

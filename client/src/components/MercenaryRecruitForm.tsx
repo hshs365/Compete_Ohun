@@ -102,7 +102,8 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [locationFetching, setLocationFetching] = useState(false);
   const { user, checkAuth } = useAuth();
-  const isAlreadyPlayerForSport = Boolean(user?.mercenaryActiveBySport?.[effectiveSport]);
+  /** 해당 종목으로 플레이어 등록(명함에 종목 추가)한 경우 true. 미등록 유저에게만 안내 문구 노출 */
+  const isAlreadyPlayerForSport = Boolean(user?.interestedSports?.includes(effectiveSport));
 
   const handleSearchAddress = useCallback(() => {
     const openPostcode = () => {
@@ -503,7 +504,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
           <div className="flex-1 overflow-y-auto px-4 py-4 pb-4">
             {/* Step 1: 종목 + 제목 + 장소 */}
             {step === 1 && (
-              <div className="space-y-5 animate-fade-in">
+              <div className="space-y-5">
                 {isAllMode && (
                   <div>
                     <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">종목 선택</label>
@@ -586,7 +587,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
 
             {/* Step 2: 날짜 + 경기 시간 */}
             {step === 2 && (
-              <div className="space-y-5 animate-fade-in">
+              <div className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">날짜</label>
                   <DarkDatePicker value={meetingDate} onChange={setMeetingDate} placeholder="연도-월-일" pointColor={pointColor} minDate={new Date()} />
@@ -615,7 +616,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
 
             {/* Step 3: 성별 제한 + 모집 인원 */}
             {step === 3 && (
-              <div className="space-y-5 animate-fade-in">
+              <div className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">성별 제한</label>
                   <select
@@ -649,7 +650,7 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
 
             {/* Step 4: 구인 조건 + 준비물 */}
             {step === 4 && (
-              <div className="space-y-5 animate-fade-in">
+              <div className="space-y-5">
                 <div className={`pt-3 border-t border-[var(--color-border-card)] ${chipStyle.bg} ${chipStyle.border} border rounded-xl p-4`}>
                   <p className="text-sm font-medium text-[var(--color-text-primary)] mb-3">종목별 구인 조건</p>
                   {EQUIPMENT_OPTIONS[effectiveSport]?.length > 0 && (
@@ -744,13 +745,6 @@ const MercenaryRecruitForm: React.FC<MercenaryRecruitFormProps> = ({
         </form>
       </div>
 
-      <style>{`
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in { animation: fade-in 0.2s ease-out; }
-      `}</style>
     </div>
   );
 };

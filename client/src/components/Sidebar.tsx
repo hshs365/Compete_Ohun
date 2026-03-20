@@ -28,10 +28,10 @@ const Sidebar = () => {
 
   const mainMenuItems = [
     { name: '홈', icon: HomeIcon, path: '/', isHome: true },
+    { name: '크루', icon: ShieldCheckIcon, path: '/teams' },
     { name: '내 정보', icon: UserIcon, path: '/my-info' },
     { name: '내 일정', icon: CalendarIcon, path: '/my-schedule' },
     { name: '명예의전당', icon: TrophyIcon, path: '/hall-of-fame' },
-    { name: '크루', icon: ShieldCheckIcon, path: '/teams' },
     { name: '팔로워', icon: UserGroupIcon, path: '/followers' },
     { name: '가이드', icon: BookOpenIcon, path: '/guide' },
   ];
@@ -43,7 +43,7 @@ const Sidebar = () => {
   ];
 
   return (
-    <div className="hidden md:flex flex-col items-center w-16 bg-gray-900 text-white h-screen py-5 shrink-0 gap-0 pl-0">
+    <div className="hidden md:flex flex-col items-center w-16 bg-[#031f61] text-white h-screen py-5 shrink-0 gap-0 pl-0">
       <div className="w-full">
         <nav className="flex flex-col items-center space-y-7 w-full">
           {mainMenuItems.map((item) => {
@@ -51,7 +51,7 @@ const Sidebar = () => {
             const baseClass = 'relative flex flex-col items-center transition-colors duration-200 w-full border-l-2 border-transparent';
             const activeClass = active
               ? 'text-white border-transparent before:content-[""] before:block before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-cyan-400'
-              : 'text-gray-400 hover:text-white';
+              : 'text-white';
             if ((item as { isHome?: boolean }).isHome) {
               return (
                 <button
@@ -86,7 +86,7 @@ const Sidebar = () => {
             const baseClass = 'relative flex flex-col items-center transition-colors duration-200 w-full border-l-2 border-transparent';
             const activeClass = active
               ? 'text-white border-transparent before:content-[""] before:block before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-cyan-400'
-              : 'text-gray-400 hover:text-white';
+              : 'text-white';
             return (
               <Link
                 key={item.name}

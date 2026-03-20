@@ -43,20 +43,20 @@ export const SPORT_POINT_COLORS: Record<string, string> = {
   볼링: '#6366f1',
 };
 
-/** 종목별 칩 스타일 (화이트모드: 검정 텍스트로 배경과 확실한 대비, 다크모드: 반투명+밝은 글자) */
+/** 종목별 칩 스타일 (화이트: 검정 텍스트 필수, 다크: 밝은 글자) */
 export const SPORT_CHIP_STYLES: Record<string, { bg: string; border: string; text: string }> = {
-  전체: { bg: 'bg-slate-100 dark:bg-slate-500/25', border: 'border-slate-300 dark:border-slate-500/50', text: '!text-black dark:!text-slate-200' },
-  축구: { bg: 'bg-emerald-100 dark:bg-emerald-600/30', border: 'border-emerald-400 dark:border-emerald-500/50', text: '!text-black dark:!text-emerald-300' },
-  풋살: { bg: 'bg-teal-100 dark:bg-teal-500/30', border: 'border-teal-400 dark:border-teal-500/50', text: '!text-black dark:!text-teal-300' },
-  농구: { bg: 'bg-orange-100 dark:bg-orange-500/30', border: 'border-orange-400 dark:border-orange-500/50', text: '!text-black dark:!text-orange-300' },
-  테니스: { bg: 'bg-violet-100 dark:bg-violet-500/30', border: 'border-violet-400 dark:border-violet-500/50', text: '!text-black dark:!text-violet-300' },
-  야구: { bg: 'bg-amber-100 dark:bg-amber-500/30', border: 'border-amber-400 dark:border-amber-500/50', text: '!text-black dark:!text-amber-300' },
-  배드민턴: { bg: 'bg-teal-100 dark:bg-teal-500/30', border: 'border-teal-400 dark:border-teal-500/50', text: '!text-black dark:!text-teal-300' },
-  핸드볼: { bg: 'bg-rose-100 dark:bg-rose-600/30', border: 'border-rose-400 dark:border-rose-500/50', text: '!text-black dark:!text-rose-300' },
-  배구: { bg: 'bg-sky-100 dark:bg-sky-600/30', border: 'border-sky-400 dark:border-sky-500/50', text: '!text-black dark:!text-sky-300' },
-  탁구: { bg: 'bg-amber-100 dark:bg-amber-500/30', border: 'border-amber-400 dark:border-amber-500/50', text: '!text-black dark:!text-amber-300' },
-  골프: { bg: 'bg-emerald-100 dark:bg-emerald-500/30', border: 'border-emerald-400 dark:border-emerald-500/50', text: '!text-black dark:!text-emerald-300' },
-  볼링: { bg: 'bg-indigo-100 dark:bg-indigo-500/30', border: 'border-indigo-400 dark:border-indigo-500/50', text: '!text-black dark:!text-indigo-300' },
+  전체: { bg: 'bg-slate-100 dark:bg-slate-500/25', border: 'border-slate-300 dark:border-slate-500/50', text: '!text-gray-900 dark:!text-slate-200' },
+  축구: { bg: 'bg-emerald-100 dark:bg-emerald-600/30', border: 'border-emerald-400 dark:border-emerald-500/50', text: '!text-gray-900 dark:!text-emerald-300' },
+  풋살: { bg: 'bg-teal-100 dark:bg-teal-500/30', border: 'border-teal-400 dark:border-teal-500/50', text: '!text-gray-900 dark:!text-teal-300' },
+  농구: { bg: 'bg-orange-100 dark:bg-orange-500/30', border: 'border-orange-400 dark:border-orange-500/50', text: '!text-gray-900 dark:!text-orange-300' },
+  테니스: { bg: 'bg-violet-100 dark:bg-violet-500/30', border: 'border-violet-400 dark:border-violet-500/50', text: '!text-gray-900 dark:!text-violet-300' },
+  야구: { bg: 'bg-amber-100 dark:bg-amber-500/30', border: 'border-amber-400 dark:border-amber-500/50', text: '!text-gray-900 dark:!text-amber-300' },
+  배드민턴: { bg: 'bg-teal-100 dark:bg-teal-500/30', border: 'border-teal-400 dark:border-teal-500/50', text: '!text-gray-900 dark:!text-teal-300' },
+  핸드볼: { bg: 'bg-rose-100 dark:bg-rose-600/30', border: 'border-rose-400 dark:border-rose-500/50', text: '!text-gray-900 dark:!text-rose-300' },
+  배구: { bg: 'bg-sky-100 dark:bg-sky-600/30', border: 'border-sky-400 dark:border-sky-500/50', text: '!text-gray-900 dark:!text-sky-300' },
+  탁구: { bg: 'bg-amber-100 dark:bg-amber-500/30', border: 'border-amber-400 dark:border-amber-500/50', text: '!text-gray-900 dark:!text-amber-300' },
+  골프: { bg: 'bg-emerald-100 dark:bg-emerald-500/30', border: 'border-emerald-400 dark:border-emerald-500/50', text: '!text-gray-900 dark:!text-emerald-300' },
+  볼링: { bg: 'bg-indigo-100 dark:bg-indigo-500/30', border: 'border-indigo-400 dark:border-indigo-500/50', text: '!text-gray-900 dark:!text-indigo-300' },
 };
 
 /** 필터/폼 필드 타입 */

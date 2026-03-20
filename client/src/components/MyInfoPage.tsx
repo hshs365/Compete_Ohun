@@ -1124,12 +1124,12 @@ const MyInfoPage = () => {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto w-full px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6 pb-24 md:pb-12">
+      <div className="max-w-4xl mx-auto w-full px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-5 sm:space-y-6 pb-24 md:pb-12">
       {myInfoTab === 'profile' && (
       <>
-      {/* 프로필 — 모바일: 패딩·아바타·타이포 축소 */}
-      <section className="bg-[var(--color-bg-card)] rounded-xl sm:rounded-2xl border border-[var(--color-border-card)] overflow-hidden shadow-sm">
-        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-4 sm:p-5 md:p-6 text-white">
+      {/* 섹션 1: 프로필 배너 (당근마켓 스타일 — 카드별 분리) */}
+      <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] overflow-hidden shadow-sm">
+        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 theme-hero-gradient p-4 sm:p-5 md:p-6 text-white">
           <div className="flex items-center gap-3 sm:gap-4">
             <div className="relative shrink-0">
               <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] md:w-20 md:h-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 sm:border-4 border-white/30 text-2xl sm:text-3xl font-bold overflow-hidden">
@@ -1157,7 +1157,7 @@ const MyInfoPage = () => {
                     autoFocus
                   />
                   <div className="flex gap-2">
-                    <button onClick={handleNicknameSave} className="flex-1 sm:flex-none min-h-[44px] px-4 py-2.5 bg-white text-indigo-600 rounded-xl font-medium text-sm hover:opacity-90 active:scale-[0.98]">
+                    <button onClick={handleNicknameSave} className="flex-1 sm:flex-none min-h-[44px] px-4 py-2.5 bg-white text-[var(--color-blue-primary)] rounded-xl font-medium text-sm hover:opacity-90 active:scale-[0.98]">
                       저장
                     </button>
                     <button onClick={() => { setNickname(profileData.nickname || ''); setIsEditingNickname(false); }} className="flex-1 sm:flex-none min-h-[44px] px-4 py-2.5 bg-white/20 rounded-xl text-sm hover:bg-white/30 active:scale-[0.98]">
@@ -1200,10 +1200,10 @@ const MyInfoPage = () => {
             </div>
           </div>
         </div>
+      </section>
 
-        {/* 본문: 프로필 정보 · 주요 업적 · 보유 뱃지 — 컴팩트 배치 (공백 최소화) */}
-        <div className="p-4 sm:p-5 md:p-6 space-y-4">
-          <div className="bg-[var(--color-bg-primary)] rounded-xl p-3 sm:p-4 border border-[var(--color-border-card)]">
+      {/* 섹션 2: 프로필 정보 */}
+      <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-4 sm:p-5 md:p-6 shadow-sm">
             <h3 className="text-base font-bold text-[var(--color-text-primary)] mb-3 flex items-center gap-2">
               <StarIcon className="w-5 h-5 text-yellow-500 shrink-0" />
               프로필 정보
@@ -1218,12 +1218,11 @@ const MyInfoPage = () => {
               </div>
               <div className="flex items-center justify-between gap-3 py-2 border-b border-[var(--color-border-card)]">
                 <span className="text-sm font-medium text-[var(--color-text-secondary)] shrink-0">매너점수</span>
-                <div className="flex items-center gap-2 min-w-0 justify-end">
+                <div className="flex-1 min-w-0 flex flex-col items-stretch min-w-[120px]">
                   <MannerScoreGauge
                     score={profileData.mannerScore ?? myProfileSummary?.mannerScore ?? 80}
                     size="sm"
                     showLabel
-                    className="shrink-0"
                   />
                 </div>
               </div>
@@ -1257,9 +1256,10 @@ const MyInfoPage = () => {
                 </div>
               </div>
             </div>
-          </div>
+      </section>
 
-          <div className="bg-[var(--color-bg-primary)] rounded-xl p-3 sm:p-4 border border-[var(--color-border-card)]">
+      {/* 섹션 3: 플레이어 기록 */}
+      <section className="bg-[var(--color-bg-card)] rounded-2xl border border-[var(--color-border-card)] p-4 sm:p-5 md:p-6 shadow-sm">
             <div className="flex items-center justify-between mb-2 sm:mb-3">
               <h3 className="text-base sm:text-lg font-bold text-[var(--color-text-primary)] flex items-center gap-2">
                 <ChartBarIcon className="w-5 h-5 text-[var(--color-blue-primary)] shrink-0" />
@@ -1308,10 +1308,10 @@ const MyInfoPage = () => {
             ) : (
               <p className="text-sm text-[var(--color-text-secondary)] py-2">아직 플레이어 기록이 없어요. 매치에 참여하거나 모임을 만들면 여기에 표시돼요.</p>
             )}
-          </div>
+      </section>
 
-          {/* 주요 업적 — 성취 감성 강조: 그라데이션·그림자 카드 */}
-          <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-amber-50/90 to-orange-50/80 dark:from-amber-950/30 dark:to-orange-950/20 border border-amber-200/60 dark:border-amber-500/30 shadow-lg shadow-amber-500/10">
+      {/* 섹션 4: 주요 업적 */}
+      <section className="relative rounded-2xl overflow-hidden border border-amber-200/60 dark:border-amber-500/30 shadow-sm bg-gradient-to-br from-amber-50/90 to-orange-50/80 dark:from-amber-950/30 dark:to-orange-950/20">
             <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent pointer-events-none" aria-hidden />
             <div className="relative p-4 sm:p-5">
               <h3 className="text-base sm:text-lg font-bold text-[var(--color-text-primary)] mb-2 sm:mb-3 flex items-center gap-2">
@@ -1365,10 +1365,10 @@ const MyInfoPage = () => {
                 );
               })()}
             </div>
-          </div>
+      </section>
 
-          {/* 보유 뱃지 — 시각적 강조 */}
-          <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-indigo-50/90 to-purple-50/80 dark:from-indigo-950/30 dark:to-purple-950/20 border border-indigo-200/60 dark:border-indigo-500/30 shadow-lg shadow-indigo-500/10">
+      {/* 섹션 5: 보유 뱃지 */}
+      <section className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-indigo-50/90 to-purple-50/80 dark:from-indigo-950/30 dark:to-purple-950/20 border border-indigo-200/60 dark:border-indigo-500/30 shadow-sm">
             <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent pointer-events-none" aria-hidden />
             <div className="relative p-4 sm:p-5">
             <h3 className="text-base sm:text-lg font-bold text-[var(--color-text-primary)] mb-2 sm:mb-3">보유 뱃지</h3>
@@ -1391,8 +1391,6 @@ const MyInfoPage = () => {
               )}
             </div>
             </div>
-          </div>
-        </div>
       </section>
       </>
       )}

@@ -1506,7 +1506,6 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
               color: white;
               line-height: 1;
               white-space: nowrap;
-              animation: markerIconFadeIn 0.35s ease-out forwards;
             " title="${group.name}">
               <span style="font-size: 14px; line-height: 1;">${sportIcon}</span>
               ${remainingText ? `<span>${remainingText}</span>` : ''}
@@ -1577,7 +1576,6 @@ const NaverMapPanel: React.FC<NaverMapPanelProps> = ({
                 font-weight: 800;
                 color: white;
                 line-height: 1;
-                animation: markerIconFadeIn 0.35s ease-out forwards;
               " title="${count}개 매치">${count}</div>
             `,
             size: new window.naver.maps.Size(44, 44),

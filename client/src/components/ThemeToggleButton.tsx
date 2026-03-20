@@ -14,8 +14,8 @@ const ThemeToggleButton: React.FC<ThemeToggleButtonProps> = ({ theme, setTheme }
   return (
     <button
       onClick={toggleTheme}
-      className="fixed bottom-4 right-4 p-3 rounded-full shadow-lg bg-[var(--color-blue-primary)] text-white
-                 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75
+      className="fixed bottom-4 right-4 p-3 rounded-full shadow-lg bg-[var(--color-accent-fab)] text-white
+                 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-fab)] focus:ring-opacity-75
                  transition-colors duration-200"
       aria-label="Toggle theme"
     >

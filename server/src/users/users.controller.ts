@@ -7,6 +7,7 @@ import { AchievementsService } from './achievements.service';
 import { RecommendedUsersService } from './recommended-users.service';
 import { UserReviewStatsService } from './user-review-stats.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { TeamsService } from '../teams/teams.service';
 import { HallOfFameQueryDto } from './dto/hall-of-fame-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -46,6 +47,7 @@ export class UsersController {
     private recommendedUsersService: RecommendedUsersService,
     private userReviewStatsService: UserReviewStatsService,
     private notificationsService: NotificationsService,
+    private teamsService: TeamsService,
     @InjectRepository(UserSeasonScore)
     private seasonScoreRepository: Repository<UserSeasonScore>,
     @InjectRepository(User)
@@ -264,6 +266,11 @@ export class UsersController {
     return { message: '언팔로우했습니다.' };
   }
 
+  /** 유저가 속한 크루 이름 목록 (캡틴/멤버) */
+  private getTeamNamesForUser(userId: number): string[] {
+    return this.teamsService.getMyTeams(userId).map((t) => t.teamName);
+  }
+
   /**
    * 팔로워 목록 조회 (나를 팔로우하는 사람들, 맞팔로우 여부 포함)
    */
@@ -280,6 +287,7 @@ export class UsersController {
       tag: follower.tag,
       profileImageUrl: follower.profileImageUrl,
       isFollowing: followingIds.includes(follower.id),
+      teamNames: this.getTeamNamesForUser(follower.id),
     }));
   }
 
@@ -296,6 +304,7 @@ export class UsersController {
       tag: followingUser.tag,
       profileImageUrl: followingUser.profileImageUrl,
       isFollowing: true,
+      teamNames: this.getTeamNamesForUser(followingUser.id),
     }));
   }
 
@@ -317,6 +326,7 @@ export class UsersController {
       tag: user.tag,
       profileImageUrl: user.profileImageUrl,
       isFollowing: followingIds.includes(user.id),
+      teamNames: this.getTeamNamesForUser(user.id),
     }));
   }
 
@@ -340,6 +350,7 @@ export class UsersController {
       tag: u.tag,
       profileImageUrl: u.profileImageUrl,
       isFollowing: followingIds.includes(u.id),
+      teamNames: this.getTeamNamesForUser(u.id),
     }));
   }
 
@@ -446,6 +457,7 @@ export class UsersController {
       mercenaryActivityStatus: targetUser.mercenaryActivityStatus ?? 'paused',
       sportEquipment: targetUser.sportEquipment || [],
       ...(isFollowing !== undefined && { isFollowing }),
+      teamNames: this.getTeamNamesForUser(userId),
     };
   }
 
@@ -509,6 +521,7 @@ export class UsersController {
         primaryStats != null
           ? { totalGames, wins: primaryStats.wins, losses: primaryStats.losses, winRate }
           : undefined,
+      teamNames: this.getTeamNamesForUser(userId),
     };
   }
 
@@ -526,6 +539,7 @@ export class UsersController {
     return recommended.map((r) => ({
       ...r,
       isFollowing: followingIds.includes(r.id),
+      teamNames: this.getTeamNamesForUser(r.id),
     }));
   }
 

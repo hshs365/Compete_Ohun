@@ -621,24 +621,14 @@ const GroupList: React.FC<GroupListProps> = ({ selectedCategory, searchQuery, sp
 
   return (
     <div className="p-1.5 md:p-3">
-      <style>{`
-        @keyframes listFadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .list-item-fade-in {
-          animation: listFadeIn 0.35s ease-out forwards;
-        }
-      `}</style>
       <div className="space-y-2 md:space-y-2.5">
         {displayedGroups.length > 0 ? (
-          displayedGroups.map((group, index) => (
+          displayedGroups.map((group) => (
             <button
               onClick={() => onGroupClick(group)}
-              className="list-item-fade-in w-full text-left block p-2 md:p-3 bg-[var(--color-bg-card)] rounded-lg md:rounded-xl border border-[var(--color-border-card)] border-l-4 transition-all duration-300 hover:scale-[1.02] hover:border-[var(--color-blue-primary)] cursor-pointer opacity-0"
+              className="w-full text-left block p-2 md:p-3 bg-[var(--color-bg-card)] rounded-lg md:rounded-xl border border-[var(--color-border-card)] border-l-4 transition-all duration-300 hover:scale-[1.02] hover:border-[var(--color-blue-primary)] cursor-pointer"
               key={group.id}
               style={{
-                animationDelay: `${index * 45}ms`,
                 borderLeftColor: SPORT_POINT_COLORS[group.category ?? ''] ?? SPORT_POINT_COLORS['전체'],
               }}
             >

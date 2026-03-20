@@ -31,6 +31,7 @@ interface User {
   commonSports?: string[];
   residenceSido?: string;
   residenceSigungu?: string;
+  teamNames?: string[];
 }
 
 /** API 프로필 요약 응답 */
@@ -61,6 +62,7 @@ interface ProfileSummary {
     category: string;
     date: string;
   }>;
+  teamNames?: string[];
 }
 
 interface UserDetailModalProps {
@@ -78,6 +80,7 @@ function getDetailFromProfile(summary: ProfileSummary | null, user: User) {
   const score = summary?.totalScore ?? user.totalScore ?? 0;
   const isHighScore = score > 100;
   const location = [summary?.residenceSido, summary?.residenceSigungu].filter(Boolean).join(' ') || user.residenceSido || user.residenceSigungu || '-';
+  const teamNames = summary?.teamNames ?? user.teamNames ?? [];
   return {
     profile: {
       joinDate: summary?.createdAt ? new Date(summary.createdAt).toLocaleDateString('ko-KR') : '-',
@@ -85,6 +88,7 @@ function getDetailFromProfile(summary: ProfileSummary | null, user: User) {
       level: isHighScore ? '고급' : ['초급', '중급', '고급'][Math.floor(seed / 3) % 3],
       followersCount: summary?.followersCount ?? 0,
       followingCount: summary?.followingCount ?? 0,
+      teamNames,
     },
     achievements: isHighScore
       ? [
@@ -268,6 +272,12 @@ const UserDetailModal: React.FC<UserDetailModalProps> = ({
                       <FormatNumber value={detail.profile.followersCount} /> / <FormatNumber value={detail.profile.followingCount} />
                     </p>
                   </div>
+                  {detail.profile.teamNames?.length > 0 && (
+                    <div className="col-span-full">
+                      <p className="text-xs text-[var(--color-text-secondary)] mb-1">크루</p>
+                      <p className="text-sm font-semibold text-[var(--color-text-primary)]">{detail.profile.teamNames.join(', ')}</p>
+                    </div>
+                  )}
                 </div>
                 {interestedSports.length > 0 && (
                   <div className="mt-4 pt-4 border-t border-[var(--color-border-card)]">

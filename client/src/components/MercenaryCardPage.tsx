@@ -26,6 +26,7 @@ interface MercenaryCardData {
   mercenaryActiveBySport: Record<string, boolean>;
   mercenaryActivityStatus: 'active' | 'paused';
   isFollowing?: boolean;
+  teamNames?: string[];
 }
 
 const MercenaryCardPage: React.FC = () => {
@@ -181,6 +182,13 @@ const MercenaryCardPage: React.FC = () => {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {card.teamNames && card.teamNames.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs text-[var(--color-text-secondary)] mb-2">크루</p>
+              <p className="text-sm font-medium text-[var(--color-text-primary)]">{card.teamNames.join(', ')}</p>
             </div>
           )}
 

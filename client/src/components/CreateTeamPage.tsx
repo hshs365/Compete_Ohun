@@ -9,6 +9,8 @@ import {
   ShieldCheckIcon,
   PhoneIcon,
   DocumentTextIcon,
+  PlusCircleIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { api } from '../utils/api';
 import { showSuccess, showError } from '../utils/swal';
@@ -33,8 +35,8 @@ const CreateTeamPage = () => {
   const [region, setRegion] = useState('');
   const [description, setDescription] = useState('');
   const [coach, setCoach] = useState('');
-  const [assistantCoach, setAssistantCoach] = useState('');
-  const [contact, setContact] = useState('');
+  const [assistantCoaches, setAssistantCoaches] = useState<string[]>(['']);
+  const [contacts, setContacts] = useState<string[]>(['']);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [invitees, setInvitees] = useState<FollowerUser[]>([]);
@@ -157,8 +159,10 @@ const CreateTeamPage = () => {
       formData.append('region', region);
       if (description.trim()) formData.append('description', description.trim());
       if (coach.trim()) formData.append('coach', coach.trim());
-      if (assistantCoach.trim()) formData.append('assistantCoach', assistantCoach.trim());
-      if (contact.trim()) formData.append('contact', contact.trim());
+      const coachList = assistantCoaches.map((s) => s.trim()).filter(Boolean);
+      if (coachList.length) formData.append('assistantCoach', coachList.join('\n'));
+      const contactList = contacts.map((s) => s.trim()).filter(Boolean);
+      if (contactList.length) formData.append('contact', contactList.join('\n'));
       if (logoFile) formData.append('logo', logoFile);
       if (selectedInviteeIds.size > 0) {
         formData.append('inviteeIds', JSON.stringify([...selectedInviteeIds]));
@@ -209,11 +213,16 @@ const CreateTeamPage = () => {
         </div>
       </header>
 
-      <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+        }}
+        className="flex-1 flex flex-col min-h-0"
+      >
         <div className="flex-1 overflow-y-auto max-w-3xl w-full mx-auto px-4 md:px-6 py-6 pb-28 safe-area-pb">
           {/* Step 1: 기본 정보 */}
           {step === 1 && (
-            <section className="space-y-6 animate-fade-in">
+            <section className="space-y-6">
               <h2 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
                 <UserGroupIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
                 기본 정보
@@ -281,7 +290,7 @@ const CreateTeamPage = () => {
 
           {/* Step 2: 크루 구성 */}
           {step === 2 && (
-            <section className="space-y-6 animate-fade-in">
+            <section className="space-y-6">
               <h2 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
                 <UserGroupIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
                 크루 구성
@@ -302,36 +311,104 @@ const CreateTeamPage = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">코치</label>
-                <input
-                  type="text"
-                  value={assistantCoach}
-                  onChange={(e) => setAssistantCoach(e.target.value)}
-                  placeholder="코치 이름 (선택)"
-                  maxLength={50}
-                  className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                />
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-[var(--color-text-primary)]">코치</label>
+                  <button
+                    type="button"
+                    onClick={() => setAssistantCoaches((prev) => [...prev, ''])}
+                    className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-blue-primary)] hover:opacity-90 min-h-[44px] min-w-[44px] justify-center touch-manipulation"
+                    aria-label="코치 추가"
+                  >
+                    <PlusCircleIcon className="w-5 h-5" />
+                    <span className="hidden sm:inline">추가</span>
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {assistantCoaches.map((value, index) => (
+                    <div key={index} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={value}
+                        onChange={(e) => {
+                          const next = [...assistantCoaches];
+                          next[index] = e.target.value;
+                          setAssistantCoaches(next);
+                        }}
+                        placeholder="코치 이름 (선택)"
+                        maxLength={50}
+                        className="flex-1 px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (assistantCoaches.length > 1) {
+                            setAssistantCoaches((prev) => prev.filter((_, i) => i !== index));
+                          }
+                        }}
+                        disabled={assistantCoaches.length <= 1}
+                        className="shrink-0 p-2 rounded-xl border border-[var(--color-border-card)] bg-[var(--color-bg-primary)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-secondary)] disabled:opacity-40 disabled:cursor-not-allowed min-w-[44px] min-h-[44px] flex items-center justify-center touch-manipulation"
+                        aria-label="삭제"
+                      >
+                        <XMarkIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2 flex items-center gap-1.5">
-                  <PhoneIcon className="w-4 h-4" />
-                  연락처
-                </label>
-                <input
-                  type="text"
-                  value={contact}
-                  onChange={(e) => setContact(e.target.value)}
-                  placeholder="크루 대표 연락처 (선택)"
-                  maxLength={50}
-                  className="w-full px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
-                />
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-[var(--color-text-primary)] flex items-center gap-1.5">
+                    <PhoneIcon className="w-4 h-4" />
+                    연락처
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setContacts((prev) => [...prev, ''])}
+                    className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-blue-primary)] hover:opacity-90 min-h-[44px] min-w-[44px] justify-center touch-manipulation"
+                    aria-label="연락처 추가"
+                  >
+                    <PlusCircleIcon className="w-5 h-5" />
+                    <span className="hidden sm:inline">추가</span>
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {contacts.map((value, index) => (
+                    <div key={index} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={value}
+                        onChange={(e) => {
+                          const next = [...contacts];
+                          next[index] = e.target.value;
+                          setContacts(next);
+                        }}
+                        placeholder="크루 대표 연락처 (선택)"
+                        maxLength={50}
+                        className="flex-1 px-4 py-3 border border-[var(--color-border-card)] rounded-xl bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-blue-primary)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (contacts.length > 1) {
+                            setContacts((prev) => prev.filter((_, i) => i !== index));
+                          }
+                        }}
+                        disabled={contacts.length <= 1}
+                        className="shrink-0 p-2 rounded-xl border border-[var(--color-border-card)] bg-[var(--color-bg-primary)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-secondary)] disabled:opacity-40 disabled:cursor-not-allowed min-w-[44px] min-h-[44px] flex items-center justify-center touch-manipulation"
+                        aria-label="삭제"
+                      >
+                        <XMarkIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </section>
           )}
 
           {/* Step 3: 크루 소개 */}
           {step === 3 && (
-            <section className="space-y-6 animate-fade-in">
+            <section className="space-y-6">
               <h2 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
                 <DocumentTextIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
                 크루 소개
@@ -353,7 +430,7 @@ const CreateTeamPage = () => {
 
           {/* Step 4: 크루원 초대 */}
           {step === 4 && (
-            <section className="space-y-6 animate-fade-in">
+            <section className="space-y-6">
               <h2 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
                 <UserPlusIcon className="w-5 h-5 text-[var(--color-blue-primary)]" />
                 크루원 초대
@@ -447,8 +524,9 @@ const CreateTeamPage = () => {
               </button>
             ) : (
               <button
-                type="submit"
+                type="button"
                 disabled={isSubmitting}
+                onClick={handleSubmit}
                 className="flex-1 sm:flex-[2] min-h-[52px] py-4 rounded-xl font-semibold text-white bg-[var(--color-blue-primary)] hover:opacity-90 active:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed transition-opacity touch-manipulation"
               >
                 {isSubmitting ? '생성 중...' : '크루 만들기'}
@@ -458,13 +536,6 @@ const CreateTeamPage = () => {
         </div>
       </form>
 
-      <style>{`
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in { animation: fade-in 0.25s ease-out; }
-      `}</style>
     </div>
   );
 };
